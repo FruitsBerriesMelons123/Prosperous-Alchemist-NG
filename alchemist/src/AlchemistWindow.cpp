@@ -3,6 +3,7 @@
 #include "DeveloperTestHub.h"
 #include "IngredientTracker.h"
 #include "MenuHandler.h"
+#include "ProfileManager.h"
 #include "RenderHook.h"
 #include "Localization.h"
 #include "main.h"
@@ -20,6 +21,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstring>
+#include <cwctype>
 #include <map>
 #include <mutex>
 #include <set>
@@ -46,18 +48,26 @@ namespace alchemist::ui {
 			return 1;
 		}
 
-		REX::INI::F32<> windowPositionX("Window", "PositionX", -1.0f);
-		REX::INI::F32<> windowPositionY("Window", "PositionY", -1.0f);
-		REX::INI::F32<> windowWidth("Window", "Width", -1.0f);
-		REX::INI::F32<> windowHeight("Window", "Height", -1.0f);
-
 		std::atomic_bool isWindowOpen = false;
-		std::atomic_bool leftMouseButtonDown = false;
+		std::atomic_bool visibilityResetRequested = false;
+		std::atomic_bool gameWindowFocused = false;
+		std::atomic_bool skyrimLeftMouseButtonDown = false;
 		std::atomic<float> mouseWheelDelta = 0.0f;
 		std::atomic_bool cursorOverWindow = false;
 		std::atomic_bool protectedIngredientPopupInputCapture = false;
+		std::atomic_bool profileTransitionCancelRequested = false;
 		ImVec2 skyrimCursorPosition(-1.0f, -1.0f);
 		bool protectedIngredientWindowVisible = false;
+		bool profileCreationFailed = false;
+		bool profileCreationOpen = false;
+		int profileSourceProfile = 0;
+		int profileToDelete = 0;
+		int pendingProfileDeletion = 0;
+		bool profileDeletionOpen = false;
+		bool profileDeletionFailed = false;
+		char profileNameInput[256]{};
+		int profileNameInputProfile = 0;
+		bool profileNameSaveFailed = false;
 		ImVec2 protectedIngredientWindowMin(-1.0f, -1.0f);
 		ImVec2 protectedIngredientWindowMax(-1.0f, -1.0f);
 		enum class PendingInputType
@@ -71,18 +81,19 @@ namespace alchemist::ui {
 			std::uint32_t value = 0;
 			bool pressed = false;
 		};
+		struct PendingMouseButtonEvent
+		{
+			bool down = false;
+		};
 		std::mutex pendingInputMutex;
 		std::vector<PendingInput> pendingInput;
-		bool previousLeftMouseButtonDown = false;
-		bool draggingWindow = false;
-		bool resizingWindow = false;
+		std::mutex pendingMouseButtonMutex;
+		std::vector<PendingMouseButtonEvent> pendingMouseButtonEvents;
 		bool windowCollapsed = false;
 		bool windowSizeIsCollapsed = false;
 		bool windowStateInitialized = false;
+		bool suppressWindowStateSave = false;
 		ImVec2 expandedWindowSize(defaultWindowWidth, defaultWindowHeight);
-		ImVec2 dragOffset;
-		ImVec2 resizeStartCursor;
-		ImVec2 resizeStartSize;
 		ImVec2 searchRectMin(-1.0f, -1.0f);
 		ImVec2 searchRectMax(-1.0f, -1.0f);
 		bool focusSearch = false;
@@ -183,14 +194,18 @@ namespace alchemist::ui {
 		bool settingsOpen = false;
 		bool trackingOpen = false;
 		bool developerTestHubOpen = false;
-		bool settingsBuffersInitialized = false;
 		bool focusProtectedIngredientSearch = false;
-		char potionPrefix[512]{};
-		char poisonPrefix[512]{};
 		struct ProtectedIngredientEntry {
+			std::string key;
 			std::string name;
+			std::string editorID;
 			int count = -1;
 			int previousCount = 1;
+		};
+		struct IngredientOption {
+			std::string key;
+			std::string name;
+			std::string editorID;
 		};
 		enum class ProtectionCategory : std::size_t {
 			kCustom,
@@ -202,6 +217,8 @@ namespace alchemist::ui {
 		struct ProtectionCategoryCounts {
 			std::array<int, static_cast<std::size_t>(ProtectionCategory::kCount)> values{};
 			bool manualOverride = false;
+			std::string name;
+			std::string editorID;
 		};
 		std::vector<ProtectedIngredientEntry> protectedIngredients;
 		char protectedIngredientSearch[512]{};
@@ -253,7 +270,7 @@ namespace alchemist::ui {
 			if (a_key.starts_with("quest:")) {
 				return ProtectionCategory::kQuest;
 			}
-			if (a_key.starts_with("constructible:")) {
+			if (a_key.starts_with("constructible:") || a_key.starts_with("forge:")) {
 				return ProtectionCategory::kCraftable;
 			}
 			if (a_key.starts_with("effect:")) {
@@ -265,6 +282,23 @@ namespace alchemist::ui {
 		bool IsTrackingRequirementVisible(const tracker::Requirement& a_requirement, bool a_manualProtectionOnly)
 		{
 			return !a_manualProtectionOnly || !a_requirement.automatic || a_requirement.key.starts_with("effect:");
+		}
+
+		std::string RequirementIngredientKey(const tracker::Requirement& a_requirement)
+		{
+			return a_requirement.ingredientFormID != 0 ? tracker::GetIngredientKey(a_requirement.ingredientFormID) : a_requirement.ingredient;
+		}
+
+		std::string IngredientDisplayLabel(std::string_view a_key, std::string_view a_name)
+		{
+			if (!a_key.starts_with("formid:")) {
+				return std::string(a_name);
+			}
+			const auto identity = a_key.substr(7);
+			return FormatText("tracking.ingredientIdentity", "{name} [{identity}]", {
+				{ "name", a_name },
+				{ "identity", identity }
+			});
 		}
 
 		void AddProtectionCount(ProtectionCategoryCounts& a_counts, ProtectionCategory a_category, int a_count)
@@ -357,6 +391,173 @@ namespace alchemist::ui {
 				return false;
 			}
 			return foldedValue.find(foldedQuery) != std::string::npos;
+		}
+
+		struct RecipeSearchTerm
+		{
+			std::string foldedText;
+			bool fuzzy = false;
+		};
+
+		using RecipeSearchGroup = std::vector<RecipeSearchTerm>;
+
+		struct RecipeSearchQuery
+		{
+			std::vector<RecipeSearchGroup> alternatives;
+		};
+
+		RecipeSearchQuery ParseRecipeSearchQuery(std::string_view a_query)
+		{
+			RecipeSearchQuery result;
+			RecipeSearchGroup currentGroup;
+			const auto localizedOr = FoldForSearch(Text("search.operator.or", "or"));
+			const auto localizedAnd = FoldForSearch(Text("search.operator.and", "and"));
+
+			auto addTerm = [&result, &currentGroup, &localizedOr, &localizedAnd](std::string_view a_text, bool a_quoted) {
+				std::string term(a_text);
+				if (term.empty()) {
+					return;
+				}
+
+				const auto foldedRawTerm = FoldForSearch(term);
+				if (!a_quoted && foldedRawTerm == localizedOr) {
+					if (!currentGroup.empty()) {
+						result.alternatives.push_back(std::move(currentGroup));
+						currentGroup.clear();
+					}
+					return;
+				}
+				if (!a_quoted && foldedRawTerm == localizedAnd) {
+					return;
+				}
+
+				bool fuzzy = false;
+				if (!a_quoted && term.size() > 1 && term.back() == '~') {
+					term.pop_back();
+					fuzzy = true;
+				}
+				const auto foldedTerm = FoldForSearch(term);
+				if (!foldedTerm.empty()) {
+					currentGroup.push_back(RecipeSearchTerm{ foldedTerm, fuzzy });
+				}
+			};
+
+			std::size_t position = 0;
+			while (position < a_query.size()) {
+				while (position < a_query.size() && std::isspace(static_cast<unsigned char>(a_query[position])) != 0) {
+					++position;
+				}
+				if (position >= a_query.size()) {
+					break;
+				}
+
+				if (a_query[position] == '"') {
+					++position;
+					const auto phraseStart = position;
+					while (position < a_query.size() && a_query[position] != '"') {
+						++position;
+					}
+					addTerm(a_query.substr(phraseStart, position - phraseStart), true);
+					if (position < a_query.size()) {
+						++position;
+					}
+				} else {
+					const auto termStart = position;
+					while (position < a_query.size() &&
+						std::isspace(static_cast<unsigned char>(a_query[position])) == 0 && a_query[position] != '"') {
+						++position;
+					}
+					addTerm(a_query.substr(termStart, position - termStart), false);
+				}
+			}
+
+			if (!currentGroup.empty()) {
+				result.alternatives.push_back(std::move(currentGroup));
+			}
+			return result;
+		}
+
+		bool EditDistanceAtMost(std::wstring_view a_value, std::wstring_view a_query, int a_maxDistance)
+		{
+			if (a_value.size() + static_cast<std::size_t>(a_maxDistance) < a_query.size() ||
+				a_query.size() + static_cast<std::size_t>(a_maxDistance) < a_value.size()) {
+				return false;
+			}
+
+			std::vector<int> previous(a_query.size() + 1);
+			std::vector<int> current(a_query.size() + 1);
+			for (std::size_t column = 0; column <= a_query.size(); ++column) {
+				previous[column] = static_cast<int>(column);
+			}
+
+			for (std::size_t row = 1; row <= a_value.size(); ++row) {
+				current[0] = static_cast<int>(row);
+				for (std::size_t column = 1; column <= a_query.size(); ++column) {
+					const int substitutionCost = a_value[row - 1] == a_query[column - 1] ? 0 : 1;
+					current[column] = (std::min)({
+						previous[column] + 1,
+						current[column - 1] + 1,
+						previous[column - 1] + substitutionCost
+					});
+				}
+				previous.swap(current);
+			}
+
+			return previous.back() <= a_maxDistance;
+		}
+
+		bool FuzzyContains(std::string_view a_foldedValue, std::string_view a_foldedQuery)
+		{
+			const auto wideValue = Utf8ToWide(a_foldedValue);
+			const auto wideQuery = Utf8ToWide(a_foldedQuery);
+			if (wideValue.empty() || wideQuery.size() < 3) {
+				return false;
+			}
+
+			const int maxDistance = wideQuery.size() >= 7 ? 2 : 1;
+			std::size_t wordStart = std::wstring::npos;
+			for (std::size_t index = 0; index <= wideValue.size(); ++index) {
+				const bool isWordCharacter = index < wideValue.size() && std::iswalnum(wideValue[index]) != 0;
+				if (isWordCharacter) {
+					if (wordStart == std::wstring::npos) {
+						wordStart = index;
+					}
+				} else if (wordStart != std::wstring::npos) {
+					if (EditDistanceAtMost(std::wstring_view(wideValue).substr(wordStart, index - wordStart), wideQuery, maxDistance)) {
+						return true;
+					}
+					wordStart = std::wstring::npos;
+				}
+			}
+			return false;
+		}
+
+		bool RecipeSearchTermMatches(std::string_view a_foldedValue, const RecipeSearchTerm& a_term)
+		{
+			if (a_foldedValue.find(a_term.foldedText) != std::string_view::npos) {
+				return true;
+			}
+			return a_term.fuzzy && FuzzyContains(a_foldedValue, a_term.foldedText);
+		}
+
+		bool RecipeMatchesSearch(const engine::RecipeResult& a_recipe, const RecipeSearchQuery& a_query)
+		{
+			if (a_query.alternatives.empty()) {
+				return true;
+			}
+
+			const std::array<std::string, 3> fields = {
+				FoldForSearch(a_recipe.name),
+				FoldForSearch(a_recipe.ingredients),
+				FoldForSearch(a_recipe.effects)
+			};
+			return std::any_of(a_query.alternatives.begin(), a_query.alternatives.end(), [&fields](const auto& group) {
+				return std::all_of(group.begin(), group.end(), [&fields](const auto& term) {
+					return std::any_of(fields.begin(), fields.end(), [&term](const auto& field) {
+						return RecipeSearchTermMatches(field, term);
+					});
+				});
+			});
 		}
 
 		std::string QuestTypeLabel(const tracker::QuestInfo& a_quest)
@@ -460,33 +661,36 @@ namespace alchemist::ui {
 			return std::isfinite(a_value) && a_value > 0.0f;
 		}
 
-		void SaveWindowState(bool a_saveSize)
+		void SaveWindowState(
+			bool a_saveSize,
+			const ImVec2* a_positionOverride = nullptr,
+			const ImVec2* a_sizeOverride = nullptr)
 		{
-			const auto position = ImGui::GetWindowPos();
+			const auto position = a_positionOverride ? *a_positionOverride : ImGui::GetWindowPos();
 			bool changed = false;
-			if (std::fabs(windowPositionX.GetValue() - position.x) > 0.01f) {
-				windowPositionX.SetValue(position.x);
+			if (std::fabs(kWindowPositionX.GetValue() - position.x) > 0.01f) {
+				kWindowPositionX.SetValue(position.x);
 				changed = true;
 			}
-			if (std::fabs(windowPositionY.GetValue() - position.y) > 0.01f) {
-				windowPositionY.SetValue(position.y);
+			if (std::fabs(kWindowPositionY.GetValue() - position.y) > 0.01f) {
+				kWindowPositionY.SetValue(position.y);
 				changed = true;
 			}
 			if (a_saveSize) {
-				const auto size = ImGui::GetWindowSize();
+				const auto size = a_sizeOverride ? *a_sizeOverride : ImGui::GetWindowSize();
 				expandedWindowSize = size;
-				if (std::fabs(windowWidth.GetValue() - size.x) > 0.01f) {
-					windowWidth.SetValue(size.x);
+				if (std::fabs(kWindowWidth.GetValue() - size.x) > 0.01f) {
+					kWindowWidth.SetValue(size.x);
 					changed = true;
 				}
-				if (std::fabs(windowHeight.GetValue() - size.y) > 0.01f) {
-					windowHeight.SetValue(size.y);
+				if (std::fabs(kWindowHeight.GetValue() - size.y) > 0.01f) {
+					kWindowHeight.SetValue(size.y);
 					changed = true;
 				}
 			}
 
 			if (changed) {
-				REX::INI::SettingStore::GetSingleton()->Save();
+				profiles::SaveCurrentProfile();
 			}
 		}
 
@@ -513,14 +717,7 @@ namespace alchemist::ui {
 		}
 
 		void LoadProtectedIngredients();
-
-		void LoadSettingsBuffers()
-		{
-			const auto prefixes = getPotionPrefixes();
-			CopySettingText(potionPrefix, prefixes.potion);
-			CopySettingText(poisonPrefix, prefixes.poison);
-			settingsBuffersInitialized = true;
-		}
+		void SaveProtectedIngredients();
 
 		void LoadTrackingBuffers()
 		{
@@ -548,51 +745,98 @@ namespace alchemist::ui {
 
 		void SaveSettings()
 		{
-			REX::INI::SettingStore::GetSingleton()->Save();
+			profiles::SaveCurrentProfile();
+		}
+
+		bool TryParseIngredientFormID(std::string_view a_key, RE::FormID& a_formID, bool& a_exact)
+		{
+			a_formID = 0;
+			a_exact = a_key.starts_with("formid:");
+			if (a_exact) {
+				a_key.remove_prefix(7);
+			}
+			if (a_key.size() < 3 || a_key[0] != '0' || (a_key[1] != 'x' && a_key[1] != 'X')) {
+				return false;
+			}
+			try {
+				a_formID = static_cast<RE::FormID>(std::stoul(std::string(a_key), nullptr, 16));
+				return a_formID != 0;
+			} catch (...) {
+				return false;
+			}
+		}
+
+		const IngredientItem* FindIngredientByKey(std::string_view a_key)
+		{
+			auto* dataHandler = RE::TESDataHandler::GetSingleton();
+			if (!dataHandler) {
+				return nullptr;
+			}
+
+			RE::FormID formID = 0;
+			bool exact = false;
+			if (TryParseIngredientFormID(a_key, formID, exact) && formID != 0) {
+				for (const auto* ingredient : dataHandler->GetFormArray<IngredientItem>()) {
+					if (!ingredient) {
+						continue;
+					}
+					const bool matches = exact ? ingredient->GetFormID() == formID :
+						(ingredient->GetFormID() == formID || (ingredient->GetFormID() & 0x00FFFFFF) == (formID & 0x00FFFFFF));
+					if (matches) {
+						return ingredient;
+					}
+				}
+				return nullptr;
+			}
+
+			const auto foldedKey = FoldForSearch(a_key);
+			for (const auto* ingredient : dataHandler->GetFormArray<IngredientItem>()) {
+				if (!ingredient) {
+					continue;
+				}
+				const auto* editorID = ingredient->GetFormEditorID();
+				const auto* name = ingredient->GetFullName();
+				if ((editorID && FoldForSearch(editorID) == foldedKey) || (name && FoldForSearch(name) == foldedKey)) {
+					return ingredient;
+				}
+			}
+			return nullptr;
 		}
 
 		void LoadProtectedIngredients()
 		{
 			protectedIngredients.clear();
-			auto* dataHandler = RE::TESDataHandler::GetSingleton();
+			bool saveCanonicalKeys = false;
 			for (const auto& token : str::split(kProtectedIngredients.GetValue(), ',')) {
 				if (token.empty()) {
 					continue;
 				}
 				const auto parts = str::split(token, '|');
 				std::string key = parts.front();
-				std::string displayName = key;
-				if (dataHandler) {
-					RE::FormID formId = 0;
-					if (key.size() >= 3 && key[0] == '0' && (key[1] == 'x' || key[1] == 'X')) {
-						try {
-							formId = static_cast<RE::FormID>(std::stoul(key, nullptr, 16));
-						} catch (...) {}
-					}
-					if (formId == 0) {
-						formId = ingredient::getDefaultIngredientFormID(key);
-					}
-					if (formId != 0) {
-						for (const auto* ing : dataHandler->GetFormArray<IngredientItem>()) {
-							if (ing && (ing->GetFormID() == formId || (ing->GetFormID() & 0x00FFFFFF) == (formId & 0x00FFFFFF))) {
-								if (ing->GetFullName() && *ing->GetFullName()) {
-									displayName = ing->GetFullName();
-									break;
-								}
-							}
-						}
-					}
+				const auto* ingredient = FindIngredientByKey(key);
+				const auto canonicalKey = ingredient ? tracker::GetIngredientKey(ingredient->GetFormID()) : key;
+				if (canonicalKey != key) {
+					saveCanonicalKeys = true;
 				}
-				ProtectedIngredientEntry entry{ .name = std::move(displayName) };
+				ProtectedIngredientEntry entry{
+					.key = canonicalKey,
+					.name = ingredient && ingredient->GetFullName() && *ingredient->GetFullName() ? ingredient->GetFullName() : key,
+					.editorID = ingredient && ingredient->GetFormEditorID() ? ingredient->GetFormEditorID() : ""
+				};
 				if (parts.size() > 1) {
 					entry.count = (std::max)(1, str::toInt(parts.at(1)));
 					entry.previousCount = entry.count;
 				}
 				if (std::none_of(protectedIngredients.begin(), protectedIngredients.end(), [&entry](const auto& existing) {
-						return existing.name == entry.name;
+						return existing.key == entry.key;
 					})) {
 					protectedIngredients.push_back(std::move(entry));
+				} else {
+					saveCanonicalKeys = true;
 				}
+			}
+			if (saveCanonicalKeys) {
+				SaveProtectedIngredients();
 			}
 		}
 
@@ -603,29 +847,35 @@ namespace alchemist::ui {
 				if (!value.empty()) {
 					value += ",";
 				}
-				value += entry.name;
+				value += entry.key;
 				if (entry.count > 0) {
 					value += "|" + std::to_string(entry.count);
 				}
 			}
 			kProtectedIngredients.SetValue(std::move(value));
-			SaveSettings();
+			profiles::SaveCurrentProfile();
 		}
 
-		std::vector<std::string> GetIngredientNames()
+		std::vector<IngredientOption> GetIngredientOptions()
 		{
-			std::vector<std::string> names;
+			std::vector<IngredientOption> options;
 			auto* dataHandler = RE::TESDataHandler::GetSingleton();
 			if (!dataHandler) {
-				return names;
+				return options;
 			}
-			for (auto* ingredient : dataHandler->GetFormArray<IngredientItem>()) {
+			for (const auto* ingredient : dataHandler->GetFormArray<IngredientItem>()) {
 				if (ingredient && ingredient->GetFullName() && *ingredient->GetFullName()) {
-					names.emplace_back(ingredient->GetFullName());
+					options.push_back(IngredientOption{
+						.key = tracker::GetIngredientKey(ingredient->GetFormID()),
+						.name = ingredient->GetFullName(),
+						.editorID = ingredient->GetFormEditorID() ? ingredient->GetFormEditorID() : ""
+					});
 				}
 			}
-			std::sort(names.begin(), names.end());
-			return names;
+			std::sort(options.begin(), options.end(), [](const auto& left, const auto& right) {
+				return left.name == right.name ? left.key < right.key : left.name < right.name;
+			});
+			return options;
 		}
 
 		int IngredientMatchScore(std::string_view a_name, std::string_view a_query)
@@ -639,30 +889,37 @@ namespace alchemist::ui {
 			return position == 0 ? 0 : static_cast<int>(position) + 1;
 		}
 
-		void AddProtectedIngredient(std::string a_name)
+		void AddProtectedIngredient(std::string a_key, std::string a_name, std::string a_editorID)
 		{
-			if (std::none_of(protectedIngredients.begin(), protectedIngredients.end(), [&a_name](const auto& entry) {
-					return entry.name == a_name;
+			if (std::none_of(protectedIngredients.begin(), protectedIngredients.end(), [&a_key](const auto& entry) {
+					return entry.key == a_key;
 				})) {
-				protectedIngredients.push_back(ProtectedIngredientEntry{ .name = std::move(a_name) });
+				protectedIngredients.push_back(ProtectedIngredientEntry{
+					.key = std::move(a_key),
+					.name = std::move(a_name),
+					.editorID = std::move(a_editorID)
+				});
 				SaveProtectedIngredients();
 			}
 		}
 
-		void OpenTrackingIngredientDetails(std::string_view a_name)
+		void OpenTrackingIngredientDetails(std::string_view a_key)
 		{
-			selectedTrackingIngredient = a_name;
+			selectedTrackingIngredient = a_key;
 			openTrackingIngredientDetails = true;
 		}
 
-		void SetProtectedIngredient(std::string_view a_name, int a_count, bool a_protectAll)
+		void SetProtectedIngredient(std::string_view a_key, int a_count, bool a_protectAll)
 		{
-			const auto found = std::find_if(protectedIngredients.begin(), protectedIngredients.end(), [a_name](const auto& entry) {
-				return entry.name == a_name;
+			const auto* ingredient = FindIngredientByKey(a_key);
+			const auto found = std::find_if(protectedIngredients.begin(), protectedIngredients.end(), [a_key](const auto& entry) {
+				return entry.key == a_key;
 			});
 			if (found == protectedIngredients.end()) {
 				protectedIngredients.push_back(ProtectedIngredientEntry{
-					.name = std::string(a_name),
+					.key = std::string(a_key),
+					.name = ingredient && ingredient->GetFullName() && *ingredient->GetFullName() ? ingredient->GetFullName() : std::string(a_key),
+					.editorID = ingredient && ingredient->GetFormEditorID() ? ingredient->GetFormEditorID() : std::string{},
 					.count = a_protectAll ? -1 : (std::max)(1, a_count),
 					.previousCount = (std::max)(1, a_count)
 				});
@@ -687,6 +944,304 @@ namespace alchemist::ui {
 			}
 			searchInputFocused.store(false, std::memory_order_release);
 			ImGui::ClearActiveID();
+		}
+
+		void ClearPendingProfileDeletion()
+		{
+			profileDeletionOpen = false;
+			pendingProfileDeletion = 0;
+			profileDeletionFailed = false;
+		}
+
+		void ClearProfileCreation()
+		{
+			profileCreationOpen = false;
+			profileSourceProfile = 0;
+			profileCreationFailed = false;
+		}
+
+		void ReloadAfterProfileSelection();
+
+		bool CreateProfileFromUI(int a_sourceProfileIndex)
+		{
+			const auto created = a_sourceProfileIndex == 0 ? profiles::CreateProfile() : profiles::CloneProfile(a_sourceProfileIndex);
+			if (created) {
+				profileCreationFailed = false;
+				ReloadAfterProfileSelection();
+			} else {
+				profileCreationFailed = true;
+			}
+			return created;
+		}
+
+		bool RequestProfileSelection(int a_profileIndex)
+		{
+			if (a_profileIndex <= 0) {
+				return false;
+			}
+			if (!profiles::SelectProfile(a_profileIndex)) {
+				return false;
+			}
+			ReloadAfterProfileSelection();
+			return true;
+		}
+
+		void RequestProfileDeletion(int a_profileIndex)
+		{
+			if (a_profileIndex <= 0 || a_profileIndex == profiles::GetCurrentProfile()) {
+				return;
+			}
+			const auto profileList = profiles::GetProfiles();
+			if (profileList.size() <= 1 || std::none_of(profileList.begin(), profileList.end(), [a_profileIndex](const auto& entry) {
+				return entry.index == a_profileIndex;
+			})) {
+				return;
+			}
+			pendingProfileDeletion = a_profileIndex;
+			profileDeletionFailed = false;
+			profileDeletionOpen = true;
+		}
+
+		void PrepareProfiles()
+		{
+			if (profileTransitionCancelRequested.exchange(false, std::memory_order_acq_rel)) {
+				if (profileDeletionOpen) {
+					ImGui::CloseCurrentPopup();
+				}
+				ClearPendingProfileDeletion();
+			}
+			const auto activeProfileBeforePrepare = profiles::GetCurrentProfile();
+			profiles::PrepareForWindow();
+			if (profiles::GetCurrentProfile() != activeProfileBeforePrepare) {
+				ReloadAfterProfileSelection();
+			}
+			if (profileDeletionOpen) {
+				const auto profileDeletionTitle = Text("profiles.deleteTitle", "Delete character profile") + "###ProfileDeletion";
+				if (!ImGui::IsPopupOpen(profileDeletionTitle.c_str())) {
+					ImGui::OpenPopup(profileDeletionTitle.c_str());
+				}
+			}
+		}
+
+		std::string IdentityLabel(const profiles::Identity& a_identity)
+		{
+			const auto name = a_identity.name.empty() ? Text("profiles.unknown", "Unknown") : a_identity.name;
+			const auto race = a_identity.race.empty() ? Text("profiles.unknown", "Unknown") : a_identity.race;
+			const auto gender = a_identity.gender.empty() ? Text("profiles.unknown", "Unknown") : a_identity.gender;
+			return FormatText("profiles.identity", "{name} | {race} | {gender}", {
+				{ "name", name },
+				{ "race", race },
+				{ "gender", gender }
+			});
+		}
+
+		std::string ProfileLabel(const profiles::ProfileSummary& a_profile)
+		{
+			const auto profileName = a_profile.profileName.empty() ? Text("profiles.unknown", "Unknown") : a_profile.profileName;
+			return FormatText("profiles.profileLabel", "{profileName} (Profile {profile}): {identity}", {
+				{ "profile", std::to_string(a_profile.index) },
+				{ "profileName", profileName },
+				{ "identity", IdentityLabel(a_profile.identity) }
+			});
+		}
+
+		void SetProfileNameInput(std::string_view a_profileName)
+		{
+			const auto length = (std::min)(a_profileName.size(), sizeof(profileNameInput) - 1);
+			std::memset(profileNameInput, 0, sizeof(profileNameInput));
+			if (length > 0) {
+				std::memcpy(profileNameInput, a_profileName.data(), length);
+			}
+			profileNameInput[length] = '\0';
+		}
+
+		void ReloadAfterProfileSelection()
+		{
+			tracker::ReloadForProfile();
+			tracker::RefreshDetection();
+			LoadTrackingBuffers();
+			windowStateInitialized = false;
+			suppressWindowStateSave = true;
+			devhub::Shutdown();
+			developerTestHubOpen = false;
+			menu::RequestRecalculation(true);
+		}
+
+		void DrawProfileUnavailableState()
+		{
+			const auto observedIdentity = profiles::GetObservedIdentity();
+			ImGui::Separator();
+			ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", Text("settings.profile", "Character profile").c_str());
+			if (!observedIdentity.IsKnown()) {
+				ImGui::TextWrapped("%s", Text("profiles.identityUnavailable", "The current Character ID and visible character identity are not available yet. The profile cannot be changed until they are ready.").c_str());
+			} else {
+				ImGui::TextWrapped("%s", Text("profiles.createFailed", "The automatic profile could not be created. Existing profiles were not changed.").c_str());
+			}
+			ImGui::Text("%s", FormatText("profiles.currentCharacter", "Current character: {identity}", {
+				{ "identity", IdentityLabel(observedIdentity) }
+			}).c_str());
+		}
+
+		void DrawProfileDeletion()
+		{
+			if (!profileDeletionOpen) {
+				return;
+			}
+
+			const auto profileList = profiles::GetProfiles();
+			const auto profile = std::find_if(profileList.begin(), profileList.end(), [](const auto& entry) {
+				return entry.index == pendingProfileDeletion;
+			});
+			if (profile == profileList.end()) {
+				ImGui::CloseCurrentPopup();
+				ClearPendingProfileDeletion();
+				return;
+			}
+
+			const bool isCurrent = profile->index == profiles::GetCurrentProfile();
+			const bool canDelete = profileList.size() > 1 && !isCurrent && profiles::HasActiveProfile();
+			bool popupOpen = true;
+			bool closePopup = false;
+			const auto title = Text("profiles.deleteTitle", "Delete character profile") + "###ProfileDeletion";
+			if (ImGui::BeginPopupModal(title.c_str(), &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+				ImGui::TextWrapped("%s", Text("profiles.deleteDescription", "This permanently removes the selected profile from alchemist.ini. It does not change the Skyrim save game. Verify the profile before continuing.").c_str());
+				ImGui::Spacing();
+				ImGui::Text("%s", FormatText("profiles.deleteSelected", "Profile to delete: {profile}", {
+					{ "profile", ProfileLabel(*profile) }
+				}).c_str());
+				const auto summary = FormatText("profiles.summary", "{completed} completed, {marked} marked, {effects} protected effects, {ingredients} custom protected ingredients.", {
+					{ "completed", std::to_string(profile->completedCount) },
+					{ "marked", std::to_string(profile->markedCount) },
+					{ "effects", std::to_string(profile->protectedEffectCount) },
+					{ "ingredients", std::to_string(profile->protectedIngredientCount) }
+				});
+				ImGui::TextDisabled("%s", summary.c_str());
+				if (isCurrent) {
+					ImGui::TextWrapped("%s", Text("profiles.deleteActiveWarning", "The active profile cannot be deleted. Switch to another profile first, then delete this one.").c_str());
+				} else if (!profiles::HasActiveProfile()) {
+					ImGui::TextWrapped("%s", Text("profiles.deleteUnavailable", "Profile deletion is unavailable until a character profile has been selected safely.").c_str());
+				} else {
+					ImGui::TextWrapped("%s", Text("profiles.deleteWarning", "Deletion cannot be undone by this plugin. The active profile and the last remaining profile are protected from deletion.").c_str());
+				}
+				ImGui::Spacing();
+				ImGui::BeginDisabled(!canDelete);
+				if (ImGui::Button((Text("profiles.deleteConfirm", "Delete profile") + "##ConfirmProfileDeletion").c_str())) {
+					if (profiles::DeleteProfile(pendingProfileDeletion)) {
+						profileToDelete = 0;
+						closePopup = true;
+					} else {
+						profileDeletionFailed = true;
+					}
+				}
+				ImGui::EndDisabled();
+				ImGui::SameLine();
+				if (ImGui::Button((Text("profiles.cancel", "Cancel") + "##CancelProfileDeletion").c_str())) {
+					closePopup = true;
+				}
+				if (profileDeletionFailed) {
+					ImGui::TextWrapped("%s", Text("profiles.deleteFailed", "The profile could not be deleted and no profile data was changed. It may already have been removed or the configuration file may not be writable.").c_str());
+				}
+				ImGui::EndPopup();
+			}
+			if (!popupOpen || closePopup) {
+				if (closePopup) {
+					ImGui::CloseCurrentPopup();
+				}
+				ClearPendingProfileDeletion();
+			}
+		}
+
+		void DrawProfileCreation()
+		{
+			if (!profileCreationOpen) {
+				return;
+			}
+
+			const auto profileList = profiles::GetProfiles();
+			const auto currentProfileIndex = profiles::GetCurrentProfile();
+			const auto sourceProfile = std::find_if(profileList.begin(), profileList.end(), [](const auto& profile) {
+				return profile.index == profileSourceProfile;
+			});
+			if (sourceProfile == profileList.end()) {
+				profileSourceProfile = currentProfileIndex > 0 ? currentProfileIndex : (profileList.empty() ? 0 : profileList.front().index);
+			}
+
+			const auto title = Text("profiles.createFromProfile", "Create from profile") + "###ProfileCreation";
+			if (!ImGui::IsPopupOpen(title.c_str())) {
+				ImGui::OpenPopup(title.c_str());
+			}
+			const auto displaySize = ImGui::GetIO().DisplaySize;
+			const auto popupWidth = (std::max)(minimumWindowWidth, (std::min)(620.0f, displaySize.x - screenMargin));
+			const auto popupHeight = (std::max)(minimumWindowHeight, (std::min)(560.0f, displaySize.y - screenMargin));
+			ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
+
+			bool popupOpen = true;
+			bool closePopup = false;
+			if (ImGui::BeginPopupModal(title.c_str(), &popupOpen, ImGuiWindowFlags_NoResize)) {
+				ImGui::TextWrapped("%s", Text("profiles.createDescription", "Create a blank profile with default settings, or select an existing profile first and create a copy. A copy keeps calculation, tracking preferences, developer mode, language, and window settings, but resets the character identity and character-specific protected ingredients, effects, and tracking requirements.").c_str());
+				ImGui::Spacing();
+				const auto selectedProfile = std::find_if(profileList.begin(), profileList.end(), [](const auto& profile) {
+					return profile.index == profileSourceProfile;
+				});
+				const auto selectedProfileLabel = selectedProfile == profileList.end() ? Text("profiles.unknown", "Unknown") : ProfileLabel(*selectedProfile);
+				ImGui::TextWrapped("%s", FormatText("profiles.createFromProfileSource", "Source profile: {profile}", {
+					{ "profile", selectedProfileLabel }
+				}).c_str());
+				ImGui::Spacing();
+
+				const float listHeight = (std::max)(120.0f, (std::min)(300.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 4.0f));
+				ImGui::BeginChild("ProfileSourceList", ImVec2(0.0f, listHeight), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+				if (profileList.empty()) {
+					ImGui::TextWrapped("%s", Text("profiles.noProfiles", "No profiles are available to copy.").c_str());
+				} else {
+					for (const auto& profile : profileList) {
+						ImGui::PushID(profile.index);
+						const bool isSelected = profile.index == profileSourceProfile;
+						if (ImGui::Selectable(ProfileLabel(profile).c_str(), isSelected)) {
+							profileSourceProfile = profile.index;
+						}
+						if (profile.index == currentProfileIndex) {
+							ImGui::TextDisabled("%s", Text("settings.profileSelect", "Active profile").c_str());
+						}
+						ImGui::Indent();
+						ImGui::TextDisabled("%s", FormatText("profiles.summary", "{completed} completed, {marked} marked, {effects} protected effects, {ingredients} custom protected ingredients.", {
+							{ "completed", std::to_string(profile.completedCount) },
+							{ "marked", std::to_string(profile.markedCount) },
+							{ "effects", std::to_string(profile.protectedEffectCount) },
+							{ "ingredients", std::to_string(profile.protectedIngredientCount) }
+						}).c_str());
+						ImGui::Unindent();
+						if (&profile != &profileList.back()) {
+							ImGui::Separator();
+						}
+						ImGui::PopID();
+					}
+				}
+				ImGui::EndChild();
+
+				const bool canCreate = profiles::GetObservedIdentity().IsKnown() && currentProfileIndex > 0 && selectedProfile != profileList.end();
+				ImGui::BeginDisabled(!canCreate);
+				if (ImGui::Button((Text("profiles.createFromSelected", "Create from selected") + "##ConfirmCreateFromProfile").c_str())) {
+					if (CreateProfileFromUI(profileSourceProfile)) {
+						closePopup = true;
+					}
+				}
+				ImGui::EndDisabled();
+				ImGui::SameLine();
+				if (ImGui::Button((Text("profiles.cancel", "Cancel") + "##CancelCreateFromProfile").c_str())) {
+					closePopup = true;
+				}
+				if (profileCreationFailed) {
+					ImGui::TextWrapped("%s", Text("profiles.createFailed", "The new profile could not be created. The existing profiles were not changed.").c_str());
+				}
+				ImGui::EndPopup();
+			}
+			if (!popupOpen || closePopup) {
+				if (closePopup) {
+					ImGui::CloseCurrentPopup();
+				}
+				ClearProfileCreation();
+			}
 		}
 
 		void DrawDeveloperToggle()
@@ -766,6 +1321,13 @@ namespace alchemist::ui {
 			const auto settingsText = Text("ui.settings", "Settings");
 			const auto effectsText = Text("ui.effects", "Effects");
 			const auto searchHint = Text("ui.searchRecipes", "Search recipes or ingredients");
+			const auto searchAndOperator = Text("search.operator.and", "AND");
+			const auto searchOrOperator = Text("search.operator.or", "OR");
+			const auto searchSyntax = FormatText(
+				"ui.searchSyntax",
+				"Supports {and}, {or}, \"exact phrases\", and fuzzy terms with ~",
+				{ { "and", searchAndOperator }, { "or", searchOrOperator } });
+			const auto clearSearchTooltip = Text("ui.clearSearch", "Clear search");
 			const std::array<std::string, 4> sortLabels = {
 				Text("sort.valueDescending", "Value ↓"),
 				Text("sort.valueAscending", "Value ↑"),
@@ -777,10 +1339,15 @@ namespace alchemist::ui {
 			const float settingsWidth = ImGui::CalcTextSize(settingsText.c_str()).x + style.FramePadding.x * 2.0f;
 			const float sortWidth = ImGui::CalcTextSize(currentSortLabel.c_str()).x + style.FramePadding.x * 2.0f + ImGui::GetFrameHeight();
 			const float effectsCheckboxWidth = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize(effectsText.c_str()).x;
+			const bool searchHasText = searchText[0] != '\0';
+			const float clearSearchButtonWidth = ImGui::GetFrameHeight();
 			float searchWidth = ImGui::GetContentRegionAvail().x - trackWidth - settingsWidth - sortWidth - effectsCheckboxWidth - style.ItemSpacing.x * 4.0f;
 			if (developerEnabled) {
 				const auto testText = Text("ui.test", "Test");
 				searchWidth -= ImGui::CalcTextSize(testText.c_str()).x + style.FramePadding.x * 2.0f + style.ItemSpacing.x;
+			}
+			if (searchHasText) {
+				searchWidth -= clearSearchButtonWidth + style.ItemSpacing.x;
 			}
 			ImGui::SetNextItemWidth((std::max)(1.0f, searchWidth));
 			if (focusSearch) {
@@ -791,6 +1358,21 @@ namespace alchemist::ui {
 			searchInputFocused.store(ImGui::IsItemActive(), std::memory_order_release);
 			searchRectMin = ImGui::GetItemRectMin();
 			searchRectMax = ImGui::GetItemRectMax();
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("%s", searchSyntax.c_str());
+			}
+			if (searchHasText) {
+				ImGui::SameLine();
+				if (ImGui::Button("×##ClearRecipeSearch", ImVec2(clearSearchButtonWidth, 0.0f))) {
+					searchText[0] = '\0';
+					focusSearch = true;
+					searchInputFocused.store(true, std::memory_order_release);
+					ImGui::ClearActiveID();
+				}
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("%s", clearSearchTooltip.c_str());
+				}
+			}
 			ImGui::SameLine();
 			if (developerEnabled) {
 				DrawDeveloperToggle();
@@ -800,8 +1382,10 @@ namespace alchemist::ui {
 				trackingOpen = true;
 				settingsOpen = false;
 				trackingBuffersInitialized = false;
-				tracker::RefreshDetection();
-				menu::RequestRecalculation(true);
+				if (kProtectIngredients.GetValue() != 0) {
+					tracker::RefreshDetection();
+					menu::RequestRecalculation(true);
+				}
 				searchInputFocused.store(false, std::memory_order_release);
 				ImGui::ClearActiveID();
 			}
@@ -809,7 +1393,6 @@ namespace alchemist::ui {
 			if (ImGui::Button((settingsText + "##Settings").c_str())) {
 				settingsOpen = true;
 				trackingOpen = false;
-				settingsBuffersInitialized = false;
 				searchInputFocused.store(false, std::memory_order_release);
 				ImGui::ClearActiveID();
 			}
@@ -868,14 +1451,14 @@ namespace alchemist::ui {
 
 			if (currentCacheGen != lastProcessedCacheGeneration || currentQuery != lastProcessedSearchText || sortMode != lastProcessedSortMode ||
 				selectedIngredientFilterChanged) {
+				const auto searchQuery = ParseRecipeSearchQuery(currentQuery);
 				processedRecipes = engine::GetCachedRecipes();
 				processedRecipes.erase(std::remove_if(processedRecipes.begin(), processedRecipes.end(), [](const engine::RecipeResult& recipe) {
-					return recipe.displayedValue < 1;
+					return recipe.displayedValue < 0;
 				}), processedRecipes.end());
-				if (!currentQuery.empty()) {
-					processedRecipes.erase(std::remove_if(processedRecipes.begin(), processedRecipes.end(), [currentQuery](const engine::RecipeResult& recipe) {
-						return !ContainsInsensitive(recipe.name, currentQuery) && !ContainsInsensitive(recipe.ingredients, currentQuery) &&
-							!ContainsInsensitive(recipe.effects, currentQuery);
+				if (!searchQuery.alternatives.empty()) {
+					processedRecipes.erase(std::remove_if(processedRecipes.begin(), processedRecipes.end(), [&searchQuery](const engine::RecipeResult& recipe) {
+						return !RecipeMatchesSearch(recipe, searchQuery);
 					}), processedRecipes.end());
 				}
 				if (filterPotionsBySelectedIngredients && !selectedIngredientFormIDs.empty()) {
@@ -1098,34 +1681,42 @@ namespace alchemist::ui {
 
 				ImGuiContext& g = *GImGui;
 				ImGuiTable* table = g.CurrentTable;
+				const bool leftMouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 				bool anyRowClicked = false;
 
 				for (int index = 0; index < pageItemCount; ++index) {
 					const auto& recipe = recipes[static_cast<std::size_t>(startIndex + index)];
 					ImGui::TableNextRow();
 					const float rowY1 = table ? table->RowPosY1 : ImGui::GetCursorScreenPos().y;
+					float maxItemY = rowY1 + ImGui::GetTextLineHeight();
 
 					ImGui::TableSetColumnIndex(0);
 					TextWrappedInCell(recipe.name.c_str());
+					maxItemY = (std::max)(maxItemY, ImGui::GetItemRectMax().y);
+
 					ImGui::TableSetColumnIndex(1);
 					TextWrappedInCell(recipe.ingredients.c_str());
+					maxItemY = (std::max)(maxItemY, ImGui::GetItemRectMax().y);
+
 					ImGui::TableSetColumnIndex(2);
 					ImGui::Text("%d", recipe.displayedValue);
+					maxItemY = (std::max)(maxItemY, ImGui::GetItemRectMax().y);
+
 					if (showEffectsColumn) {
 						ImGui::TableSetColumnIndex(3);
 						TextWrappedInCell(recipe.effects.c_str());
+						maxItemY = (std::max)(maxItemY, ImGui::GetItemRectMax().y);
 					}
 
 					if (table) {
-						const float rowY2 = (std::max)(table->RowPosY2, rowY1 + ImGui::GetTextLineHeightWithSpacing());
+						const float rowY2 = (std::max)({ table->RowPosY2, maxItemY + style.CellPadding.y, rowY1 + ImGui::GetTextLineHeightWithSpacing() });
 						const ImVec2 mousePos = g.IO.MousePos;
 						const bool isRowHovered = (table->HoveredColumnBody >= 0 && table->HoveredColumnBody < table->ColumnsCount &&
 							table->HoveredColumnBorder == -1 && table->ResizedColumn == -1 &&
 							mousePos.y >= rowY1 && mousePos.y < rowY2 &&
-							table->InnerClipRect.Contains(mousePos) &&
-							!ImGui::IsAnyItemActive());
+							table->InnerClipRect.Contains(mousePos));
 
-						if (isRowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+						if (isRowHovered && leftMouseClicked) {
 							selectedRecipeIngredientDetails = recipe.ingredientDetails;
 							anyRowClicked = true;
 						}
@@ -1141,15 +1732,14 @@ namespace alchemist::ui {
 					}
 				}
 
-				if (table && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && cursorOverWindow.load(std::memory_order_acquire) && !anyRowClicked) {
+				if (table && leftMouseClicked && cursorOverWindow.load(std::memory_order_acquire) && !anyRowClicked) {
 					const ImVec2 mousePos = g.IO.MousePos;
 					const bool onScrollbar = (table->InnerWindow && mousePos.x >= table->InnerClipRect.Max.x);
 					const bool resizingColumn = (table->ResizedColumn != -1 || table->HoveredColumnBorder != -1);
-					if (!onScrollbar && !resizingColumn) {
+					if (!onScrollbar && !resizingColumn && table->InnerClipRect.Contains(mousePos)) {
 						selectedRecipeIngredientDetails.clear();
 					}
 				}
-
 				ImGui::EndTable();
 			}
 
@@ -1259,30 +1849,22 @@ namespace alchemist::ui {
 
 		bool DrawSettings()
 		{
-			if (!settingsBuffersInitialized) {
-				LoadSettingsBuffers();
-			}
-
 			bool recalculate = false;
-			bool textInputActive = false;
 			if (ImGui::Button((Text("settings.back", "< Back to recipes") + "##BackToRecipes").c_str())) {
 				settingsOpen = false;
-				settingsBuffersInitialized = false;
 				searchInputFocused.store(false, std::memory_order_release);
 				ImGui::ClearActiveID();
 			}
 			ImGui::SameLine();
 			if (ImGui::Button((Text("settings.reset", "Reset all settings") + "##ResetSettings").c_str())) {
-				kIgnorePlayer.SetValue(kIgnorePlayer.GetValueDefault());
-				kSinglethreaded.SetValue(kSinglethreaded.GetValueDefault());
-				kPotionPoison.SetValue(kPotionPoison.GetValueDefault());
-				kCacheDurationSeconds.SetValue(kCacheDurationSeconds.GetValueDefault());
-				kStaleRecalculateThresholdMs.SetValue(kStaleRecalculateThresholdMs.GetValueDefault());
-				kCraftDebounceMs.SetValue(kCraftDebounceMs.GetValueDefault());
-				kFilterPotionsBySelectedIngredients.SetValue(kFilterPotionsBySelectedIngredients.GetValueDefault());
-				kProtectIngredients.SetValue(kProtectIngredients.GetValueDefault());
-				kManualProtectionOnly.SetValue(kManualProtectionOnly.GetValueDefault());
-				LoadSettingsBuffers();
+				kIgnorePlayer.SetValue(kDefaultIgnorePlayer);
+				kSinglethreaded.SetValue(kDefaultSinglethreaded);
+				kCacheDurationSeconds.SetValue(kDefaultCacheDurationSeconds);
+				kStaleRecalculateThresholdMs.SetValue(kDefaultStaleRecalculateThresholdMs);
+				kCraftDebounceMs.SetValue(kDefaultCraftDebounceMs);
+				kFilterPotionsBySelectedIngredients.SetValue(kDefaultFilterPotionsBySelectedIngredients);
+				kProtectIngredients.SetValue(kDefaultProtectIngredients);
+				kManualProtectionOnly.SetValue(kDefaultManualProtectionOnly);
 				SaveSettings();
 				recalculate = true;
 			}
@@ -1293,6 +1875,7 @@ namespace alchemist::ui {
 			const auto settingsSavedText = Text("settings.saved", "Changes are saved to alchemist.ini automatically.");
 			ImGui::TextDisabled("%s", settingsSavedText.c_str());
 			ImGui::BeginChild("SettingsScroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
 			ImGui::SeparatorText(Text("settings.calculation", "Calculation").c_str());
 
 			bool usePlayerStats = kIgnorePlayer.GetValue() == 0;
@@ -1342,38 +1925,136 @@ namespace alchemist::ui {
 			}
 			ImGui::TextDisabled("%s", Text("settings.filterSelectedDescription", "Show only potions made from ingredients currently selected in the Skyrim alchemy menu. With no ingredients selected, all potions are shown.").c_str());
 
-			ImGui::SeparatorText(Text("settings.naming", "Naming").c_str());
-			ImGui::SetNextItemWidth(-1.0f);
-			if (ImGui::InputText(Text("settings.potionPrefix", "Potion prefix").c_str(), potionPrefix, sizeof(potionPrefix))) {
-				kPotionPoison.SetValue(std::string(potionPrefix) + "," + poisonPrefix);
-				SaveSettings();
-			}
-			textInputActive = textInputActive || ImGui::IsItemActive();
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				recalculate = true;
-			}
+			const auto profileList = profiles::GetProfiles();
+			const auto observedIdentity = profiles::GetObservedIdentity();
+			ImGui::SeparatorText(Text("settings.profile", "Character profile").c_str());
+				const auto currentProfileIndex = profiles::GetCurrentProfile();
+				std::string currentProfileLabel = Text("profiles.unknown", "Unknown");
+				std::string currentProfileName;
+				for (const auto& profile : profileList) {
+					if (profile.index == currentProfileIndex) {
+						currentProfileLabel = ProfileLabel(profile);
+						currentProfileName = profile.profileName;
+						break;
+					}
+				}
+				ImGui::Text("%s", Text("settings.profileSelect", "Active profile").c_str());
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth((std::min)(420.0f, (std::max)(180.0f, ImGui::GetContentRegionAvail().x)));
+				if (ImGui::BeginCombo("##SettingsProfileCombo", currentProfileLabel.c_str())) {
+					for (const auto& profile : profileList) {
+						if (!observedIdentity.IsKnown() || profile.identity.characterID != observedIdentity.characterID) {
+							continue;
+						}
+						ImGui::PushID(profile.index);
+						const bool isCurrent = profile.index == currentProfileIndex;
+						if (ImGui::Selectable(ProfileLabel(profile).c_str(), isCurrent)) {
+							RequestProfileSelection(profile.index);
+						}
+						if (isCurrent) {
+							ImGui::SetItemDefaultFocus();
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndCombo();
+				}
+				ImGui::TextDisabled("%s", Text("settings.profileDescription", "Switching applies the selected profile's tracking data for the current Character ID. Profiles for another Character ID cannot be selected here.").c_str());
+				ImGui::Text("%s", FormatText("profiles.currentCharacter", "Current character: {identity}", {
+					{ "identity", IdentityLabel(observedIdentity) }
+				}).c_str());
+				if (profileNameInputProfile != currentProfileIndex) {
+					SetProfileNameInput(currentProfileName);
+					profileNameInputProfile = currentProfileIndex;
+					profileNameSaveFailed = false;
+				}
+				ImGui::Text("%s", Text("settings.profileName", "Profile name").c_str());
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth((std::min)(320.0f, (std::max)(180.0f, ImGui::GetContentRegionAvail().x - 150.0f)));
+				const bool profileNameSubmitted = ImGui::InputText("##SettingsProfileName", profileNameInput, sizeof(profileNameInput), ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SameLine();
+				const bool profileNameSaveClicked = ImGui::Button((Text("settings.profileNameSave", "Save profile name") + "##SettingsProfileNameSave").c_str());
+				if (profileNameSubmitted || profileNameSaveClicked) {
+					if (profiles::RenameProfile(currentProfileIndex, profileNameInput)) {
+						profileNameSaveFailed = false;
+						const auto renamedProfiles = profiles::GetProfiles();
+						const auto renamedProfile = std::find_if(renamedProfiles.begin(), renamedProfiles.end(), [currentProfileIndex](const auto& profile) {
+							return profile.index == currentProfileIndex;
+						});
+						if (renamedProfile != renamedProfiles.end()) {
+							SetProfileNameInput(renamedProfile->profileName);
+						}
+					} else {
+						profileNameSaveFailed = true;
+					}
+				}
+				ImGui::TextDisabled("%s", Text("settings.profileNameDescription", "Profile names must be non-empty and unique. The name is stored separately from the Skyrim character name.").c_str());
+				if (profileNameSaveFailed) {
+					ImGui::TextWrapped("%s", Text("profiles.renameFailed", "The profile name was not saved. Use a non-empty name that is not already assigned to another profile, and make sure alchemist.ini can be written.").c_str());
+				}
+				const bool canCreateProfile = profiles::GetObservedIdentity().IsKnown() && currentProfileIndex > 0;
+				ImGui::BeginDisabled(!canCreateProfile);
+				if (ImGui::Button((Text("profiles.createBlank", "Create blank profile") + "##SettingsCreateBlankProfile").c_str())) {
+					CreateProfileFromUI(0);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button((Text("profiles.createFromProfile", "Create from profile") + "##SettingsCreateFromProfile").c_str())) {
+					profileSourceProfile = currentProfileIndex;
+					profileCreationFailed = false;
+					profileCreationOpen = true;
+				}
+				ImGui::EndDisabled();
+				ImGui::TextWrapped("%s", Text("settings.profileCreationDescription", "A blank profile starts with default settings. A profile based on the active profile keeps calculation, tracking preferences, developer mode, language, and window settings, while resetting the character identity and character-specific protected ingredients, effects, and tracking requirements.").c_str());
+				if (!canCreateProfile) {
+					ImGui::TextDisabled("%s", Text("profiles.identityUnavailable", "The current Character ID and visible character identity are not available yet. The profile cannot be changed until they are ready.").c_str());
+				}
+				if (profileCreationFailed) {
+					ImGui::TextWrapped("%s", Text("profiles.createFailed", "The new profile could not be created. The existing profiles were not changed.").c_str());
+				}
 
-			ImGui::SetNextItemWidth(-1.0f);
-			if (ImGui::InputText(Text("settings.poisonPrefix", "Poison prefix").c_str(), poisonPrefix, sizeof(poisonPrefix))) {
-				kPotionPoison.SetValue(std::string(potionPrefix) + "," + poisonPrefix);
-				SaveSettings();
-			}
-			textInputActive = textInputActive || ImGui::IsItemActive();
-			ImGui::TextDisabled("%s", Text("settings.prefixDescription", "Prefixes are applied to beneficial potion and harmful poison names.").c_str());
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				recalculate = true;
-			}
+				ImGui::SeparatorText(Text("settings.profileDeletion", "Delete a profile").c_str());
+				const bool profileIsActive = profiles::HasActiveProfile();
+				if (profileToDelete == 0 || std::none_of(profileList.begin(), profileList.end(), [thisIndex = profileToDelete](const auto& entry) {
+					return entry.index == thisIndex;
+				})) {
+					profileToDelete = currentProfileIndex;
+				}
+				ImGui::Text("%s", Text("settings.profileDeletionSelect", "Profile to delete").c_str());
+				ImGui::SameLine();
+				std::string profileToDeleteLabel = Text("profiles.unknown", "Unknown");
+				for (const auto& profile : profileList) {
+					if (profile.index == profileToDelete) {
+						profileToDeleteLabel = ProfileLabel(profile);
+						break;
+					}
+				}
+				ImGui::SetNextItemWidth((std::min)(420.0f, (std::max)(180.0f, ImGui::GetContentRegionAvail().x)));
+				if (ImGui::BeginCombo("##SettingsDeleteProfileCombo", profileToDeleteLabel.c_str())) {
+					for (const auto& profile : profileList) {
+						ImGui::PushID(profile.index);
+						if (ImGui::Selectable(ProfileLabel(profile).c_str(), profile.index == profileToDelete)) {
+							profileToDelete = profile.index;
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndCombo();
+				}
+				const bool selectedProfileIsCurrent = profileToDelete == currentProfileIndex;
+				ImGui::BeginDisabled(!profileIsActive || selectedProfileIsCurrent);
+				if (ImGui::Button((Text("settings.profileDelete", "Delete selected profile") + "##SettingsDeleteProfile").c_str())) {
+					RequestProfileDeletion(profileToDelete);
+				}
+				ImGui::EndDisabled();
+				ImGui::TextWrapped("%s", Text("settings.profileDeletionDescription", "Deleting a profile removes only its INI data. The active profile and the last remaining profile are protected; switch profiles explicitly before deleting the old one.").c_str());
+				if (!profileIsActive) {
+					ImGui::TextDisabled("%s", Text("profiles.deleteUnavailable", "Profile deletion is unavailable until a character profile has been selected safely.").c_str());
+				}
 
 			ImGui::EndChild();
-			searchInputFocused.store(textInputActive, std::memory_order_release);
 			return recalculate;
 		}
 
 		bool DrawTracking()
 		{
-			if (!trackingBuffersInitialized) {
-				LoadTrackingBuffers();
-			}
 			protectedIngredientWindowVisible = false;
 			protectedIngredientWindowMin = ImVec2(-1.0f, -1.0f);
 			protectedIngredientWindowMax = ImVec2(-1.0f, -1.0f);
@@ -1397,6 +2078,7 @@ namespace alchemist::ui {
 			}
 			textInputActive = textInputActive || ImGui::GetIO().WantTextInput;
 
+			ImGui::BeginChild("TrackingScroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 			ImGui::Separator();
 			const auto trackingTitle = Text("tracking.title", "Ingredient protection and tracking");
 			ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", trackingTitle.c_str());
@@ -1404,6 +2086,9 @@ namespace alchemist::ui {
 			if (ImGui::Checkbox(Text("tracking.enableProtection", "Enable ingredient protection and tracking").c_str(), &protectIngredients)) {
 				kProtectIngredients.SetValue(protectIngredients ? 1 : 0);
 				SaveSettings();
+				if (protectIngredients) {
+					tracker::RefreshDetection();
+				}
 				recalculate = true;
 			}
 			ImGui::TextDisabled("%s", Text("tracking.enableProtectionDescription", "Static reservations, craftable-item requirements, selected effects, and unfinished tracking requirements are used while this is enabled.").c_str());
@@ -1421,8 +2106,25 @@ namespace alchemist::ui {
 				ImGui::TextWrapped("%s", Text("tracking.description", "All loaded quests are listed below, including future inactive quests. Quest matching uses objective text, so verify detected ingredient rows and edit or mark them complete when needed.").c_str());
 			}
 			ImGui::TextDisabled("%s", Text("tracking.questCompletionNotice", "Completed quests are automatically marked complete and excluded from the protected ingredient list.").c_str());
+			if (!trackingEnabled) {
+				trackingBuffersInitialized = false;
+				trackingRequirementBuffers.clear();
+				protectedIngredients.clear();
+				openProtectedIngredientWindow = false;
+				positionProtectedIngredientWindow = false;
+				focusProtectedIngredientSearch = false;
+				selectedTrackingIngredient.clear();
+				openTrackingIngredientDetails = false;
+				selectedTrackingQuestFormID = 0;
+				ImGui::EndChild();
+				searchInputFocused.store(textInputActive || ImGui::GetIO().WantTextInput, std::memory_order_release);
+				return recalculate;
+			}
 
-			ImGui::BeginChild("TrackingScroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+			if (!trackingBuffersInitialized) {
+				LoadTrackingBuffers();
+			}
+
 			ImGui::SetNextItemOpen(false, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader((Text("tracking.effects", "Ingredient effects to protect") + "##TrackingEffects").c_str())) {
 				ImGui::TextDisabled("%s", Text("tracking.effectsDescription", "Select effects to reserve every ingredient that provides them. Set each selected effect to protect all copies or a finite quantity per ingredient; open an ingredient below to adjust an individual detection.").c_str());
@@ -1511,7 +2213,16 @@ namespace alchemist::ui {
 				if (!IsTrackingRequirementVisible(requirement, manualProtectionOnly) || requirement.ingredient.empty()) {
 					continue;
 				}
-				auto& counts = protectionCounts[requirement.ingredient];
+					const auto ingredientKey = RequirementIngredientKey(requirement);
+				auto& counts = protectionCounts[ingredientKey];
+				if (counts.name.empty()) {
+					counts.name = requirement.ingredient;
+				}
+					if (counts.editorID.empty() && requirement.ingredientFormID != 0) {
+						if (const auto* ingredient = FindIngredientByKey(ingredientKey); ingredient && ingredient->GetFormEditorID()) {
+							counts.editorID = ingredient->GetFormEditorID();
+						}
+					}
 				if (requirement.automatic && requirement.overridden) {
 					counts.manualOverride = true;
 				}
@@ -1522,7 +2233,12 @@ namespace alchemist::ui {
 				AddProtectionCount(counts, GetProtectionCategory(requirement.key), count);
 			}
 			for (const auto& entry : protectedIngredients) {
-				AddProtectionCount(protectionCounts[entry.name], ProtectionCategory::kCustom, entry.count < 0 ? 999 : entry.count);
+				auto& counts = protectionCounts[entry.key];
+				if (counts.name.empty()) {
+					counts.name = entry.name;
+					counts.editorID = entry.editorID;
+				}
+				AddProtectionCount(counts, ProtectionCategory::kCustom, entry.count < 0 ? 999 : entry.count);
 			}
 
 			ImGui::SetNextItemOpen(false, ImGuiCond_Once);
@@ -1560,28 +2276,52 @@ namespace alchemist::ui {
 
 				ImGui::TextDisabled("%s", FormatText("tracking.protectionSummaryText", "{count} ingredients have active protection requirements or manual overrides.",
 					{ { "count", std::to_string(protectionCounts.size()) } }).c_str());
+				const float comparisonTableRowHeight = ImGui::GetTextLineHeightWithSpacing();
+				const float comparisonTableHeight = (std::clamp)(ImGui::GetContentRegionAvail().y * 0.45f,
+					comparisonTableRowHeight * 8.0f,
+					comparisonTableRowHeight * 12.0f);
 				if (protectionCounts.empty()) {
 					ImGui::TextDisabled("%s", Text("tracking.noProtectionComparison", "No detected ingredients or protected-list entries to compare.").c_str());
-				} else if (ImGui::BeginTable("TrackingProtectionComparison", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp)) {
+				} else if (ImGui::BeginTable("TrackingProtectionComparison", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp,
+					ImVec2(0.0f, comparisonTableHeight))) {
 				const auto ingredientHeader = Text("tracking.comparisonIngredient", "Ingredient");
 				const auto customHeader = Text("tracking.comparisonCustom", "Custom");
 				const auto questHeader = Text("tracking.comparisonQuest", "Quest");
 				const auto craftableHeader = Text("tracking.comparisonCraftable", "Craftable");
 				const auto effectHeader = Text("tracking.comparisonEffect", "Effect");
 				const auto overrideHeader = Text("tracking.comparisonOverride", "Override");
-				ImGui::TableSetupColumn(ingredientHeader.c_str());
-				ImGui::TableSetupColumn(customHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-				ImGui::TableSetupColumn(questHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-				ImGui::TableSetupColumn(craftableHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-				ImGui::TableSetupColumn(effectHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-				ImGui::TableSetupColumn(overrideHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 110.0f);
+				ImGui::TableSetupScrollFreeze(0, 1);
+				ImGui::TableSetupColumn(ingredientHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 150.0f);
+				ImGui::TableSetupColumn(customHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 40.0f);
+				ImGui::TableSetupColumn(questHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 40.0f);
+				ImGui::TableSetupColumn(craftableHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 50.0f);
+				ImGui::TableSetupColumn(effectHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 40.0f);
+				ImGui::TableSetupColumn(overrideHeader.c_str(), ImGuiTableColumnFlags_WidthFixed, 90.0f);
 				ImGui::TableHeadersRow();
-				for (const auto& [name, categoryCounts] : protectionCounts) {
+				std::vector<decltype(protectionCounts)::const_iterator> sortedProtectionCounts;
+				sortedProtectionCounts.reserve(protectionCounts.size());
+				for (auto iterator = protectionCounts.cbegin(); iterator != protectionCounts.cend(); ++iterator) {
+					sortedProtectionCounts.push_back(iterator);
+				}
+				std::sort(sortedProtectionCounts.begin(), sortedProtectionCounts.end(), [](const auto& left, const auto& right) {
+					const auto leftName = FoldForSearch(left->second.name);
+					const auto rightName = FoldForSearch(right->second.name);
+					if (leftName != rightName) {
+						return leftName < rightName;
+					}
+					if (left->second.name != right->second.name) {
+						return left->second.name < right->second.name;
+					}
+					return left->first < right->first;
+				});
+				for (const auto iterator : sortedProtectionCounts) {
+					const auto& key = iterator->first;
+					const auto& categoryCounts = iterator->second;
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
-					ImGui::PushID(name.c_str());
+					ImGui::PushID(key.c_str());
 					const auto& ingredientButtonIO = ImGui::GetIO();
-					const auto ingredientButtonLabel = name + "##TrackingComparisonIngredientDetails";
+					const auto ingredientButtonLabel = categoryCounts.name + "##TrackingComparisonIngredientDetails";
 					const bool ingredientButtonClicked = ImGui::SmallButton(ingredientButtonLabel.c_str());
 					const auto ingredientButtonMin = ImGui::GetItemRectMin();
 					const auto ingredientButtonMax = ImGui::GetItemRectMax();
@@ -1593,7 +2333,7 @@ namespace alchemist::ui {
 					}
 					ImGui::PopID();
 					if (ingredientButtonClicked) {
-						OpenTrackingIngredientDetails(name);
+						OpenTrackingIngredientDetails(key);
 					}
 					for (std::size_t category = 0; category < static_cast<std::size_t>(ProtectionCategory::kCount); ++category) {
 						ImGui::TableSetColumnIndex(static_cast<int>(category + 1));
@@ -1619,6 +2359,7 @@ namespace alchemist::ui {
 
 			std::size_t detectedCount = 0;
 			std::size_t detectedActiveCount = 0;
+			std::size_t manualCount = 0;
 			std::size_t activeCount = 0;
 			for (const auto& requirement : requirements) {
 				if (!IsTrackingRequirementVisible(requirement, manualProtectionOnly)) {
@@ -1626,6 +2367,7 @@ namespace alchemist::ui {
 				}
 				detectedCount += requirement.automatic ? 1 : 0;
 				detectedActiveCount += requirement.automatic && !requirement.completed ? 1 : 0;
+				manualCount += !requirement.automatic ? 1 : 0;
 				activeCount += !requirement.completed ? 1 : 0;
 			}
 
@@ -1652,6 +2394,11 @@ namespace alchemist::ui {
 				textInputActive = textInputActive || ImGui::IsItemActive();
 				if (ImGui::InputText((Text("tracking.editIngredient", "Ingredient") + "##EditIngredient").c_str(), editBuffers.ingredient, sizeof(editBuffers.ingredient))) {
 					requirement.ingredient = editBuffers.ingredient;
+					if (const auto* ingredient = FindIngredientByKey(editBuffers.ingredient)) {
+						requirement.ingredientFormID = ingredient->GetFormID();
+					} else {
+						requirement.ingredientFormID = 0;
+					}
 					tracker::UpdateRequirement(requirement);
 					recalculate = true;
 				}
@@ -1738,7 +2485,7 @@ namespace alchemist::ui {
 					ImGui::TextDisabled("%s", FormatText("tracking.summary", "{detected} detected, {manual} manual, {active} protecting",
 						{
 							{ "detected", std::to_string(detectedCount) },
-							{ "manual", std::to_string(requirements.size() - detectedCount) },
+							{ "manual", std::to_string(manualCount) },
 							{ "active", std::to_string(activeCount) }
 						}).c_str());
 					if (requirements.empty()) {
@@ -2017,28 +2764,44 @@ namespace alchemist::ui {
 				ImGui::InputTextWithHint("##TrackingProtectedIngredientSearch", Text("tracking.protectedSearchHint", "Type an ingredient to protect...").c_str(), protectedIngredientSearch, sizeof(protectedIngredientSearch));
 				ingredientSearchActive = ImGui::IsItemActive();
 				const std::string searchQuery(protectedIngredientSearch);
-				auto suggestions = GetIngredientNames();
-				suggestions.erase(std::remove_if(suggestions.begin(), suggestions.end(), [&searchQuery](const auto& name) {
-					return IngredientMatchScore(name, searchQuery) < 0 || std::any_of(protectedIngredients.begin(), protectedIngredients.end(), [&name](const auto& entry) {
-						return entry.name == name;
-					});
+				auto suggestions = GetIngredientOptions();
+				suggestions.erase(std::remove_if(suggestions.begin(), suggestions.end(), [&searchQuery](const auto& option) {
+					return (IngredientMatchScore(option.name, searchQuery) < 0 &&
+						IngredientMatchScore(option.editorID, searchQuery) < 0 &&
+						IngredientMatchScore(option.key, searchQuery) < 0) ||
+						std::any_of(protectedIngredients.begin(), protectedIngredients.end(), [&option](const auto& entry) {
+							return entry.key == option.key;
+						});
 				}), suggestions.end());
 				std::sort(suggestions.begin(), suggestions.end(), [&searchQuery](const auto& left, const auto& right) {
-					const auto leftScore = IngredientMatchScore(left, searchQuery);
-					const auto rightScore = IngredientMatchScore(right, searchQuery);
-					return leftScore == rightScore ? left < right : leftScore < rightScore;
+					const auto leftScore = IngredientMatchScore(left.name, searchQuery);
+					const auto rightScore = IngredientMatchScore(right.name, searchQuery);
+					if (leftScore != rightScore) {
+						return leftScore < rightScore;
+					}
+					const auto leftName = FoldForSearch(left.name);
+					const auto rightName = FoldForSearch(right.name);
+					if (leftName != rightName) {
+						return leftName < rightName;
+					}
+					if (left.name != right.name) {
+						return left.name < right.name;
+					}
+					return left.key < right.key;
 				});
 				if (suggestions.empty()) {
 					ImGui::TextDisabled("%s", Text("tracking.noAvailableIngredients", "No available ingredients match the search.").c_str());
 				} else {
 					for (const auto& suggestion : suggestions) {
-						if (ImGui::Selectable(suggestion.c_str())) {
-							AddProtectedIngredient(suggestion);
+						ImGui::PushID(suggestion.key.c_str());
+						if (ImGui::Selectable(IngredientDisplayLabel(suggestion.key, suggestion.name).c_str())) {
+							AddProtectedIngredient(suggestion.key, suggestion.name, suggestion.editorID);
 							protectedIngredientSearch[0] = '\0';
 							ingredientSearchActive = false;
 							recalculate = true;
 							pickerOpen = false;
 						}
+						ImGui::PopID();
 					}
 				}
 			}
@@ -2063,6 +2826,23 @@ namespace alchemist::ui {
 			}
 			textInputActive = textInputActive || ingredientSearchActive;
 			if (!selectedTrackingIngredient.empty()) {
+				std::string selectedIngredientName = selectedTrackingIngredient;
+				std::string selectedIngredientEditorID;
+				if (const auto* ingredient = FindIngredientByKey(selectedTrackingIngredient)) {
+					selectedIngredientName = ingredient->GetFullName() && *ingredient->GetFullName() ? ingredient->GetFullName() : selectedIngredientName;
+					selectedIngredientEditorID = ingredient->GetFormEditorID() ? ingredient->GetFormEditorID() : "";
+				}
+				if (const auto protectedEntry = std::find_if(protectedIngredients.begin(), protectedIngredients.end(), [](const auto& entry) {
+					return entry.key == selectedTrackingIngredient;
+				}); protectedEntry != protectedIngredients.end()) {
+					selectedIngredientName = protectedEntry->name;
+					selectedIngredientEditorID = protectedEntry->editorID;
+				} else if (const auto requirement = std::find_if(requirements.begin(), requirements.end(), [](const auto& entry) {
+					return RequirementIngredientKey(entry) == selectedTrackingIngredient;
+				}); requirement != requirements.end()) {
+					selectedIngredientName = requirement->ingredient;
+				}
+				const auto selectedIngredientLabel = IngredientDisplayLabel(selectedTrackingIngredient, selectedIngredientName);
 				const bool detailsPopupRequested = openTrackingIngredientDetails;
 				const auto detailsPopupLabel = Text("tracking.ingredientDetails", "Ingredient details") + "###TrackingIngredientDetails";
 				if (detailsPopupRequested) {
@@ -2081,10 +2861,10 @@ namespace alchemist::ui {
 				const bool detailsPopupVisible = ImGui::BeginPopupModal(detailsPopupLabel.c_str(), &detailsWindowOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_AlwaysVerticalScrollbar);
 				if (detailsPopupVisible) {
 					cursorOverWindow.store(true, std::memory_order_release);
-					ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", selectedTrackingIngredient.c_str());
+					ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", selectedIngredientLabel.c_str());
 					ImGui::TextWrapped("%s", Text("tracking.ingredientDetailsDescription", "This popup shows every protection source for this ingredient. Changes are saved immediately and reduce the copies available to the potion calculator.").c_str());
 					const auto protectedEntry = std::find_if(protectedIngredients.begin(), protectedIngredients.end(), [](const auto& entry) {
-						return entry.name == selectedTrackingIngredient;
+						return entry.key == selectedTrackingIngredient;
 					});
 					ImGui::SeparatorText(Text("tracking.staticProtection", "Static protection").c_str());
 					ImGui::TextWrapped("%s", Text("tracking.staticProtectionDescription", "Static protection is a manual reservation for this ingredient. It applies independently of detected quests, recipes, and selected effects.").c_str());
@@ -2092,7 +2872,7 @@ namespace alchemist::ui {
 						ImGui::TextDisabled("%s", Text("tracking.noStaticProtection", "This ingredient has no static protection exception.").c_str());
 						ImGui::TextWrapped("%s", Text("tracking.addStaticProtectionDescription", "Use this button to add a saved reservation before changing its quantity.").c_str());
 						if (ImGui::Button((Text("tracking.addStaticProtection", "Protect this ingredient") + "##AddStaticProtection").c_str())) {
-							AddProtectedIngredient(selectedTrackingIngredient);
+							AddProtectedIngredient(selectedTrackingIngredient, selectedIngredientName, selectedIngredientEditorID);
 							recalculate = true;
 						}
 					} else {
@@ -2133,7 +2913,7 @@ namespace alchemist::ui {
 					ImGui::TextWrapped("%s", Text("tracking.detectedSourcesDescription", "These rows were found from loaded game records or entered as tracking requirements. Each row contributes its own reservation, and all unfinished rows are combined for this ingredient.").c_str());
 					bool foundRequirement = false;
 					for (const auto& original : requirements) {
-						if (!IsTrackingRequirementVisible(original, manualProtectionOnly) || original.ingredient != selectedTrackingIngredient) {
+						if (!IsTrackingRequirementVisible(original, manualProtectionOnly) || RequirementIngredientKey(original) != selectedTrackingIngredient) {
 							continue;
 						}
 						foundRequirement = true;
@@ -2142,51 +2922,56 @@ namespace alchemist::ui {
 						const bool manualOverride = requirement.automatic && requirement.overridden;
 						const auto typeText = Text(manualOverride ? "tracking.manualOverrideLabel" : (requirement.automatic ? "tracking.detected" : "tracking.manualLabel"),
 							manualOverride ? "Manual override" : (requirement.automatic ? "Detected" : "Manual"));
-						ImGui::TextColored(manualOverride ? ImVec4(1.0f, 0.75f, 0.35f, 1.0f) : (requirement.automatic ? ImVec4(0.55f, 0.8f, 1.0f, 1.0f) : ImVec4(0.65f, 1.0f, 0.65f, 1.0f)), "%s", typeText.c_str());
-						ImGui::SameLine();
-						ImGui::TextWrapped("%s", requirement.source.empty() ? Text("tracking.unknownSource", "Unspecified source").c_str() : requirement.source.c_str());
-						if (!requirement.detail.empty()) {
-							ImGui::TextWrapped("%s", requirement.detail.c_str());
-						}
-						bool protectAll = requirement.count >= 999;
-						if (ImGui::Checkbox((Text("tracking.protectAllDetection", "Protect all from this detection") + "##ProtectAllDetection").c_str(), &protectAll)) {
-							if (protectAll) {
-								requirement.previousCount = requirement.count < kUnlimitedProtectionCount ? (std::max)(1, requirement.count) : GetFiniteProtectionCount(requirement);
-								requirement.count = kUnlimitedProtectionCount;
-							} else {
-								requirement.count = GetFiniteProtectionCount(requirement);
-								requirement.previousCount = requirement.count;
+						const auto sourceText = requirement.source.empty() ? Text("tracking.unknownSource", "Unspecified source") : requirement.source;
+						const auto entryLabel = sourceText + "##IngredientDetectionEntry";
+						ImGui::SetNextItemOpen(false, ImGuiCond_Once);
+						if (ImGui::CollapsingHeader(entryLabel.c_str())) {
+							ImGui::TextColored(manualOverride ? ImVec4(1.0f, 0.75f, 0.35f, 1.0f) : (requirement.automatic ? ImVec4(0.55f, 0.8f, 1.0f, 1.0f) : ImVec4(0.65f, 1.0f, 0.65f, 1.0f)), "%s", typeText.c_str());
+							ImGui::SameLine();
+							ImGui::TextWrapped("%s", sourceText.c_str());
+							if (!requirement.detail.empty()) {
+								ImGui::TextWrapped("%s", requirement.detail.c_str());
 							}
-							tracker::UpdateRequirement(requirement);
-							recalculate = true;
-						}
-						ImGui::TextWrapped("%s", Text("tracking.protectAllDetectionDescription", "Reserve every available copy for this source. Clear it to use a finite protected quantity instead.").c_str());
-						if (!protectAll) {
-							ImGui::SetNextItemWidth(100.0f);
-							if (ImGui::InputInt((Text("tracking.protectQuantity", "Protected quantity") + "##ProtectQuantity").c_str(), &requirement.count, 1, 10)) {
-								requirement.count = (std::clamp)(requirement.count, 1, 998);
-								requirement.previousCount = requirement.count;
+							bool protectAll = requirement.count >= 999;
+							if (ImGui::Checkbox((Text("tracking.protectAllDetection", "Protect all from this detection") + "##ProtectAllDetection").c_str(), &protectAll)) {
+								if (protectAll) {
+									requirement.previousCount = requirement.count < kUnlimitedProtectionCount ? (std::max)(1, requirement.count) : GetFiniteProtectionCount(requirement);
+									requirement.count = kUnlimitedProtectionCount;
+								} else {
+									requirement.count = GetFiniteProtectionCount(requirement);
+									requirement.previousCount = requirement.count;
+								}
 								tracker::UpdateRequirement(requirement);
 								recalculate = true;
 							}
-							ImGui::TextWrapped("%s", Text("tracking.protectQuantityDescription", "The protected quantity for this source is combined with other active sources for the same ingredient.").c_str());
-						}
-						bool completed = requirement.completed;
-						if (ImGui::Checkbox((Text("tracking.completed", "Completed") + "##IngredientDetectionCompleted").c_str(), &completed)) {
-							requirement.completed = completed;
-							requirement.completionOverridden = true;
-							tracker::UpdateRequirement(requirement);
-							recalculate = true;
-						}
-						ImGui::TextWrapped("%s", Text("tracking.completedDescription", "Mark this requirement completed when it is fulfilled. Completed rows no longer reserve ingredient copies.").c_str());
-						if (!requirement.automatic) {
-							if (ImGui::SmallButton((Text("tracking.remove", "Remove") + "##IngredientDetectionRemove").c_str())) {
-								tracker::RemoveManual(requirement.key);
+							ImGui::TextWrapped("%s", Text("tracking.protectAllDetectionDescription", "Reserve every available copy for this source. Clear it to use a finite protected quantity instead.").c_str());
+							if (!protectAll) {
+								ImGui::SetNextItemWidth(100.0f);
+								if (ImGui::InputInt((Text("tracking.protectQuantity", "Protected quantity") + "##ProtectQuantity").c_str(), &requirement.count, 1, 10)) {
+									requirement.count = (std::clamp)(requirement.count, 1, 998);
+									requirement.previousCount = requirement.count;
+									tracker::UpdateRequirement(requirement);
+									recalculate = true;
+								}
+								ImGui::TextWrapped("%s", Text("tracking.protectQuantityDescription", "The protected quantity for this source is combined with other active sources for the same ingredient.").c_str());
+							}
+							bool completed = requirement.completed;
+							if (ImGui::Checkbox((Text("tracking.completed", "Completed") + "##IngredientDetectionCompleted").c_str(), &completed)) {
+								requirement.completed = completed;
+								requirement.completionOverridden = true;
+								tracker::UpdateRequirement(requirement);
 								recalculate = true;
 							}
-							ImGui::TextWrapped("%s", Text("tracking.removeDetectionDescription", "Remove deletes this manual tracking row and its reservation; automatically detected rows cannot be removed here.").c_str());
+							ImGui::TextWrapped("%s", Text("tracking.completedDescription", "Mark this requirement completed when it is fulfilled. Completed rows no longer reserve ingredient copies.").c_str());
+							if (!requirement.automatic) {
+								if (ImGui::SmallButton((Text("tracking.remove", "Remove") + "##IngredientDetectionRemove").c_str())) {
+									tracker::RemoveManual(requirement.key);
+									recalculate = true;
+								}
+								ImGui::TextWrapped("%s", Text("tracking.removeDetectionDescription", "Remove deletes this manual tracking row and its reservation; automatically detected rows cannot be removed here.").c_str());
+							}
+							ImGui::Separator();
 						}
-						ImGui::Separator();
 						ImGui::PopID();
 					}
 					if (!foundRequirement) {
@@ -2237,9 +3022,47 @@ namespace alchemist::ui {
 		}
 	}
 
+	void NotifyNewGame()
+	{
+		profileTransitionCancelRequested.store(true, std::memory_order_release);
+		profiles::NotifyNewGame();
+	}
+
+	void NotifyGameLoadStarted()
+	{
+		profileTransitionCancelRequested.store(true, std::memory_order_release);
+		profiles::NotifyGameLoadStarted();
+	}
+
+	void NotifyGameLoadFinished()
+	{
+		profileTransitionCancelRequested.store(true, std::memory_order_release);
+		profiles::NotifyGameLoadFinished();
+	}
+
 	void SetVisible(bool a_visible)
 	{
-		isWindowOpen.store(a_visible, std::memory_order_release);
+		const auto wasVisible = isWindowOpen.exchange(a_visible, std::memory_order_acq_rel);
+		if (wasVisible != a_visible) {
+			visibilityResetRequested.store(true, std::memory_order_release);
+		}
+	}
+
+	void SetGameWindowFocused(bool a_focused)
+	{
+		const auto wasFocused = gameWindowFocused.exchange(a_focused, std::memory_order_acq_rel);
+		if (wasFocused == a_focused) {
+			return;
+		}
+
+		ResetInputState();
+		if (ImGui::GetCurrentContext()) {
+			auto& io = ImGui::GetIO();
+			io.ClearEventsQueue();
+			io.ClearInputKeys();
+			io.ClearInputMouse();
+			io.AddFocusEvent(a_focused);
+		}
 	}
 
 	void SetCursorPosition(float a_x, float a_y)
@@ -2249,7 +3072,17 @@ namespace alchemist::ui {
 
 	void SetLeftMouseButtonDown(bool a_down)
 	{
-		leftMouseButtonDown.store(a_down, std::memory_order_release);
+		const auto previousState = skyrimLeftMouseButtonDown.exchange(a_down, std::memory_order_acq_rel);
+		if (previousState == a_down) {
+			return;
+		}
+		std::scoped_lock lock(pendingMouseButtonMutex);
+		pendingMouseButtonEvents.push_back(PendingMouseButtonEvent{ a_down });
+	}
+
+	bool IsLeftMouseButtonDown()
+	{
+		return skyrimLeftMouseButtonDown.load(std::memory_order_acquire);
 	}
 
 	void AddMouseWheel(float a_delta)
@@ -2368,21 +3201,44 @@ namespace alchemist::ui {
 	void UpdateImGuiMouseInput()
 	{
 		auto& io = ImGui::GetIO();
-		if (!IsVisible()) {
+		if (!IsVisible() || !gameWindowFocused.load(std::memory_order_acquire)) {
+			{
+				std::scoped_lock lock(pendingMouseButtonMutex);
+				pendingMouseButtonEvents.clear();
+			}
 			io.AddMousePosEvent(-1.0f, -1.0f);
 			io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
 			mouseWheelDelta.store(0.0f, std::memory_order_release);
-			leftMouseButtonDown.store(false, std::memory_order_release);
+			skyrimLeftMouseButtonDown.store(false, std::memory_order_release);
 			return;
 		}
 
 		io.AddMousePosEvent(skyrimCursorPosition.x, skyrimCursorPosition.y);
-		io.AddMouseButtonEvent(ImGuiMouseButton_Left, leftMouseButtonDown.load(std::memory_order_acquire));
-		io.AddMouseWheelEvent(0.0f, mouseWheelDelta.exchange(0.0f, std::memory_order_acq_rel));
+		std::vector<PendingMouseButtonEvent> mouseButtonEvents;
+		{
+			std::scoped_lock lock(pendingMouseButtonMutex);
+			mouseButtonEvents.swap(pendingMouseButtonEvents);
+		}
+		const auto eventLeftButtonDown = skyrimLeftMouseButtonDown.load(std::memory_order_acquire);
+		const auto nativeLeftButtonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+		const auto submittedLeftButtonDown = eventLeftButtonDown || nativeLeftButtonDown;
+		if (mouseButtonEvents.empty()) {
+			io.AddMouseButtonEvent(ImGuiMouseButton_Left, submittedLeftButtonDown);
+		} else {
+			for (const auto& event : mouseButtonEvents) {
+				io.AddMouseButtonEvent(ImGuiMouseButton_Left, event.down);
+			}
+			if (mouseButtonEvents.back().down != submittedLeftButtonDown) {
+				io.AddMouseButtonEvent(ImGuiMouseButton_Left, submittedLeftButtonDown);
+			}
+		}
+		const auto wheelDelta = mouseWheelDelta.exchange(0.0f, std::memory_order_acq_rel);
+		io.AddMouseWheelEvent(0.0f, wheelDelta);
 	}
 
 	void ResetInputState()
 	{
+		visibilityResetRequested.store(false, std::memory_order_release);
 		if (ImGui::GetCurrentContext()) {
 			ImGui::ClearActiveID();
 		}
@@ -2394,9 +3250,11 @@ namespace alchemist::ui {
 		protectedIngredientWindowVisible = false;
 		protectedIngredientWindowMin = ImVec2(-1.0f, -1.0f);
 		protectedIngredientWindowMax = ImVec2(-1.0f, -1.0f);
-		draggingWindow = false;
-		resizingWindow = false;
-		previousLeftMouseButtonDown = leftMouseButtonDown.load(std::memory_order_acquire);
+		skyrimLeftMouseButtonDown.store(false, std::memory_order_release);
+		{
+			std::scoped_lock lock(pendingMouseButtonMutex);
+			pendingMouseButtonEvents.clear();
+		}
 		searchRectMin = ImVec2(-1.0f, -1.0f);
 		searchRectMax = ImVec2(-1.0f, -1.0f);
 		searchInputFocused.store(false, std::memory_order_release);
@@ -2410,7 +3268,7 @@ namespace alchemist::ui {
 	void ProcessKeyboardInput()
 	{
 		const auto gameWindow = render::GetGameWindowHandle();
-		if (!gameWindow || ::GetForegroundWindow() != gameWindow) {
+		if (!gameWindowFocused.load(std::memory_order_acquire) || !gameWindow || ::GetForegroundWindow() != gameWindow) {
 			std::scoped_lock lock(pendingInputMutex);
 			pendingInput.clear();
 			return;
@@ -2481,8 +3339,9 @@ namespace alchemist::ui {
 		}
 
 		const auto position = skyrimCursorPosition;
+		const auto& io = ImGui::GetIO();
 		auto* drawList = ImGui::GetForegroundDrawList();
-		const auto displaySize = ImGui::GetIO().DisplaySize;
+		const auto displaySize = io.DisplaySize;
 		const float cursorScale = (displaySize.y > 0.0f) ? std::clamp(displaySize.y / 1080.0f, 1.0f, 3.0f) : 1.0f;
 		const float s = cursorScale;
 
@@ -2528,6 +3387,9 @@ namespace alchemist::ui {
 
 	void DrawWindow()
 	{
+		if (visibilityResetRequested.exchange(false, std::memory_order_acq_rel)) {
+			ResetInputState();
+		}
 		if (!IsVisible()) {
 			ResetInputState();
 			return;
@@ -2539,15 +3401,15 @@ namespace alchemist::ui {
 			const auto maximumWidth = (std::max)(minimumWindowWidth, displaySize.x);
 			const auto maximumHeight = (std::max)(minimumWindowHeight, displaySize.y);
 			expandedWindowSize = ImVec2(
-				(std::min)(maximumWidth, IsValidSavedSize(windowWidth.GetValue()) ? windowWidth.GetValue() : defaultWindowWidth),
-				(std::min)(maximumHeight, IsValidSavedSize(windowHeight.GetValue()) ? windowHeight.GetValue() : defaultWindowHeight));
+				(std::min)(maximumWidth, IsValidSavedSize(kWindowWidth.GetValue()) ? kWindowWidth.GetValue() : defaultWindowWidth),
+				(std::min)(maximumHeight, IsValidSavedSize(kWindowHeight.GetValue()) ? kWindowHeight.GetValue() : defaultWindowHeight));
 			const auto maximumX = (std::max)(0.0f, displaySize.x - expandedWindowSize.x);
 			const auto maximumY = (std::max)(0.0f, displaySize.y - expandedWindowSize.y);
 			const auto defaultX = (std::min)(maximumX, (std::max)(0.0f, displaySize.x - expandedWindowSize.x - screenMargin));
 			const auto defaultY = (std::min)(maximumY, screenMargin);
 			const auto position = ImVec2(
-				(std::min)(maximumX, IsValidSavedValue(windowPositionX.GetValue()) ? windowPositionX.GetValue() : defaultX),
-				(std::min)(maximumY, IsValidSavedValue(windowPositionY.GetValue()) ? windowPositionY.GetValue() : defaultY));
+				(std::min)(maximumX, IsValidSavedValue(kWindowPositionX.GetValue()) ? kWindowPositionX.GetValue() : defaultX),
+				(std::min)(maximumY, IsValidSavedValue(kWindowPositionY.GetValue()) ? kWindowPositionY.GetValue() : defaultY));
 			ImGui::SetNextWindowPos(position, ImGuiCond_Always);
 			ImGui::SetNextWindowSize(expandedWindowSize, ImGuiCond_Always);
 			windowStateInitialized = true;
@@ -2559,11 +3421,22 @@ namespace alchemist::ui {
 			ImGui::SetNextWindowSize(expandedWindowSize, ImGuiCond_Always);
 			windowSizeIsCollapsed = false;
 		}
+		ImGui::SetNextWindowSizeConstraints(
+			ImVec2(minimumWindowWidth, windowCollapsed ? ImGui::GetFrameHeight() : minimumWindowHeight),
+			ImVec2((std::max)(minimumWindowWidth, displaySize.x), (std::max)(minimumWindowHeight, displaySize.y)));
 		const auto windowTitle = Text("window.title", "Prosperous Alchemist") + "##AlchemistWindow";
-		const bool popupInputCapture = !windowCollapsed && trackingOpen &&
-			(openProtectedIngredientWindow || !selectedTrackingIngredient.empty());
+		const bool mainWindowContentsVisible = ImGui::Begin(
+			windowTitle.c_str(),
+			nullptr,
+				ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+		auto* mainWindow = ImGui::GetCurrentWindow();
+		PrepareProfiles();
+		DrawProfileDeletion();
+			DrawProfileCreation();
+			const bool popupInputCapture = profileDeletionOpen || profileCreationOpen || (!windowCollapsed && trackingOpen &&
+			(openProtectedIngredientWindow || !selectedTrackingIngredient.empty()));
 		protectedIngredientPopupInputCapture.store(popupInputCapture, std::memory_order_release);
-		if (!ImGui::Begin(windowTitle.c_str(), nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar)) {
+		if (!mainWindowContentsVisible) {
 			const auto windowPosition = ImGui::GetWindowPos();
 			const auto windowSize = ImGui::GetWindowSize();
 			protectedIngredientWindowVisible = false;
@@ -2578,6 +3451,14 @@ namespace alchemist::ui {
 			ImGui::End();
 			return;
 		}
+		const bool hasActiveProfile = profiles::HasActiveProfile();
+		if (!hasActiveProfile) {
+			DrawProfileUnavailableState();
+			protectedIngredientPopupInputCapture.store(true, std::memory_order_release);
+			cursorOverWindow.store(true, std::memory_order_release);
+			ImGui::End();
+			return;
+		}
 		const auto windowPosition = ImGui::GetWindowPos();
 		const auto windowSize = ImGui::GetWindowSize();
 		const auto mousePosition = skyrimCursorPosition;
@@ -2587,7 +3468,6 @@ namespace alchemist::ui {
 		const bool cursorOverProtectedWindow = IsCursorOverProtectedIngredientWindow(mousePosition);
 		const bool cursorCapture = popupInputCapture || cursorOverMainWindow || cursorOverProtectedWindow;
 		cursorOverWindow.store(cursorCapture, std::memory_order_release);
-		const auto leftButtonDown = leftMouseButtonDown.load(std::memory_order_acquire);
 		if (settingsOpen || trackingOpen) {
 			searchRectMin = ImVec2(-1.0f, -1.0f);
 			searchRectMax = ImVec2(-1.0f, -1.0f);
@@ -2603,9 +3483,7 @@ namespace alchemist::ui {
 		const auto resizeGripMin = ImVec2(windowPosition.x + windowSize.x - resizeGripSize, windowPosition.y + windowSize.y - resizeGripSize);
 		const auto cursorOverResizeGrip = !windowCollapsed && mousePosition.x >= resizeGripMin.x && mousePosition.x <= windowPosition.x + windowSize.x &&
 			mousePosition.y >= resizeGripMin.y && mousePosition.y <= windowPosition.y + windowSize.y;
-		const auto cursorOverTitleBar = !cursorOverToggleButton && mousePosition.x >= windowPosition.x && mousePosition.x <= windowPosition.x + windowSize.x &&
-			mousePosition.y >= windowPosition.y && mousePosition.y <= windowPosition.y + ImGui::GetFrameHeight();
-		const auto leftButtonPressed = leftButtonDown && !previousLeftMouseButtonDown;
+		const auto leftButtonPressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 		const auto cursorOverSearch = mousePosition.x >= searchRectMin.x && mousePosition.x <= searchRectMax.x &&
 			mousePosition.y >= searchRectMin.y && mousePosition.y <= searchRectMax.y;
 		if (leftButtonPressed && cursorOverSearch) {
@@ -2617,32 +3495,13 @@ namespace alchemist::ui {
 		}
 		if (leftButtonPressed && cursorOverToggleButton) {
 			windowCollapsed = !windowCollapsed;
-			draggingWindow = false;
-			resizingWindow = false;
-		} else if (leftButtonPressed && cursorOverResizeGrip) {
-			resizingWindow = true;
-			draggingWindow = false;
-			resizeStartCursor = mousePosition;
-			resizeStartSize = windowSize;
-		} else if (!leftButtonDown) {
-			draggingWindow = false;
-			resizingWindow = false;
-		} else if (!draggingWindow && !previousLeftMouseButtonDown && cursorOverTitleBar) {
-			draggingWindow = true;
-			dragOffset = ImVec2(mousePosition.x - windowPosition.x, mousePosition.y - windowPosition.y);
+			if (mainWindow) {
+				ImGui::SetActiveID(ImGui::GetID("##AlchemistCollapseToggle"), mainWindow);
+				if (GImGui->MovingWindow == mainWindow) {
+					GImGui->MovingWindow = nullptr;
+				}
+			}
 		}
-		if (resizingWindow) {
-			const auto maximumWindowWidth = (std::max)(minimumWindowWidth, displaySize.x - windowPosition.x);
-			const auto maximumWindowHeight = (std::max)(minimumWindowHeight, displaySize.y - windowPosition.y);
-			const auto width = (std::min)(maximumWindowWidth, (std::max)(minimumWindowWidth, resizeStartSize.x + mousePosition.x - resizeStartCursor.x));
-			const auto height = (std::min)(maximumWindowHeight, (std::max)(minimumWindowHeight, resizeStartSize.y + mousePosition.y - resizeStartCursor.y));
-			ImGui::SetWindowSize(ImVec2(width, height));
-			expandedWindowSize = ImVec2(width, height);
-		} else if (draggingWindow) {
-			ImGui::SetWindowPos(ImVec2(mousePosition.x - dragOffset.x, mousePosition.y - dragOffset.y));
-		}
-		previousLeftMouseButtonDown = leftButtonDown;
-
 		auto* drawList = ImGui::GetForegroundDrawList();
 		const auto toggleColor = cursorOverToggleButton ? IM_COL32(255, 220, 120, 255) : IM_COL32(210, 180, 100, 255);
 		drawList->AddRectFilled(toggleButtonMin, toggleButtonMax, IM_COL32(45, 32, 16, 255), 2.0f);
@@ -2656,7 +3515,11 @@ namespace alchemist::ui {
 			ImVec2(toggleButtonMax.x - iconPadding, toggleButtonMin.y + iconPadding),
 			ImVec2(toggleButtonMin.x + iconPadding, toggleButtonMax.y - iconPadding),
 			toggleColor, 1.8f);
-		SaveWindowState(!windowCollapsed && !windowSizeIsCollapsed);
+		if (suppressWindowStateSave) {
+			suppressWindowStateSave = false;
+		} else {
+			SaveWindowState(!windowCollapsed && !windowSizeIsCollapsed);
+		}
 		if (!windowCollapsed) {
 			const auto resizeGripColor = cursorOverResizeGrip ? IM_COL32(255, 220, 120, 255) : IM_COL32(160, 130, 75, 255);
 			const auto resizeGripMax = ImVec2(windowPosition.x + windowSize.x - 4.0f, windowPosition.y + windowSize.y - 4.0f);

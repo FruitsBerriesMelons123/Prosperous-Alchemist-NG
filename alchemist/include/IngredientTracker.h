@@ -54,6 +54,7 @@ namespace alchemist::tracker {
 		std::string source;
 		std::string detail;
 		std::string ingredient;
+		std::uint32_t ingredientFormID = 0;
 		int count = 1;
 		bool completed = false;
 		bool automatic = false;
@@ -74,6 +75,10 @@ namespace alchemist::tracker {
 	};
 
 	bool RefreshDetection();
+	bool HasPersistedTrackingData();
+	void ResetForNewGame();
+	void ReloadForProfile();
+	std::string GetIngredientKey(std::uint32_t a_formID);
 	std::vector<EffectInfo> GetEffects();
 	std::vector<QuestInfo> GetQuests();
 	std::vector<Requirement> GetRequirements();

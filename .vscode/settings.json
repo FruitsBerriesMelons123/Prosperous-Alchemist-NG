@@ -1,10 +1,10 @@
 {
   "files.exclude": {
     "**/__pycache__": true,
+    "licenses": true,
+    "temp": true,
+    "scratch": true,
     "COPYING": true,
     "EXCEPTIONS.md": true
-  },
-  "search.exclude": {
-    "**/alandtse-CommonLibSSE-NG": true
   }
 }

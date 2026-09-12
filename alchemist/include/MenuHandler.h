@@ -15,5 +15,6 @@ namespace alchemist::menu {
 	void RequestRecalculation(bool a_force = false);
 	void RefreshAlchemyMenu(bool a_hasPurityPerk);
 	bool GetCursorSnapshot(CursorSnapshot& a_snapshot);
+	std::vector<std::uint32_t> GetSelectedIngredientFormIDsInSelectionOrder();
 	std::vector<std::uint32_t> GetSelectedIngredientFormIDs();
 }

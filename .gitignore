@@ -1,5 +1,8 @@
 # Custom entries
-potions-predicted-*.csv
+scratch/
+chats/
+temp_build_start.txt
+potions-predicted-*
 relevant.md
 *.diff
 code-part*.md
@@ -8,7 +11,6 @@ links/
 archive/
 updates.md
 requests.md
-problems.md
 dist/
 temp/
 vcpkg/

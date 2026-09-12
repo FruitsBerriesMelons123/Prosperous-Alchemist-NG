@@ -163,6 +163,33 @@ namespace alchemist::alchemyplus {
 					return nullptr;
 				}
 				auto* form = dataHandler->LookupForm(formID, plugin);
+				if (!form) {
+					if (plugin == "Complete Alchemy & Cooking Overhaul.esp") {
+						form = dataHandler->LookupForm(formID, "Complete Alchemy & Cooking Overhaul.esm");
+					} else if (plugin == "Complete Alchemy & Cooking Overhaul.esm") {
+						form = dataHandler->LookupForm(formID, "Complete Alchemy & Cooking Overhaul.esp");
+					} else if (plugin == "Skyrim.esm") {
+						static constexpr std::array<std::string_view, 11> kCcDlcPlugins{
+							"Update.esm",
+							"Dawnguard.esm",
+							"Dragonborn.esm",
+							"ccbgssse037-curios.esl",
+							"ccbgssse025-advdsgs.esm",
+							"ccbgssse001-fish.esm",
+							"ccbgssse067-daedinv.esm",
+							"ccbgssse003-zombies.esl",
+							"ccbgssse040-advobgg.esl",
+							"ccasvsse001-almsivi.esm",
+							"ccvsvsse004-beaskpeg.esl"
+						};
+						for (const auto pName : kCcDlcPlugins) {
+							if (auto* f = dataHandler->LookupForm(formID, pName)) {
+								form = f;
+								break;
+							}
+						}
+					}
+				}
 				return form ? form->As<RE::EffectSetting>() : nullptr;
 			} catch (...) {
 				return nullptr;
@@ -257,6 +284,11 @@ namespace alchemist::alchemyplus {
 		}
 	}
 	void Adapter::Initialize() noexcept
+	{
+		Refresh();
+	}
+
+	void Adapter::Refresh() noexcept
 	{
 		g_detected = false;
 		g_active = false;

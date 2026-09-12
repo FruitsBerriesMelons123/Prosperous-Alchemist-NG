@@ -1,5 +1,8 @@
 #include "main.h"
 #include "AlchemistEngine.h"
+#include "ModSettings.h"
+#include "PotionConfirmation.h"
+#include "ProfileManager.h"
 
 #include <Windows.h>
 
@@ -19,6 +22,34 @@
 
 namespace alchemist::engine {
 	namespace {
+		inline bool IsSystemMemorySafe()
+		{
+			MEMORYSTATUSEX status{};
+			status.dwLength = sizeof(status);
+			if (GlobalMemoryStatusEx(&status)) {
+				// High "memory load" is normal (cache). Only bail out on genuine exhaustion.
+				if (status.ullAvailPhys < (256ULL * 1024 * 1024) ||
+					status.ullAvailPageFile < (512ULL * 1024 * 1024)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// Leaves at least 2 cores free on >= 6-core CPUs and 1 core free on 2-4 core CPUs
+		inline std::size_t GetSafeWorkerCount(std::size_t candidateCount, bool multithreaded)
+		{
+			if (!multithreaded || candidateCount <= 1) {
+				return 1;
+			}
+			const auto hw = std::thread::hardware_concurrency();
+			if (hw <= 1) {
+				return 1;
+			}
+			const std::size_t target = hw > 4 ? hw - 2 : hw - 1;
+			return (std::min)(target, candidateCount);
+		}
+
 		std::mutex snapshotMutex;
 		constexpr std::size_t maxCachedRecipes = 2500;
 		vector<RecipeResult> cachedRecipes;
@@ -33,10 +64,10 @@ namespace alchemist::engine {
 		string FormatIngredients(const Potion& potion)
 		{
 			if (potion.size == 2) {
-				return str::printSort2(potion.ingredient1.name, potion.ingredient2.name);
+				return potion.ingredient1.name + ", " + potion.ingredient2.name;
 			}
 			if (potion.size == 3) {
-				return str::printSort3(potion.ingredient1.name, potion.ingredient2.name, potion.ingredient3.name);
+				return potion.ingredient1.name + ", " + potion.ingredient2.name + ", " + potion.ingredient3.name;
 			}
 			return {};
 		}
@@ -218,6 +249,7 @@ namespace alchemist::engine {
 		RecalculationSnapshot CaptureSnapshot()
 		{
 			initAlchemist();
+			modsettings::RefreshAndSynchronize(player);
 
 			RecalculationSnapshot snapshot;
 			snapshot.ingredients.assign(ingredients.begin(), ingredients.end());
@@ -271,6 +303,19 @@ namespace alchemist::engine {
 			}
 			for (const auto formID : currentFormIDs) {
 				if (masterCache.availableFormIDs.find(formID) == masterCache.availableFormIDs.end()) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		bool IsMasterCacheSubsetOfCurrentLocked(const std::unordered_set<std::uint32_t>& currentFormIDs)
+		{
+			if (!masterCache.isValid || masterCache.availableFormIDs.empty()) {
+				return false;
+			}
+			for (const auto formID : masterCache.availableFormIDs) {
+				if (currentFormIDs.find(formID) == currentFormIDs.end()) {
 					return false;
 				}
 			}
@@ -334,23 +379,37 @@ namespace alchemist::engine {
 				NativePotionResult nativeResult;
 			};
 
-			const auto hardwareThreads = std::thread::hardware_concurrency();
-			const std::size_t requestedWorkers = hardwareThreads > 0 ? hardwareThreads : 1;
-			const std::size_t workerCount = multithreaded ? (std::min)(requestedWorkers, total) : 1;
-
+			// Throttle worker count to preserve Skyrim core headroom
+			const std::size_t workerCount = GetSafeWorkerCount(total, multithreaded);
 			std::atomic<std::size_t> nextIndex = 0;
+			std::atomic<bool> memoryAbort = false;
 			std::vector<std::vector<EvaluatedItem>> workerResults(workerCount);
 
 			const auto worker = [&](std::size_t workerIndex) {
+				SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+
 				auto& results = workerResults[workerIndex];
 				while (true) {
 					if (cancelToken && cancelToken->load(std::memory_order_relaxed)) {
 						break;
 					}
+					if (memoryAbort.load(std::memory_order_relaxed)) {
+						break;
+					}
+
 					const auto idx = nextIndex.fetch_add(1, std::memory_order_relaxed);
 					if (idx >= total) {
 						break;
 					}
+
+					if ((idx & 0x7FF) == 0) {
+						if (!IsSystemMemorySafe()) {
+							memoryAbort.store(true, std::memory_order_relaxed);
+							break;
+						}
+						std::this_thread::yield();
+					}
+
 					if ((idx & 0x7F) == 0 || idx + 1 >= total) {
 						std::scoped_lock lock(progressMutex);
 						currentProgress.isUpdating = true;
@@ -359,6 +418,7 @@ namespace alchemist::engine {
 						currentProgress.current = idx + 1;
 						currentProgress.total = total;
 					}
+
 					const auto& entry = masterCache.entries[idx];
 					std::vector<Ingredient> selectedIngredients;
 					selectedIngredients.reserve(entry.formCount);
@@ -374,7 +434,7 @@ namespace alchemist::engine {
 							pointers.push_back(&ing);
 						}
 						auto res = effect::evaluatePotion(pointers, player);
-						if (res.valid && std::isfinite(res.cost) && static_cast<int>(std::floor(res.cost)) >= 1) {
+						if (res.valid && std::isfinite(res.cost) && static_cast<int>(std::floor(res.cost)) >= 0) {
 							results.push_back({ idx, std::move(res) });
 						}
 					}
@@ -510,6 +570,7 @@ namespace alchemist::engine {
 		struct GeneratedOutput {
 			std::vector<RecipeResult> results;
 			std::vector<MasterRecipeEntry> masterEntries;
+			bool cancelled = false;
 		};
 
 		GeneratedOutput GenerateRecipeResults(
@@ -542,13 +603,13 @@ namespace alchemist::engine {
 			if (calculation.cancelled || (cancelToken && cancelToken->load(std::memory_order_relaxed))) {
 				std::scoped_lock lock(progressMutex);
 				currentProgress.isUpdating = false;
-				return {};
+				return GeneratedOutput{ {}, {}, true };
 			}
 
 			std::vector<const Potion*> sortedPotions;
 			sortedPotions.reserve(calculation.potions.size());
 			for (const auto& potion : calculation.potions) {
-				if (potion.size > 0 && static_cast<int>(std::floor(potion.cost)) >= 1) {
+				if (potion.size > 0 && static_cast<int>(std::floor(potion.cost)) >= 0) {
 					sortedPotions.push_back(&potion);
 				}
 			}
@@ -707,7 +768,13 @@ namespace alchemist::engine {
 
 			{
 				std::scoped_lock cacheLock(masterCacheMutex);
-				if (masterCache.isValid && !IsMasterCacheExpiredLocked() && job->snapshot.cacoRevision == masterCache.cacoRevision) {
+				const bool canUseDeltaMerge = masterCache.isValid &&
+					!IsMasterCacheExpiredLocked() &&
+					job->snapshot.cacoRevision == masterCache.cacoRevision &&
+					job->snapshot.player.state == masterCache.playerState &&
+					IsMasterCacheSubsetOfCurrentLocked(currentFormIDs);
+
+				if (canUseDeltaMerge) {
 					for (const auto fid : currentFormIDs) {
 						if (masterCache.availableFormIDs.find(fid) == masterCache.availableFormIDs.end()) {
 							newFormIDs.insert(fid);
@@ -715,34 +782,15 @@ namespace alchemist::engine {
 					}
 
 					if (newFormIDs.empty()) {
-						if (job->snapshot.player.state == masterCache.playerState) {
-							{
-								std::scoped_lock lock(progressMutex);
-								currentProgress.isUpdating = true;
-								currentProgress.progressFraction = 0.50f;
-								currentProgress.phase = "Filtering recipe cache...";
-							}
-							results = FilterMasterCacheLocked(currentFormIDs);
-							handled = true;
-						} else {
-							const bool multithreaded = kSinglethreaded.GetValue() == 0;
-							ReevaluateMasterCacheAtPlayerStateLocked(
-								job->snapshot.player, multithreaded, job->cancelToken.get());
-							{
-								std::scoped_lock lock(progressMutex);
-								currentProgress.isUpdating = true;
-								currentProgress.progressFraction = 0.95f;
-								currentProgress.phase = "Filtering recipe cache...";
-							}
-							results = FilterMasterCacheLocked(currentFormIDs);
-							handled = true;
+						{
+							std::scoped_lock lock(progressMutex);
+							currentProgress.isUpdating = true;
+							currentProgress.progressFraction = 0.50f;
+							currentProgress.phase = "Filtering recipe cache...";
 						}
+						results = FilterMasterCacheLocked(currentFormIDs);
+						handled = true;
 					} else {
-						if (job->snapshot.player.state != masterCache.playerState) {
-							const bool multithreaded = kSinglethreaded.GetValue() == 0;
-							ReevaluateMasterCacheAtPlayerStateLocked(
-								job->snapshot.player, multithreaded, job->cancelToken.get());
-						}
 						isDeltaMerge = true;
 					}
 				}
@@ -790,7 +838,7 @@ namespace alchemist::engine {
 
 				deltaMasterEntries.reserve(calcOutput.potions.size());
 				for (const auto& potion : calcOutput.potions) {
-					if (potion.size > 0 && static_cast<int>(std::floor(potion.cost)) >= 1) {
+					if (potion.size > 0 && static_cast<int>(std::floor(potion.cost)) >= 0) {
 						auto ingredientStr = FormatIngredients(potion);
 						if (!ingredientStr.empty()) {
 							MasterRecipeEntry entry;
@@ -834,6 +882,9 @@ namespace alchemist::engine {
 			if (!handled) {
 				const bool multithreaded = kSinglethreaded.GetValue() == 0;
 				auto generated = GenerateRecipeResults(job->snapshot, multithreaded, job->cancelToken.get());
+				if (generated.cancelled) {
+					return;
+				}
 				if (job->cancelToken && job->cancelToken->load(std::memory_order_relaxed)) {
 					std::scoped_lock lock(progressMutex);
 					currentProgress.isUpdating = false;
@@ -889,6 +940,8 @@ namespace alchemist::engine {
 
 		void WorkerLoop()
 		{
+			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+
 			while (true) {
 				std::shared_ptr<AsyncJob> job;
 				{
@@ -899,10 +952,13 @@ namespace alchemist::engine {
 					if (workerStopping) {
 						break;
 					}
+					if (!pendingJob) {
+						continue;
+					}
 
 					const auto debounceMs = kCraftDebounceMs.GetValue();
 					if (!pendingJob->force && debounceMs > 0) {
-						while (true) {
+						while (!workerStopping && pendingJob) {
 							const auto now = std::chrono::steady_clock::now();
 							const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - pendingJob->queueTime).count();
 							if (elapsed >= debounceMs) {
@@ -910,9 +966,12 @@ namespace alchemist::engine {
 							}
 							const auto remaining = debounceMs - elapsed;
 							workerCv.wait_for(lock, std::chrono::milliseconds(remaining));
-							if (workerStopping) {
-								return;
-							}
+						}
+						if (workerStopping) {
+							return;
+						}
+						if (!pendingJob) {
+							continue;
 						}
 					}
 
@@ -946,7 +1005,15 @@ namespace alchemist::engine {
 
 	void Recalculate(bool a_force)
 	{
+		if (!profiles::HasActiveProfile()) {
+			std::scoped_lock lock(progressMutex);
+			currentProgress.isUpdating = false;
+			currentProgress.progressFraction = 0.0f;
+			currentProgress.phase.clear();
+			return;
+		}
 		auto snapshot = CaptureSnapshot();
+		confirmations::DrainPendingConfirmations(player);
 
 		{
 			std::scoped_lock lock(snapshotMutex);
@@ -1019,6 +1086,18 @@ namespace alchemist::engine {
 
 	void RecalculateAsync(std::function<void()> a_onComplete, bool a_force)
 	{
+		if (!profiles::HasActiveProfile()) {
+			{
+				std::scoped_lock lock(progressMutex);
+				currentProgress.isUpdating = false;
+				currentProgress.progressFraction = 0.0f;
+				currentProgress.phase.clear();
+			}
+			if (a_onComplete) {
+				a_onComplete();
+			}
+			return;
+		}
 		auto snapshot = CaptureSnapshot();
 
 		{
@@ -1037,10 +1116,6 @@ namespace alchemist::engine {
 				currentFormIDs.insert(ing.nativeIngredient->GetFormID());
 			}
 		}
-
-		const auto thresholdMs = kStaleRecalculateThresholdMs.GetValue();
-		const bool guardActive = (thresholdMs > 0) &&
-			(lastCalculationDurationMs.load(std::memory_order_acquire) > static_cast<std::uint32_t>(thresholdMs));
 
 		{
 			std::scoped_lock cacheLock(masterCacheMutex);
@@ -1093,74 +1168,6 @@ namespace alchemist::engine {
 							allCachedRecipes.clear();
 							cacheGeneration.fetch_add(1, std::memory_order_release);
 						}
-						if (guardActive) {
-							{
-								std::scoped_lock lock(progressMutex);
-								currentProgress.isUpdating = false;
-								currentProgress.progressFraction = 1.0f;
-								currentProgress.phase = "Completed";
-							}
-							{
-								std::scoped_lock sLock(staleMutex);
-								isRecipeListStale.store(true, std::memory_order_release);
-								staleReasonText = "Alchemy level changed";
-							}
-							{
-								std::scoped_lock wLock(workerMutex);
-								if (pendingJob) {
-									pendingJob->cancelToken->store(true, std::memory_order_relaxed);
-									pendingJob.reset();
-								}
-							}
-							{
-								std::scoped_lock snapLock(snapshotMutex);
-								lastCompletedSnapshot = std::move(snapshot);
-								hasCompletedSnapshot = true;
-							}
-							if (a_onComplete) {
-								a_onComplete();
-							}
-							return;
-						}
-					}
-
-					if (!isSubset && guardActive) {
-						auto filtered = FilterMasterCacheLocked(currentFormIDs);
-						{
-							std::lock_guard snapLock(snapshotMutex);
-							loadAllRequested = true;
-							totalAvailableRecipes = filtered.size();
-							cachedRecipes = std::move(filtered);
-							allCachedRecipes.clear();
-							cacheGeneration.fetch_add(1, std::memory_order_release);
-						}
-						{
-							std::scoped_lock lock(progressMutex);
-							currentProgress.isUpdating = false;
-							currentProgress.progressFraction = 1.0f;
-							currentProgress.phase = "Completed";
-						}
-						{
-							std::scoped_lock sLock(staleMutex);
-							isRecipeListStale.store(true, std::memory_order_release);
-							staleReasonText = "New ingredients available";
-						}
-						{
-							std::scoped_lock wLock(workerMutex);
-							if (pendingJob) {
-								pendingJob->cancelToken->store(true, std::memory_order_relaxed);
-								pendingJob.reset();
-							}
-						}
-						{
-							std::scoped_lock snapLock(snapshotMutex);
-							lastCompletedSnapshot = std::move(snapshot);
-							hasCompletedSnapshot = true;
-						}
-						if (a_onComplete) {
-							a_onComplete();
-						}
-						return;
 					}
 				}
 			}
@@ -1300,9 +1307,15 @@ namespace alchemist::engine {
 			}
 
 			const auto shareEffect = [&effectIdentities](std::size_t first, std::size_t second) {
-				for (const auto* identity : effectIdentities[first]) {
-					if (std::find(effectIdentities[second].begin(), effectIdentities[second].end(), identity) != effectIdentities[second].end()) {
-						return true;
+				for (const auto* id1 : effectIdentities[first]) {
+					if (!id1) continue;
+					const auto fid1 = id1->GetFormID();
+					for (const auto* id2 : effectIdentities[second]) {
+						if (!id2) continue;
+						const auto fid2 = id2->GetFormID();
+						if ((fid1 != 0 && fid1 == fid2) || id1 == id2) {
+							return true;
+						}
 					}
 				}
 				return false;
@@ -1378,9 +1391,12 @@ namespace alchemist::engine {
 			}
 			for (std::size_t first = 0; first + 2 < ingredientCount; ++first) {
 				for (std::size_t second = first + 1; second + 1 < ingredientCount; ++second) {
+					const bool ab = shareEffect(first, second);
 					for (std::size_t third = second + 1; third < ingredientCount; ++third) {
-						if ((shareEffect(first, second) || shareEffect(first, third) || shareEffect(second, third)) &&
-							evaluate(first, second, third)) {
+						const bool ac = shareEffect(first, third);
+						const bool bc = shareEffect(second, third);
+						const bool validTriple = ab ? (ac || bc) : (ac && bc);
+						if (validTriple && evaluate(first, second, third)) {
 							++algorithmResult.craftableTriples;
 						}
 					}
@@ -1501,16 +1517,10 @@ namespace alchemist::engine {
 			return std::nullopt;
 		}
 
-		std::vector<std::string> ingredientNames;
-		ingredientNames.reserve(selectedIngredients.size());
-		for (const auto& ingredient : selectedIngredients) {
-			ingredientNames.push_back(ingredient.name);
-		}
-		std::sort(ingredientNames.begin(), ingredientNames.end());
-		if (ingredientNames.size() == 2) {
-			result.ingredients = str::printSort2(ingredientNames[0], ingredientNames[1]);
-		} else {
-			result.ingredients = str::printSort3(ingredientNames[0], ingredientNames[1], ingredientNames[2]);
+		if (selectedIngredients.size() == 2) {
+			result.ingredients = selectedIngredients[0].name + ", " + selectedIngredients[1].name;
+		} else if (selectedIngredients.size() == 3) {
+			result.ingredients = selectedIngredients[0].name + ", " + selectedIngredients[1].name + ", " + selectedIngredients[2].name;
 		}
 		result.ingredientDetails = FormatIngredientDetails(selectedIngredients);
 		result.ingredientFormIDs = std::move(formIDs);
@@ -1523,12 +1533,14 @@ namespace alchemist::engine {
 
 	void NotifyAlchemyMenuOpened()
 	{
+		confirmations::BeginAlchemySession();
 		std::scoped_lock lock(masterCacheMutex);
 		masterCache.hasMenuClosedTime = false;
 	}
 
 	void NotifyAlchemyMenuClosed()
 	{
+		confirmations::EndAlchemySession();
 		std::scoped_lock lock(masterCacheMutex);
 		masterCache.menuClosedTime = std::chrono::steady_clock::now();
 		masterCache.hasMenuClosedTime = true;

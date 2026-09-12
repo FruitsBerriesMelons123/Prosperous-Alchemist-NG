@@ -1,0 +1,66 @@
+name: pa-tests
+alias: pat
+script: ProsperousAlchemistTests
+help: Testing commands for Prosperous Alchemist NG
+subs:
+  - name: default
+    alias: d
+    func: SetupDefault
+    args:
+      - name: mode
+        type: string
+        required: true
+        help: The mode to apply default settings for (vanilla/caco/ap/caco-ap).
+    help: Sets the canonical default state (alchemy 100, no perks) for the given mode (vanilla/caco/ap/caco-ap).
+  - name: vanilla
+    alias: v
+    func: SetupVanilla
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+    help: Sets the game state for Vanilla mode.
+  - name: caco
+    alias: c
+    func: SetupCACO
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+    help: Sets the game state for CACO mode.
+  - name: ap
+    alias: a
+    func: SetupAP
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+    help: Sets the game state for AP mode.
+  - name: caco-ap
+    alias: ca
+    func: SetupCACOAP
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+    help: Sets the game state for CACO + AP mode.
+  - name: vanilla-purity
+    func: SetupVanillaPurity
+    help: Sets the non-default test state for Vanilla Purity tests.
+  - name: vanilla-changed
+    func: SetupVanillaChanged
+    help: Sets changed/non-default test state for Vanilla mode.
+  - name: ap-changed
+    func: SetupAPChanged
+    help: Sets changed/non-default test state for AP mode.
+  - name: caco-ap-changed
+    func: SetupCACOAPChanged
+    help: Sets changed/non-default test state for CACO+AP mode.
+  - name: caco-changed
+    func: SetupCACOChanged
+    help: Sets changed/non-default test state for CACO mode.
+

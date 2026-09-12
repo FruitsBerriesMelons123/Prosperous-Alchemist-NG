@@ -21,6 +21,22 @@ namespace RE
 
 namespace alchemist::caco
 {
+	struct Settings
+	{
+		std::int32_t restoreHealthDuration = 0;
+		std::int32_t restoreMagickaDuration = 0;
+		std::int32_t restoreStaminaDuration = 0;
+		bool restoreEffectsDoNotStack = false;
+		std::int32_t damageHealthDuration = 0;
+		std::int32_t damageMagickaDuration = 0;
+		std::int32_t damageStaminaDuration = 0;
+		bool disableAllPotionHandling = false;
+		float alchemyXPMultiplier = 1.0f;
+		float alchemyIngredientInitMultiplier = 0.0f;
+		float alchemySkillFactor = 0.0f;
+		bool impureProcessingEnabled = false;
+	};
+
 	// The adapter reads loaded CACO records and settings without invoking Papyrus or mutating the active menu.
 	struct SeekerEvaluationState
 	{
@@ -76,8 +92,11 @@ namespace alchemist::caco
 			float a_alchemyLevel,
 			float a_perkMultiplier) noexcept
 		{
-			return a_ingredientInitMultiplier *
-				(1.0f + (a_skillFactor - 1.0f) * a_alchemyLevel / 100.0f) * a_perkMultiplier;
+			const double skillRatio = static_cast<double>(a_alchemyLevel) / 100.0;
+			const double factor = static_cast<double>(a_ingredientInitMultiplier) *
+				(1.0 + (static_cast<double>(a_skillFactor) - 1.0) * skillRatio) *
+				static_cast<double>(a_perkMultiplier);
+			return static_cast<float>(factor);
 		}
 
 		inline constexpr float CalculateAlchemyActorValueMultiplier(float a_fortifyAlchemyLevel) noexcept
@@ -88,9 +107,11 @@ namespace alchemist::caco
 		inline constexpr float CalculateVanillaAlchemyEffectiveness(
 			float a_alchemyLevel,
 			float a_alchemistMultiplier,
-			float a_perkMultiplier = 1.0f) noexcept
+			float a_perkMultiplier = 1.0f,
+			float a_ingredientInitMultiplier = 4.0f,
+			float a_skillFactor = 1.5f) noexcept
 		{
-			return CalculateAlchemyEffectiveness(4.0f, 1.5f, a_alchemyLevel, a_alchemistMultiplier * a_perkMultiplier);
+			return CalculateAlchemyEffectiveness(a_ingredientInitMultiplier, a_skillFactor, a_alchemyLevel, a_alchemistMultiplier * a_perkMultiplier);
 		}
 
 		inline constexpr float CalculateDurationBasedIngredientPowerFactor(float a_effectiveness) noexcept
@@ -194,9 +215,11 @@ namespace alchemist::caco
 			bool a_potion,
 			bool a_beneficial,
 			bool a_includeTypePerks,
-			bool a_mixedPotion = false) noexcept
+			bool a_mixedPotion = false,
+			bool a_disableAllPotionHandling = false) noexcept
 		{
-			return a_includeTypePerks && a_potion && !a_mixedPotion && a_beneficial;
+			const bool allowsBenefactor = a_potion && (a_disableAllPotionHandling || !a_mixedPotion);
+			return a_includeTypePerks && allowsBenefactor && a_beneficial;
 		}
 
 		inline constexpr bool ShouldApplyBenefactorFallback(
@@ -206,9 +229,10 @@ namespace alchemist::caco
 			bool a_hasBenefactor,
 			bool a_benefactorApplied,
 			bool a_benefactorEntryPointFound,
-			bool a_mixedPotion = false) noexcept
+			bool a_mixedPotion = false,
+			bool a_disableAllPotionHandling = false) noexcept
 		{
-			return ShouldApplyBenefactor(a_potion, a_beneficial, a_includeTypePerks, a_mixedPotion) &&
+			return ShouldApplyBenefactor(a_potion, a_beneficial, a_includeTypePerks, a_mixedPotion, a_disableAllPotionHandling) &&
 				a_hasBenefactor && !a_benefactorApplied && !a_benefactorEntryPointFound;
 		}
 
@@ -378,6 +402,9 @@ namespace alchemist::caco
 
 		[[nodiscard]] static bool IsDetected() noexcept;
 		[[nodiscard]] static bool IsActive() noexcept;
+		[[nodiscard]] static float GetAlchemyIngredientInitMultiplier() noexcept;
+		[[nodiscard]] static float GetAlchemySkillFactor() noexcept;
+		[[nodiscard]] static bool TryGetSettings(Settings& a_settings) noexcept;
 		[[nodiscard]] static std::uint64_t GetCalculationRevision() noexcept;
 		[[nodiscard]] static bool IsPotionHandlingEnabled() noexcept;
 		[[nodiscard]] static bool IsImpureProcessingEnabled() noexcept;
@@ -422,9 +449,15 @@ namespace alchemist::caco
 		[[nodiscard]] static bool HasBeneficialKeyword(const RE::EffectSetting* a_effect) noexcept;
 		[[nodiscard]] static bool HasHarmfulKeyword(const RE::EffectSetting* a_effect) noexcept;
 		[[nodiscard]] static bool IsDurationBased(const RE::EffectSetting* a_effect) noexcept;
+		[[nodiscard]] static std::int32_t FindFamily(const RE::EffectSetting* a_effect) noexcept;
+		[[nodiscard]] static float GetFamilyDurationSeconds(std::int32_t a_familyIndex) noexcept;
 		[[nodiscard]] static RE::EffectSetting* ResolveIngredientEffect(
 			const RE::IngredientItem* a_ingredient,
 			RE::EffectSetting* a_sourceEffect) noexcept;
+		[[nodiscard]] static RE::EffectSetting* ResolveIngredientEffect(
+			const RE::IngredientItem* a_ingredient,
+			RE::EffectSetting* a_sourceEffect,
+			std::size_t a_durationIndex) noexcept;
 
 		[[nodiscard]] static float ApplyImpureMagnitude(float a_value) noexcept;
 		[[nodiscard]] static float ApplyImpureDuration(float a_value) noexcept;

@@ -11,6 +11,7 @@ namespace alchemist::alchemyplus {
 	class Adapter final {
 	public:
 		static void Initialize() noexcept;
+		static void Refresh() noexcept;
 		[[nodiscard]] static bool IsDetected() noexcept;
 		[[nodiscard]] static bool IsActive() noexcept;
 		[[nodiscard]] static bool IsRoundingEnabled() noexcept;

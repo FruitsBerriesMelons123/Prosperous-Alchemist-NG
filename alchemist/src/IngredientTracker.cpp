@@ -1,13 +1,21 @@
 #include "IngredientTracker.h"
 
 #include "main.h"
+#include "ProfileManager.h"
 
+#include "RE/B/BGSListForm.h"
 #include "RE/B/BGSConstructibleObject.h"
 #include "RE/E/Effect.h"
+#include "RE/I/IngredientItem.h"
+#include "RE/T/TESLevCharacter.h"
+#include "RE/T/TESLevItem.h"
+#include "RE/T/TESLevSpell.h"
+#include "RE/T/TESNPC.h"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <limits>
@@ -24,6 +32,14 @@ namespace alchemist::tracker {
 	namespace {
 		using json = nlohmann::json;
 		constexpr int kUnlimitedProtectionCount = 999;
+		constexpr std::size_t kMaxForgeResultNames = 32;
+		constexpr std::size_t kMaxForgeResultDepth = 8;
+		constexpr std::size_t kMaxForgeResultForms = 256;
+
+		bool IsTrackingEnabled()
+		{
+			return kProtectIngredients.GetValue() != 0;
+		}
 
 		struct StoredRequirement
 		{
@@ -31,6 +47,7 @@ namespace alchemist::tracker {
 			std::string source;
 			std::string detail;
 			std::string ingredient;
+			std::uint32_t ingredientFormID = 0;
 			int count = 1;
 			bool completed = false;
 			bool completionOverridden = false;
@@ -62,6 +79,22 @@ namespace alchemist::tracker {
 			return result;
 		}
 
+		std::string TrimText(std::string_view a_text)
+		{
+			const auto isWhitespace = [](char a_character) {
+				return std::isspace(static_cast<unsigned char>(a_character)) != 0;
+			};
+			std::size_t begin = 0;
+			while (begin < a_text.size() && isWhitespace(a_text[begin])) {
+				++begin;
+			}
+			std::size_t end = a_text.size();
+			while (end > begin && isWhitespace(a_text[end - 1])) {
+				--end;
+			}
+			return std::string(a_text.substr(begin, end - begin));
+		}
+
 		bool IsBoundaryCharacter(unsigned char a_character)
 		{
 			return std::isalnum(a_character) != 0 || a_character == '_';
@@ -87,7 +120,7 @@ namespace alchemist::tracker {
 			return std::string::npos;
 		}
 
-		int ParseQuantity(std::string_view a_text, std::size_t a_namePosition)
+		int ParseQuantity(std::string_view a_text, std::size_t a_namePosition, std::size_t a_nameLength = 0)
 		{
 			std::size_t end = a_namePosition;
 			while (end > 0 && std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
@@ -103,7 +136,7 @@ namespace alchemist::tracker {
 				} catch (...) {}
 			}
 
-			begin = a_namePosition;
+			begin = a_namePosition + a_nameLength;
 			while (begin < a_text.size() && std::isspace(static_cast<unsigned char>(a_text[begin])) != 0) {
 				++begin;
 			}
@@ -125,11 +158,6 @@ namespace alchemist::tracker {
 			return 1;
 		}
 
-		bool ContainsInsensitive(std::string_view a_text, std::string_view a_query)
-		{
-			return FoldText(a_text).find(FoldText(a_query)) != std::string::npos;
-		}
-
 		std::string FormLabel(const RE::TESForm* a_form)
 		{
 			if (!a_form) {
@@ -139,6 +167,17 @@ namespace alchemist::tracker {
 				return editorID;
 			}
 			return "0x" + std::to_string(a_form->GetFormID());
+		}
+
+		std::string FormDisplayName(const RE::TESForm* a_form)
+		{
+			if (!a_form) {
+				return {};
+			}
+			if (const auto* name = a_form->GetName(); name && *name) {
+				return name;
+			}
+			return FormLabel(a_form);
 		}
 
 		std::string QuestLabel(const RE::TESQuest* a_quest)
@@ -176,6 +215,275 @@ namespace alchemist::tracker {
 			return stream.str();
 		}
 
+		struct ForgeRoot
+		{
+			RE::FormID formID;
+			RE::FormID resultFormID;
+			std::string_view name;
+		};
+
+		struct ForgeIngredientReference
+		{
+			std::size_t rootIndex = 0;
+			std::size_t recipeIndex = 0;
+			RE::FormID ingredientFormID = 0;
+			std::vector<RE::FormID> listPath;
+			std::vector<std::uint32_t> entryPath;
+		};
+
+		struct ForgeResolution
+		{
+			std::vector<ForgeIngredientReference> ingredientReferences;
+		};
+
+		constexpr std::array<ForgeRoot, 2> kForgeRoots{ {
+			{ 0x000CDE01, 0x000CDE02, "Atronach Forge"sv },
+			{ 0x0010F73F, 0x0010F740, "Atronach Forge Sigil Stone"sv }
+		} };
+
+		std::string MakeForgeKey(const ForgeRoot& a_root, const ForgeIngredientReference& a_reference)
+		{
+			std::string key = "forge:" + FormIDText(a_root.formID);
+			for (std::size_t index = 0; index < a_reference.listPath.size(); ++index) {
+				key += ":" + FormIDText(a_reference.listPath[index]);
+				if (index < a_reference.entryPath.size()) {
+					key += "@" + std::to_string(a_reference.entryPath[index]);
+				}
+			}
+			key += ":" + FormIDText(a_reference.ingredientFormID);
+			return key;
+		}
+
+		std::string ForgePathText(const ForgeIngredientReference& a_reference)
+		{
+			std::string result;
+			for (std::size_t index = 0; index < a_reference.listPath.size(); ++index) {
+				if (!result.empty()) {
+					result += " -> ";
+				}
+				const auto* list = RE::TESForm::LookupByID(a_reference.listPath[index]);
+				result += list ? FormDisplayName(list) : FormIDText(a_reference.listPath[index]);
+				result += " (" + FormIDText(a_reference.listPath[index]) + ")";
+				if (index < a_reference.entryPath.size()) {
+					result += "[" + std::to_string(a_reference.entryPath[index]) + "]";
+				}
+			}
+			return result;
+		}
+
+		void ResolveForgeList(
+			std::size_t a_rootIndex,
+			const RE::BGSListForm* a_list,
+			ForgeResolution& a_result,
+			std::vector<RE::FormID>& a_listPath,
+			std::vector<std::uint32_t>& a_entryPath,
+			std::set<RE::FormID>& a_activeLists,
+			std::optional<std::size_t> a_recipeIndex = std::nullopt)
+		{
+			if (!a_list || a_rootIndex >= kForgeRoots.size()) {
+				return;
+			}
+
+			const auto listFormID = a_list->GetFormID();
+			if (!a_activeLists.insert(listFormID).second) {
+				return;
+			}
+
+			a_listPath.push_back(listFormID);
+			std::uint32_t entryIndex = 0;
+			a_list->ForEachForm([&](RE::TESForm* a_form) {
+				const auto currentEntryIndex = entryIndex++;
+				if (!a_form) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+
+				if (a_form->Is(RE::FormType::FormList)) {
+					const auto* nestedList = a_form->As<RE::BGSListForm>();
+					if (!nestedList) {
+						return RE::BSContainer::ForEachResult::kContinue;
+					}
+					const auto recipeIndex = a_recipeIndex.value_or(static_cast<std::size_t>(currentEntryIndex));
+					a_entryPath.push_back(currentEntryIndex);
+					ResolveForgeList(a_rootIndex, nestedList, a_result, a_listPath, a_entryPath, a_activeLists, recipeIndex);
+					a_entryPath.pop_back();
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+
+				if (!a_form->Is(RE::FormType::Ingredient)) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+
+				const auto* ingredient = a_form->As<RE::IngredientItem>();
+				if (!ingredient) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+
+				a_entryPath.push_back(currentEntryIndex);
+				ForgeIngredientReference reference{
+					.rootIndex = a_rootIndex,
+					.recipeIndex = a_recipeIndex.value_or(static_cast<std::size_t>(currentEntryIndex)),
+					.ingredientFormID = ingredient->GetFormID(),
+					.listPath = a_listPath,
+					.entryPath = a_entryPath
+				};
+				a_entryPath.pop_back();
+				a_result.ingredientReferences.push_back(std::move(reference));
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+
+			a_listPath.pop_back();
+			a_activeLists.erase(listFormID);
+		}
+
+		ForgeResolution ResolveAtronachForgeLists(RE::TESDataHandler* a_dataHandler)
+		{
+			ForgeResolution result;
+			if (!a_dataHandler) {
+				return result;
+			}
+
+			for (std::size_t rootIndex = 0; rootIndex < kForgeRoots.size(); ++rootIndex) {
+				const auto& root = kForgeRoots[rootIndex];
+				const auto* rootForm = RE::TESForm::LookupByID(root.formID);
+				if (!rootForm) {
+					continue;
+				}
+				if (!rootForm->Is(RE::FormType::FormList)) {
+					continue;
+				}
+				const auto* rootList = rootForm->As<RE::BGSListForm>();
+				if (!rootList) {
+					continue;
+				}
+
+				std::vector<RE::FormID> listPath;
+				std::vector<std::uint32_t> entryPath;
+				std::set<RE::FormID> activeLists;
+				ResolveForgeList(rootIndex, rootList, result, listPath, entryPath, activeLists);
+			}
+			return result;
+		}
+
+		const RE::TESLeveledList* GetForgeLeveledList(const RE::TESForm* a_form)
+		{
+			if (!a_form) {
+				return nullptr;
+			}
+			if (const auto* leveledItem = a_form->As<RE::TESLevItem>()) {
+				return leveledItem;
+			}
+			if (const auto* leveledCharacter = a_form->As<RE::TESLevCharacter>()) {
+				return leveledCharacter;
+			}
+			if (const auto* leveledSpell = a_form->As<RE::TESLevSpell>()) {
+				return leveledSpell;
+			}
+			return nullptr;
+		}
+
+		std::string ForgeLeafName(const RE::TESForm* a_form)
+		{
+			if (!a_form) {
+				return {};
+			}
+			if (const auto* npc = a_form->As<RE::TESNPC>()) {
+				if (const auto* fullName = npc->GetFullName(); fullName && *fullName) {
+					return fullName;
+				}
+			}
+			if (const auto* name = a_form->GetName(); name && *name) {
+				return name;
+			}
+			return {};
+		}
+
+		void CollectForgeResultNames(
+			const RE::TESForm* a_form,
+			std::size_t a_depth,
+			std::size_t& a_visitedForms,
+			std::vector<std::string>& a_names,
+			std::set<std::string>& a_seenNames,
+			std::set<RE::FormID>& a_activeLeveledLists,
+			std::set<RE::FormID>& a_activeTemplateForms)
+		{
+			if (!a_form || a_depth > kMaxForgeResultDepth || a_visitedForms >= kMaxForgeResultForms || a_names.size() >= kMaxForgeResultNames) {
+				return;
+			}
+			++a_visitedForms;
+
+			if (const auto* leveledList = GetForgeLeveledList(a_form)) {
+				if (a_depth == kMaxForgeResultDepth || !a_activeLeveledLists.insert(a_form->GetFormID()).second) {
+					return;
+				}
+				for (const auto* containedForm : leveledList->GetContainedForms()) {
+					CollectForgeResultNames(containedForm, a_depth + 1, a_visitedForms, a_names, a_seenNames, a_activeLeveledLists, a_activeTemplateForms);
+					if (a_visitedForms >= kMaxForgeResultForms || a_names.size() >= kMaxForgeResultNames) {
+						break;
+					}
+				}
+				a_activeLeveledLists.erase(a_form->GetFormID());
+				return;
+			}
+
+			const auto name = ForgeLeafName(a_form);
+			if (!name.empty()) {
+				if (a_seenNames.insert(name).second) {
+					a_names.push_back(name);
+				}
+				return;
+			}
+
+			if (const auto* npc = a_form->As<RE::TESNPC>(); npc && npc->baseTemplateForm) {
+				const auto npcFormID = a_form->GetFormID();
+				if (a_activeTemplateForms.insert(npcFormID).second) {
+					CollectForgeResultNames(npc->baseTemplateForm, a_depth + 1, a_visitedForms, a_names, a_seenNames, a_activeLeveledLists, a_activeTemplateForms);
+					a_activeTemplateForms.erase(npcFormID);
+				}
+			}
+		}
+
+		std::string ForgeResultFormName(const RE::TESForm* a_form)
+		{
+			std::vector<std::string> names;
+			std::set<std::string> seenNames;
+			std::set<RE::FormID> activeLeveledLists;
+			std::set<RE::FormID> activeTemplateForms;
+			std::size_t visitedForms = 0;
+			CollectForgeResultNames(a_form, 0, visitedForms, names, seenNames, activeLeveledLists, activeTemplateForms);
+
+			std::string result;
+			for (const auto& name : names) {
+				if (!result.empty()) {
+					result += ", ";
+				}
+				result += name;
+			}
+			return result;
+		}
+
+		std::string ForgeResultName(const ForgeRoot& a_root, std::size_t a_recipeIndex)
+		{
+			const auto* resultForm = RE::TESForm::LookupByID(a_root.resultFormID);
+			if (!resultForm || !resultForm->Is(RE::FormType::FormList)) {
+				return {};
+			}
+			const auto* resultList = resultForm->As<RE::BGSListForm>();
+			if (!resultList) {
+				return {};
+			}
+
+			std::size_t resultIndex = 0;
+			std::string result;
+			resultList->ForEachForm([&](RE::TESForm* a_form) {
+				if (resultIndex++ != a_recipeIndex) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+				result = ForgeResultFormName(a_form);
+				return RE::BSContainer::ForEachResult::kStop;
+			});
+			return result;
+		}
+
 		std::string MakeEffectKey(RE::FormID a_effectID, RE::FormID a_ingredientID)
 		{
 			return "effect:" + std::to_string(a_effectID) + ":" + std::to_string(a_ingredientID);
@@ -188,10 +496,11 @@ namespace alchemist::tracker {
 			}
 			selectedEffectsLoaded = true;
 			for (const auto& token : str::split(kProtectedEffects.GetValue(), ',')) {
-				if (!token.empty() && std::none_of(selectedEffectTokens.begin(), selectedEffectTokens.end(), [&token](const auto& existing) {
-						return FoldText(existing) == FoldText(token);
+				const auto normalizedToken = TrimText(token);
+				if (!normalizedToken.empty() && std::none_of(selectedEffectTokens.begin(), selectedEffectTokens.end(), [&normalizedToken](const auto& existing) {
+						return FoldText(existing) == FoldText(normalizedToken);
 					})) {
-					selectedEffectTokens.push_back(token);
+					selectedEffectTokens.push_back(normalizedToken);
 				}
 			}
 		}
@@ -206,7 +515,7 @@ namespace alchemist::tracker {
 				value += token;
 			}
 			kProtectedEffects.SetValue(std::move(value));
-			REX::INI::SettingStore::GetSingleton()->Save();
+			profiles::SaveCurrentProfile();
 		}
 
 		void LoadSelectedEffectCountsLocked()
@@ -234,7 +543,7 @@ namespace alchemist::tracker {
 				value += key + "|" + std::to_string((std::clamp)(count, 1, 999));
 			}
 			kProtectedEffectCounts.SetValue(std::move(value));
-			REX::INI::SettingStore::GetSingleton()->Save();
+			profiles::SaveCurrentProfile();
 		}
 
 		std::vector<EffectInfo> ScanAvailableEffects(RE::TESDataHandler* a_dataHandler)
@@ -273,9 +582,32 @@ namespace alchemist::tracker {
 
 		bool EffectTokenMatches(const std::string& a_token, const EffectInfo& a_effect)
 		{
-			const auto token = FoldText(a_token);
-			return token == FoldText(a_effect.key) || token == FoldText(a_effect.name) ||
-				(!a_effect.editorID.empty() && token == FoldText(a_effect.editorID));
+			const auto trimmedToken = TrimText(a_token);
+			const auto token = FoldText(trimmedToken);
+			if (token == FoldText(a_effect.key) || token == FoldText(a_effect.name) ||
+				(!a_effect.editorID.empty() && token == FoldText(a_effect.editorID))) {
+				return true;
+			}
+
+			// Magic effect editor IDs like MagicAlchFortifyEnchanting are keywords, not form editor IDs.
+			// Match the token against effect keywords by iterating all loaded effects.
+			auto* dataHandler = RE::TESDataHandler::GetSingleton();
+			if (!dataHandler) {
+				return false;
+			}
+
+			for (const auto* effectForm : dataHandler->GetFormArray<RE::EffectSetting>()) {
+				if (!effectForm || effectForm->GetFormID() != a_effect.formIDValue) {
+					continue;
+				}
+
+				// Check if this effect has a keyword matching the token
+				if (effectForm->HasKeywordString(trimmedToken)) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 		json ToJson(const StoredRequirement& a_requirement)
@@ -285,6 +617,7 @@ namespace alchemist::tracker {
 				{ "source", a_requirement.source },
 				{ "detail", a_requirement.detail },
 				{ "ingredient", a_requirement.ingredient },
+				{ "ingredientFormID", a_requirement.ingredientFormID },
 				{ "count", a_requirement.count },
 				{ "completed", a_requirement.completed },
 				{ "completionOverridden", a_requirement.completionOverridden },
@@ -303,6 +636,9 @@ namespace alchemist::tracker {
 			result.source = a_value.value("source", std::string{});
 			result.detail = a_value.value("detail", std::string{});
 			result.ingredient = a_value.at("ingredient").get<std::string>();
+			if (a_value.contains("ingredientFormID") && a_value.at("ingredientFormID").is_number_unsigned()) {
+				result.ingredientFormID = a_value.at("ingredientFormID").get<std::uint32_t>();
+			}
 			result.count = (std::clamp)(a_value.value("count", 1), 1, 999);
 			result.completed = a_value.value("completed", false);
 			result.completionOverridden = a_value.value("completionOverridden", false);
@@ -358,7 +694,7 @@ namespace alchemist::tracker {
 				document["overrides"].push_back(ToJson(requirement));
 			}
 			kTrackedRequirements.SetValue(document.dump());
-			REX::INI::SettingStore::GetSingleton()->Save();
+			profiles::SaveCurrentProfile();
 		}
 
 		StoredRequirement ToStored(const Requirement& a_requirement)
@@ -368,6 +704,7 @@ namespace alchemist::tracker {
 				.source = a_requirement.source,
 				.detail = a_requirement.detail,
 				.ingredient = a_requirement.ingredient,
+				.ingredientFormID = a_requirement.ingredientFormID,
 				.count = (std::clamp)(a_requirement.count, 1, 999),
 				.completed = a_requirement.completed,
 				.completionOverridden = a_requirement.completionOverridden,
@@ -384,6 +721,7 @@ namespace alchemist::tracker {
 				.source = a_requirement.source,
 				.detail = a_requirement.detail,
 				.ingredient = a_requirement.ingredient,
+				.ingredientFormID = a_requirement.ingredientFormID,
 				.count = a_requirement.count,
 				.completed = a_requirement.completed,
 				.automatic = a_automatic,
@@ -400,7 +738,11 @@ namespace alchemist::tracker {
 			result.reserve(detectedRequirements.size() + manualRequirements.size());
 			for (const auto& detected : detectedRequirements) {
 				if (const auto overrideIt = overrides.find(detected.key); overrideIt != overrides.end()) {
-					result.push_back(ToRequirement(overrideIt->second, true, true, detected.count));
+					auto requirement = ToRequirement(overrideIt->second, true, true, detected.count);
+					if (requirement.ingredientFormID == 0) {
+						requirement.ingredientFormID = detected.ingredientFormID;
+					}
+					result.push_back(std::move(requirement));
 				} else {
 					auto requirement = detected;
 					requirement.automaticCount = detected.count;
@@ -553,7 +895,8 @@ namespace alchemist::tracker {
 							.source = source,
 							.detail = detail,
 							.ingredient = candidate.name,
-							.count = ParseQuantity(objectiveText, matchPosition),
+							.ingredientFormID = candidate.formID,
+							.count = ParseQuantity(objectiveText, matchPosition, candidate.name.length()),
 							.completed = objectiveCompleted,
 							.automatic = true
 						});
@@ -571,14 +914,17 @@ namespace alchemist::tracker {
 				return result;
 			}
 			for (const auto* recipe : a_dataHandler->GetFormArray<RE::BGSConstructibleObject>()) {
-				if (!recipe || !recipe->createdItem || recipe->requiredItems.numContainerObjects == 0) {
+				if (!recipe) {
 					continue;
 				}
-				const auto createdName = FormLabel(recipe->createdItem);
-				const auto benchName = recipe->benchKeyword ? FormLabel(recipe->benchKeyword) : std::string{};
+				const auto benchName = recipe->benchKeyword ? FormDisplayName(recipe->benchKeyword) : std::string{};
 				const std::string benchEditorID = recipe->benchKeyword && recipe->benchKeyword->GetFormEditorID() ? recipe->benchKeyword->GetFormEditorID() : std::string{};
+				if (!recipe->createdItem || recipe->requiredItems.numContainerObjects == 0) {
+					continue;
+				}
+				const auto createdName = FormDisplayName(recipe->createdItem);
 				const std::uint32_t outputCount = (std::max)(std::uint32_t{ 1 }, static_cast<std::uint32_t>(recipe->data.numConstructed));
-				const std::uint32_t craftsForTwo = (2u + outputCount - 1u) / outputCount;
+				const std::uint32_t craftsForOne = (1u + outputCount - 1u) / outputCount;
 				for (std::uint32_t index = 0; index < recipe->requiredItems.numContainerObjects; ++index) {
 					const auto* required = recipe->requiredItems.containerObjects[index];
 					if (!required || !required->obj || !required->obj->Is(RE::FormType::Ingredient)) {
@@ -592,7 +938,7 @@ namespace alchemist::tracker {
 						continue;
 					}
 					const std::uint32_t requiredCount = (std::max)(std::uint32_t{ 1 }, static_cast<std::uint32_t>(required->count));
-					const std::uint32_t count = (std::min)(std::uint32_t{ 999 }, requiredCount * craftsForTwo);
+					const std::uint32_t count = (std::min)(std::uint32_t{ 999 }, requiredCount * craftsForOne);
 					std::string detail = "Recipe FormID: " + FormIDText(recipe->GetFormID()) + "; created item: " + createdName +
 						"; outputs per craft: " + std::to_string(outputCount);
 					if (!benchName.empty()) {
@@ -606,6 +952,7 @@ namespace alchemist::tracker {
 						.source = "Crafting: " + createdName,
 						.detail = std::move(detail),
 						.ingredient = candidate->name,
+						.ingredientFormID = candidate->formID,
 						.count = static_cast<int>(count),
 						.completed = false,
 						.automatic = true
@@ -637,7 +984,8 @@ namespace alchemist::tracker {
 						.source = "Ingredient effect: " + selectedEffect.name,
 						.detail = "Effect FormID: " + selectedEffect.key + (selectedEffect.editorID.empty() ? std::string{} : "; editor ID: " + selectedEffect.editorID),
 						.ingredient = ingredient->GetFullName(),
-					.count = (selectedEffect.protectedCount > 0 ? selectedEffect.protectedCount : kUnlimitedProtectionCount),
+						.ingredientFormID = ingredient->GetFormID(),
+						.count = (selectedEffect.protectedCount > 0 ? selectedEffect.protectedCount : kUnlimitedProtectionCount),
 						.completed = false,
 						.automatic = true
 					});
@@ -669,41 +1017,36 @@ namespace alchemist::tracker {
 		std::vector<Requirement> ScanAtronachForgeRecipes(RE::TESDataHandler* a_dataHandler, const std::vector<IngredientCandidate>& a_candidates)
 		{
 			std::vector<Requirement> result;
-			if (!a_dataHandler) {
-				return result;
-			}
-			for (const auto* recipe : a_dataHandler->GetFormArray<RE::BGSConstructibleObject>()) {
-				if (!recipe || !recipe->benchKeyword) {
+			auto resolution = ResolveAtronachForgeLists(a_dataHandler);
+			for (const auto& reference : resolution.ingredientReferences) {
+				if (reference.rootIndex >= kForgeRoots.size()) {
 					continue;
 				}
-				const auto benchName = FormLabel(recipe->benchKeyword);
-				const auto benchEditorID = recipe->benchKeyword->GetFormEditorID() ? recipe->benchKeyword->GetFormEditorID() : "";
-				if (!ContainsInsensitive(benchName, "atronach") && !ContainsInsensitive(benchEditorID, "atronach")) {
+				const auto& root = kForgeRoots[reference.rootIndex];
+				const auto candidate = std::find_if(a_candidates.begin(), a_candidates.end(), [&reference](const auto& value) {
+					return value.formID == reference.ingredientFormID;
+				});
+				const auto key = MakeForgeKey(root, reference);
+				if (candidate == a_candidates.end()) {
 					continue;
 				}
-				const auto createdName = FormLabel(recipe->createdItem);
-				for (std::uint32_t index = 0; index < recipe->requiredItems.numContainerObjects; ++index) {
-					const auto* required = recipe->requiredItems.containerObjects[index];
-					if (!required || !required->obj || !required->obj->Is(RE::FormType::Ingredient)) {
-						continue;
-					}
-					const auto* ingredient = static_cast<const RE::IngredientItem*>(required->obj);
-					const auto candidate = std::find_if(a_candidates.begin(), a_candidates.end(), [ingredient](const auto& value) {
-						return value.formID == ingredient->GetFormID();
-					});
-					if (candidate == a_candidates.end()) {
-						continue;
-					}
-					result.push_back(Requirement{
-						.key = MakeConstructibleKey(recipe->GetFormID(), ingredient->GetFormID()),
-						.source = "Atronach Forge: " + createdName,
-						.detail = "Recipe FormID: " + FormIDText(recipe->GetFormID()) + "; created form: " + createdName + "; bench keyword: " + benchName + " (" + benchEditorID + ")",
-						.ingredient = candidate->name,
-						.count = (std::clamp)(required->count, 1, 999),
-						.completed = false,
-						.automatic = true
-					});
-				}
+
+				const auto path = ForgePathText(reference);
+				const auto resultName = ForgeResultName(root, reference.recipeIndex);
+				const auto source = resultName.empty() ? "Atronach Forge" : "Atronach Forge: " + resultName;
+				const auto detail = "Root: " + std::string(root.name) + " (" + FormIDText(root.formID) + "); result: " +
+					(resultName.empty() ? std::string("unavailable") : resultName) + "; recipe path: " + path +
+					"; selected ingredient: " + candidate->name + " (" + FormIDText(reference.ingredientFormID) + ")";
+				result.push_back(Requirement{
+					.key = key,
+					.source = source,
+					.detail = detail,
+					.ingredient = candidate->name,
+					.ingredientFormID = candidate->formID,
+					.count = 1,
+					.completed = false,
+					.automatic = true
+				});
 			}
 			return result;
 		}
@@ -741,6 +1084,9 @@ namespace alchemist::tracker {
 
 		void DoSetQuestStage(std::uint32_t a_formID, std::uint16_t a_stage, bool a_force)
 		{
+			if (!IsTrackingEnabled()) {
+				return;
+			}
 			auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(a_formID);
 			if (!quest) {
 				SetStatus("Quest " + FormIDText(a_formID) + " no longer exists");
@@ -761,7 +1107,7 @@ namespace alchemist::tracker {
 			}
 
 			std::string error;
-			if (!DispatchQuestMethod(quest, "SetCurrentStageID"sv, RE::MakeFunctionArguments(static_cast<std::int32_t>(a_stage)), error)) {
+			if (!DispatchQuestMethod(quest, "SetStage"sv, RE::MakeFunctionArguments(static_cast<std::int32_t>(a_stage)), error)) {
 				SetStatus(error);
 				return;
 			}
@@ -771,6 +1117,9 @@ namespace alchemist::tracker {
 
 		void DoSetQuestObjective(std::uint32_t a_formID, std::uint16_t a_objective, ObjectiveAction a_action)
 		{
+			if (!IsTrackingEnabled()) {
+				return;
+			}
 			auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(a_formID);
 			if (!quest) {
 				SetStatus("Quest " + FormIDText(a_formID) + " no longer exists");
@@ -826,6 +1175,8 @@ namespace alchemist::tracker {
 			});
 			auto craftRequirements = ScanConstructibleRecipes(dataHandler, candidates);
 			result.insert(result.end(), craftRequirements.begin(), craftRequirements.end());
+			auto forgeRequirements = ScanAtronachForgeRecipes(dataHandler, candidates);
+			result.insert(result.end(), forgeRequirements.begin(), forgeRequirements.end());
 			auto effectRequirements = ScanIngredientEffects(dataHandler, selectedEffects);
 			result.insert(result.end(), effectRequirements.begin(), effectRequirements.end());
 			return result;
@@ -834,12 +1185,21 @@ namespace alchemist::tracker {
 		bool RequirementsEqual(const Requirement& a_left, const Requirement& a_right)
 		{
 			return a_left.key == a_right.key && a_left.source == a_right.source && a_left.detail == a_right.detail &&
-				a_left.ingredient == a_right.ingredient && a_left.count == a_right.count && a_left.completed == a_right.completed;
+				a_left.ingredient == a_right.ingredient && a_left.ingredientFormID == a_right.ingredientFormID &&
+				a_left.count == a_right.count && a_left.completed == a_right.completed;
 		}
+	}
+
+	std::string GetIngredientKey(std::uint32_t a_formID)
+	{
+		return a_formID == 0 ? std::string{} : "formid:" + FormIDText(a_formID);
 	}
 
 	bool RefreshDetection()
 	{
+		if (!IsTrackingEnabled()) {
+			return false;
+		}
 		auto detected = ScanDetectedRequirements();
 		auto quests = ScanQuestInfo(RE::TESDataHandler::GetSingleton());
 		std::scoped_lock lock(stateMutex);
@@ -856,8 +1216,59 @@ namespace alchemist::tracker {
 		return changed || questsChanged;
 	}
 
+	bool HasPersistedTrackingData()
+	{
+		std::scoped_lock lock(stateMutex);
+		return kProtectedIngredients.GetValue() != kDefaultProtectedIngredients ||
+			kProtectedEffects.GetValue() != kDefaultProtectedEffects ||
+			kProtectedEffectCounts.GetValue() != kDefaultProtectedEffectCounts ||
+			kTrackedRequirements.GetValue() != kDefaultTrackedRequirements;
+	}
+
+	void ResetForNewGame()
+	{
+		std::scoped_lock lock(stateMutex);
+		kProtectedIngredients.SetValue(kDefaultProtectedIngredients);
+		kProtectedEffects.SetValue(kDefaultProtectedEffects);
+		kProtectedEffectCounts.SetValue(kDefaultProtectedEffectCounts);
+		kTrackedRequirements.SetValue(kDefaultTrackedRequirements);
+		stateLoaded = false;
+		nextManualID = 1;
+		manualRequirements.clear();
+		overrides.clear();
+		selectedEffectsLoaded = false;
+		selectedEffectTokens.clear();
+		selectedEffectCountsLoaded = false;
+		selectedEffectCounts.clear();
+		detectedRequirements.clear();
+		detectedQuests.clear();
+		statusMessage.clear();
+		++stateRevision;
+		profiles::SaveCurrentProfile();
+	}
+
+	void ReloadForProfile()
+	{
+		std::scoped_lock lock(stateMutex);
+		stateLoaded = false;
+		nextManualID = 1;
+		manualRequirements.clear();
+		overrides.clear();
+		selectedEffectsLoaded = false;
+		selectedEffectTokens.clear();
+		selectedEffectCountsLoaded = false;
+		selectedEffectCounts.clear();
+		detectedRequirements.clear();
+		detectedQuests.clear();
+		statusMessage.clear();
+		++stateRevision;
+	}
+
 	std::vector<EffectInfo> GetEffects()
 	{
+		if (!IsTrackingEnabled()) {
+			return {};
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadSelectedEffectsLocked();
 			LoadSelectedEffectCountsLocked();
@@ -875,6 +1286,9 @@ namespace alchemist::tracker {
 
 	std::vector<QuestInfo> GetQuests()
 	{
+		if (!IsTrackingEnabled()) {
+			return {};
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		return detectedQuests;
@@ -882,6 +1296,9 @@ namespace alchemist::tracker {
 
 	std::vector<Requirement> GetRequirements()
 	{
+		if (!IsTrackingEnabled()) {
+			return {};
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		return GetRequirementsLocked();
@@ -889,6 +1306,9 @@ namespace alchemist::tracker {
 
 	std::uint64_t GetRevision()
 	{
+		if (!IsTrackingEnabled()) {
+			return 0;
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		return stateRevision;
@@ -896,12 +1316,18 @@ namespace alchemist::tracker {
 
 	std::string GetStatus()
 	{
+		if (!IsTrackingEnabled()) {
+			return {};
+		}
 		std::scoped_lock lock(stateMutex);
 		return statusMessage;
 	}
 
 	std::map<std::string, int> GetProtectedIngredients()
 	{
+		if (!IsTrackingEnabled()) {
+			return {};
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		std::map<std::string, int> result;
@@ -913,18 +1339,22 @@ namespace alchemist::tracker {
 			if (manualProtectionOnly && requirement.automatic && requirement.key.rfind("effect:", 0) != 0) {
 				continue;
 			}
+			const auto ingredientKey = requirement.ingredientFormID != 0 ? GetIngredientKey(requirement.ingredientFormID) : requirement.ingredient;
 			const int count = (std::max)(1, requirement.count);
-			if (result[requirement.ingredient] == 999 || count == 999) {
-				result[requirement.ingredient] = 999;
+			if (result[ingredientKey] == 999 || count == 999) {
+				result[ingredientKey] = 999;
 			} else {
-				result[requirement.ingredient] = (std::min)(999, result[requirement.ingredient] + count);
+				result[ingredientKey] = (std::min)(999, result[ingredientKey] + count);
 			}
-		}
+			}
 		return result;
 	}
 
 	void SetEffectSelected(const std::string& a_key, bool a_selected)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadSelectedEffectsLocked();
 			LoadSelectedEffectCountsLocked();
@@ -945,6 +1375,9 @@ namespace alchemist::tracker {
 
 		void SetEffectProtectionCount(const std::string& a_key, int a_count)
 		{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 			std::scoped_lock lock(stateMutex);
 			LoadSelectedEffectsLocked();
 			LoadSelectedEffectCountsLocked();
@@ -963,6 +1396,9 @@ namespace alchemist::tracker {
 
 	void AddManual(std::string a_source, std::string a_detail, std::string a_ingredient, int a_count)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		if (a_ingredient.empty()) {
 			return;
 		}
@@ -973,6 +1409,7 @@ namespace alchemist::tracker {
 			.source = std::move(a_source),
 			.detail = std::move(a_detail),
 			.ingredient = std::move(a_ingredient),
+			.ingredientFormID = 0,
 			.count = (std::clamp)(a_count, 1, 999),
 			.completed = false
 		});
@@ -981,6 +1418,9 @@ namespace alchemist::tracker {
 
 	void UpdateRequirement(const Requirement& a_requirement)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		if (a_requirement.key.empty() || a_requirement.ingredient.empty()) {
 			return;
 		}
@@ -1002,6 +1442,9 @@ namespace alchemist::tracker {
 
 	void RemoveManual(const std::string& a_key)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		manualRequirements.erase(std::remove_if(manualRequirements.begin(), manualRequirements.end(), [&a_key](const auto& requirement) {
@@ -1012,6 +1455,9 @@ namespace alchemist::tracker {
 
 	void ClearOverrides()
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		for (auto iterator = overrides.begin(); iterator != overrides.end();) {
@@ -1026,6 +1472,9 @@ namespace alchemist::tracker {
 
 	void ResetToDetected()
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		manualRequirements.clear();
@@ -1035,6 +1484,9 @@ namespace alchemist::tracker {
 
 	void RequestQuestStage(std::uint32_t a_formID, std::uint16_t a_stage, bool a_force)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		const auto* tasks = SKSE::GetTaskInterface();
 		if (!tasks) {
 			SetStatus("SKSE task interface unavailable");
@@ -1048,6 +1500,9 @@ namespace alchemist::tracker {
 
 	void RequestQuestObjective(std::uint32_t a_formID, std::uint16_t a_objective, ObjectiveAction a_action)
 	{
+		if (!IsTrackingEnabled()) {
+			return;
+		}
 		const auto* tasks = SKSE::GetTaskInterface();
 		if (!tasks) {
 			SetStatus("SKSE task interface unavailable");

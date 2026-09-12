@@ -3,6 +3,7 @@
 #include "AlchemistWindow.h"
 #include "AlchemistEngine.h"
 #include "DeveloperTestHub.h"
+#include "PotionConfirmation.h"
 #include "main.h"
 
 #include "RE/Skyrim.h"
@@ -10,28 +11,65 @@
 #include "RE/B/ButtonEvent.h"
 #include "RE/B/BSWin32MouseDevice.h"
 #include "RE/M/MenuCursor.h"
+#include "RE/M/MouseMoveEvent.h"
 
 #include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 
 namespace alchemist::menu {
 	namespace {
 		void QueueRecalculation(bool a_force = false);
 		std::atomic_uint64_t menuGeneration = 0;
 		std::atomic_bool nativeAlchemyOpen = false;
-		std::atomic<float> nativeCursorX = -1.0f;
-		std::atomic<float> nativeCursorY = -1.0f;
-		std::atomic<float> nativeCursorWidth = 0.0f;
-		std::atomic<float> nativeCursorHeight = 0.0f;
-		std::atomic_bool nativeCursorValid = false;
+		std::atomic_bool confirmationQueued = false;
+		std::atomic_bool inventoryEventObserved = false;
+		CursorSnapshot nativeCursorSnapshot{};
+		bool nativeCursorValid = false;
+		std::mutex nativeCursorMutex;
+
+		void QueueConfirmationDrainTask(std::uint64_t a_generation)
+		{
+			auto* taskInterface = SKSE::GetTaskInterface();
+			if (!taskInterface) {
+				confirmationQueued.store(false, std::memory_order_release);
+				return;
+			}
+			taskInterface->AddTask([a_generation]() {
+				const bool currentMenu = nativeAlchemyOpen.load(std::memory_order_acquire) &&
+					a_generation == menuGeneration.load(std::memory_order_acquire);
+				if (!currentMenu) {
+					confirmationQueued.store(false, std::memory_order_release);
+					return;
+				}
+				if (!confirmations::IsDrainReady()) {
+					QueueConfirmationDrainTask(a_generation);
+					return;
+				}
+				confirmationQueued.store(false, std::memory_order_release);
+				confirmations::DrainPendingConfirmations(player);
+			});
+		}
+
+		void QueueConfirmationRecording()
+		{
+			bool expected = false;
+			if (!confirmationQueued.compare_exchange_strong(expected, true)) {
+				return;
+			}
+
+			const auto generation = menuGeneration.load(std::memory_order_acquire);
+			QueueConfirmationDrainTask(generation);
+		}
 
 		void CaptureNativeCursor()
 		{
 			auto* menuCursor = RE::MenuCursor::GetSingleton();
 			if (!menuCursor) {
-				nativeCursorValid.store(false, std::memory_order_release);
+				std::scoped_lock lock(nativeCursorMutex);
+				nativeCursorValid = false;
 				return;
 			}
 
@@ -41,20 +79,26 @@ namespace alchemist::menu {
 				cursorData.screenWidthX <= 0.0f || cursorData.screenWidthY <= 0.0f ||
 				cursorData.cursorPosX < 0.0f || cursorData.cursorPosY < 0.0f ||
 				cursorData.cursorPosX > cursorData.screenWidthX || cursorData.cursorPosY > cursorData.screenWidthY) {
-				nativeCursorValid.store(false, std::memory_order_release);
+				std::scoped_lock lock(nativeCursorMutex);
+				nativeCursorValid = false;
 				return;
 			}
 
-			nativeCursorX.store(cursorData.cursorPosX, std::memory_order_relaxed);
-			nativeCursorY.store(cursorData.cursorPosY, std::memory_order_relaxed);
-			nativeCursorWidth.store(cursorData.screenWidthX, std::memory_order_relaxed);
-			nativeCursorHeight.store(cursorData.screenWidthY, std::memory_order_relaxed);
-			nativeCursorValid.store(true, std::memory_order_release);
+		const CursorSnapshot cursorSnapshot{
+			.x = cursorData.cursorPosX,
+			.y = cursorData.cursorPosY,
+			.width = cursorData.screenWidthX,
+			.height = cursorData.screenWidthY
+		};
+		std::scoped_lock lock(nativeCursorMutex);
+		nativeCursorSnapshot = cursorSnapshot;
+		nativeCursorValid = true;
 		}
 
 		void ResetNativeCursor()
 		{
-			nativeCursorValid.store(false, std::memory_order_release);
+			std::scoped_lock lock(nativeCursorMutex);
+			nativeCursorValid = false;
 		}
 
 		bool IsAlchemySubMenu(const RE::CraftingSubMenus::CraftingSubMenu* a_submenu)
@@ -71,6 +115,16 @@ namespace alchemist::menu {
 			return false;
 		}
 
+		bool IsAlchemyMenuActive()
+		{
+			auto* uiInterface = RE::UI::GetSingleton();
+			if (!uiInterface) {
+				return false;
+			}
+			auto craftingMenu = uiInterface->GetMenu<RE::CraftingMenu>();
+			return craftingMenu && IsAlchemySubMenu(craftingMenu->GetCraftingSubMenu());
+		}
+
 		class InputHandler final : public RE::BSTEventSink<RE::InputEvent*> {
 		public:
 			RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const* a_event,
@@ -80,17 +134,25 @@ namespace alchemist::menu {
 					return RE::BSEventNotifyControl::kContinue;
 				}
 
-				bool stopPropagation = false;
+				const bool leftMouseButtonDownAtStart = ui::IsLeftMouseButtonDown();
+				bool stopMousePropagation = false;
+				bool stopKeyboardPropagation = false;
+				bool mouseMoveEventPresent = false;
+				bool heldLeftButtonEventPresent = false;
 				for (auto* event = *a_event; event; event = event->next) {
-					if (event->GetEventType() == RE::INPUT_EVENT_TYPE::kMouseMove ||
-						event->GetEventType() == RE::INPUT_EVENT_TYPE::kButton) {
+					if (event->GetEventType() == RE::INPUT_EVENT_TYPE::kMouseMove) {
+						mouseMoveEventPresent = true;
+						CaptureNativeCursor();
+						continue;
+					}
+					if (event->GetEventType() == RE::INPUT_EVENT_TYPE::kButton) {
 						CaptureNativeCursor();
 					}
 					if (event->GetEventType() == RE::INPUT_EVENT_TYPE::kChar) {
 						if (const auto* charEvent = event->AsCharEvent()) {
 							ui::AddInputCharacter(charEvent->keyCode);
 						}
-						stopPropagation = stopPropagation || ui::IsSearchInputFocused();
+						stopKeyboardPropagation = stopKeyboardPropagation || ui::IsSearchInputFocused();
 						continue;
 					}
 					if (event->GetEventType() != RE::INPUT_EVENT_TYPE::kButton) {
@@ -100,15 +162,20 @@ namespace alchemist::menu {
 					auto* buttonEvent = event->AsButtonEvent();
 					if (buttonEvent && buttonEvent->GetDevice() == RE::INPUT_DEVICE::kKeyboard) {
 						ui::AddInputKey(buttonEvent->GetIDCode(), buttonEvent->IsPressed());
-						stopPropagation = stopPropagation || ui::IsSearchInputFocused();
+						stopKeyboardPropagation = stopKeyboardPropagation || ui::IsSearchInputFocused();
 						continue;
 					}
 					if (buttonEvent && buttonEvent->GetDevice() == RE::INPUT_DEVICE::kMouse) {
-						if (buttonEvent->GetIDCode() == static_cast<std::uint32_t>(RE::BSWin32MouseDevice::Key::kLeftButton)) {
+						const auto buttonID = buttonEvent->GetIDCode();
+						const bool leftButton = buttonID == static_cast<std::uint32_t>(RE::BSWin32MouseDevice::Key::kLeftButton);
+						if (leftButton && buttonEvent->IsHeld()) {
+							heldLeftButtonEventPresent = true;
+						}
+						if (leftButton) {
 							ui::SetLeftMouseButtonDown(buttonEvent->IsPressed());
 						}
 						if (buttonEvent->IsPressed()) {
-							switch (buttonEvent->GetIDCode()) {
+							switch (buttonID) {
 							case RE::BSWin32MouseDevice::Key::kWheelUp:
 								ui::AddMouseWheel(1.0f);
 								break;
@@ -119,11 +186,19 @@ namespace alchemist::menu {
 								break;
 							}
 						}
-						stopPropagation = stopPropagation || ui::IsCursorOverWindow();
+						const auto cursorOverWindow = ui::IsCursorOverWindow();
+						stopMousePropagation = stopMousePropagation || cursorOverWindow;
 						continue;
 					}
-					stopPropagation = stopPropagation || ui::IsSearchInputFocused();
+					stopKeyboardPropagation = stopKeyboardPropagation || ui::IsSearchInputFocused();
 				}
+
+				const bool activeLeftDrag = leftMouseButtonDownAtStart || heldLeftButtonEventPresent;
+				const bool forwardNativeMouseMotion = activeLeftDrag && mouseMoveEventPresent;
+				if (forwardNativeMouseMotion) {
+					stopMousePropagation = false;
+				}
+				const bool stopPropagation = stopKeyboardPropagation || stopMousePropagation;
 				return stopPropagation ? RE::BSEventNotifyControl::kStop : RE::BSEventNotifyControl::kContinue;
 			}
 		};
@@ -182,12 +257,26 @@ namespace alchemist::menu {
 			RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* a_event,
 				RE::BSTEventSource<RE::TESContainerChangedEvent>*) override
 			{
-				if (!a_event || !nativeAlchemyOpen.load(std::memory_order_acquire)) {
+				const bool menuActive = IsAlchemyMenuActive();
+				if (!a_event || (!nativeAlchemyOpen.load(std::memory_order_acquire) && !menuActive && !confirmations::IsObservationCaptureActive())) {
 					return RE::BSEventNotifyControl::kContinue;
+				}
+				bool expected = false;
+				inventoryEventObserved.compare_exchange_strong(expected, true, std::memory_order_acq_rel);
+				if (!nativeAlchemyOpen.load(std::memory_order_acquire) && menuActive) {
+					nativeAlchemyOpen.store(true, std::memory_order_release);
+					menuGeneration.fetch_add(1, std::memory_order_acq_rel);
+					engine::NotifyAlchemyMenuOpened();
 				}
 
 				auto* player = RE::PlayerCharacter::GetSingleton();
-				if (!player || (a_event->oldContainer != player->GetFormID() && a_event->newContainer != player->GetFormID())) {
+				if (!player) {
+					return RE::BSEventNotifyControl::kContinue;
+				}
+				const auto playerFormID = player->GetFormID();
+				const bool addedToPlayer = a_event->newContainer == playerFormID && a_event->oldContainer != playerFormID;
+				const bool removedFromPlayer = a_event->oldContainer == playerFormID && a_event->newContainer != playerFormID;
+				if (!addedToPlayer && !removedFromPlayer) {
 					return RE::BSEventNotifyControl::kContinue;
 				}
 
@@ -195,6 +284,15 @@ namespace alchemist::menu {
 				if (!form || (!form->Is(RE::FormType::Ingredient) && !form->Is(RE::FormType::AlchemyItem) && !form->Is(RE::FormType::Armor))) {
 					return RE::BSEventNotifyControl::kContinue;
 				}
+				const auto eventCount = static_cast<std::int64_t>(a_event->itemCount);
+				if (eventCount == 0) {
+					return RE::BSEventNotifyControl::kContinue;
+				}
+				const auto eventMagnitude = eventCount < 0 ? -eventCount : eventCount;
+				confirmations::ObserveInventoryChange(
+					form->GetFormID(),
+					addedToPlayer ? eventMagnitude : -eventMagnitude);
+				QueueConfirmationRecording();
 				QueueRecalculation();
 				return RE::BSEventNotifyControl::kContinue;
 			}
@@ -265,6 +363,7 @@ namespace alchemist::menu {
 						if (!active) {
 							return;
 						}
+						confirmations::DrainPendingConfirmations(player);
 						RefreshAlchemyMenu(player.hasPerkPurity);
 					});
 				}, force);
@@ -282,14 +381,18 @@ namespace alchemist::menu {
 		}
 		if (!inventoryChangeHandlerRegistered) {
 			if (auto* scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton()) {
-				scriptEventSourceHolder->AddEventSink<RE::TESContainerChangedEvent>(&inventoryChangeHandler);
-				inventoryChangeHandlerRegistered = true;
+				if (auto* eventSource = scriptEventSourceHolder->GetEventSource<RE::TESContainerChangedEvent>()) {
+					eventSource->AddEventSink(&inventoryChangeHandler);
+					inventoryChangeHandlerRegistered = true;
+				}
 			}
 		}
 		if (!equipChangeHandlerRegistered) {
 			if (auto* scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton()) {
-				scriptEventSourceHolder->AddEventSink<RE::TESEquipEvent>(&equipChangeHandler);
-				equipChangeHandlerRegistered = true;
+				if (auto* eventSource = scriptEventSourceHolder->GetEventSource<RE::TESEquipEvent>()) {
+					eventSource->AddEventSink(&equipChangeHandler);
+					equipChangeHandlerRegistered = true;
+				}
 			}
 		}
 		if (!inputHandlerRegistered) {
@@ -330,17 +433,16 @@ namespace alchemist::menu {
 
 	bool GetCursorSnapshot(CursorSnapshot& a_snapshot)
 	{
-		if (!nativeCursorValid.load(std::memory_order_acquire)) {
+		CaptureNativeCursor();
+		std::scoped_lock lock(nativeCursorMutex);
+		if (!nativeCursorValid) {
 			return false;
 		}
-		a_snapshot.x = nativeCursorX.load(std::memory_order_relaxed);
-		a_snapshot.y = nativeCursorY.load(std::memory_order_relaxed);
-		a_snapshot.width = nativeCursorWidth.load(std::memory_order_relaxed);
-		a_snapshot.height = nativeCursorHeight.load(std::memory_order_relaxed);
+		a_snapshot = nativeCursorSnapshot;
 		return true;
 	}
 
-	std::vector<std::uint32_t> GetSelectedIngredientFormIDs()
+	std::vector<std::uint32_t> GetSelectedIngredientFormIDsInSelectionOrder()
 	{
 		std::vector<std::uint32_t> selectedFormIDs;
 		if (!nativeAlchemyOpen.load(std::memory_order_acquire)) {
@@ -372,6 +474,12 @@ namespace alchemist::menu {
 			selectedFormIDs.push_back(entry.ingredient->object->GetFormID());
 		}
 
+		return selectedFormIDs;
+	}
+
+	std::vector<std::uint32_t> GetSelectedIngredientFormIDs()
+	{
+		auto selectedFormIDs = GetSelectedIngredientFormIDsInSelectionOrder();
 		std::sort(selectedFormIDs.begin(), selectedFormIDs.end());
 		selectedFormIDs.erase(std::unique(selectedFormIDs.begin(), selectedFormIDs.end()), selectedFormIDs.end());
 		return selectedFormIDs;

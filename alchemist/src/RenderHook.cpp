@@ -14,7 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -33,39 +35,47 @@ namespace alchemist::render {
 
 		void SynchronizeSkyrimCursor(float& a_cursorX, float& a_cursorY)
 		{
+			const auto isUsableGameWindow = [](HWND a_window) {
+				if (!a_window || !IsWindow(a_window)) {
+					return false;
+				}
+				DWORD processID = 0;
+				return GetWindowThreadProcessId(a_window, &processID) != 0 && processID == GetCurrentProcessId();
+			};
+			HWND currentWindowHandle = nullptr;
+			if (const auto* window = RE::BSGraphics::Renderer::GetCurrentRenderWindow(); window && window->hWnd) {
+				currentWindowHandle = reinterpret_cast<HWND>(window->hWnd);
+			}
+			if (!isUsableGameWindow(currentWindowHandle)) {
+				const auto foregroundWindow = GetForegroundWindow();
+				if (isUsableGameWindow(foregroundWindow)) {
+					currentWindowHandle = foregroundWindow;
+				}
+			}
+			if (currentWindowHandle && currentWindowHandle != gameWindowHandle) {
+				gameWindowHandle = currentWindowHandle;
+			}
+
 			const auto displaySize = ImGui::GetIO().DisplaySize;
-			menu::CursorSnapshot cursorSnapshot;
-			if (menu::GetCursorSnapshot(cursorSnapshot) && displaySize.x > 0.0f && displaySize.y > 0.0f) {
-				a_cursorX = cursorSnapshot.x / cursorSnapshot.width * displaySize.x;
-				a_cursorY = cursorSnapshot.y / cursorSnapshot.height * displaySize.y;
-				ui::SetCursorPosition(
-					a_cursorX,
-					a_cursorY);
-				return;
+			menu::CursorSnapshot cursorSnapshot{};
+			const bool snapshotValid = menu::GetCursorSnapshot(cursorSnapshot) && displaySize.x > 0.0f && displaySize.y > 0.0f;
+			ImVec2 cursorPosition(-1.0f, -1.0f);
+			if (snapshotValid) {
+				cursorPosition = ImVec2(
+					cursorSnapshot.x / cursorSnapshot.width * displaySize.x,
+					cursorSnapshot.y / cursorSnapshot.height * displaySize.y);
+			}
+			const bool cursorPositionValid = snapshotValid &&
+				std::isfinite(cursorPosition.x) && std::isfinite(cursorPosition.y) &&
+				cursorPosition.x >= 0.0f && cursorPosition.x <= displaySize.x &&
+				cursorPosition.y >= 0.0f && cursorPosition.y <= displaySize.y;
+			if (!cursorPositionValid) {
+				cursorPosition = ImVec2(-1.0f, -1.0f);
 			}
 
-			if (!gameWindowHandle) {
-				return;
-			}
-
-			RECT clientRect{};
-			POINT cursorPosition{};
-			if (displaySize.x <= 0.0f || displaySize.y <= 0.0f ||
-				!GetClientRect(gameWindowHandle, &clientRect) ||
-				!GetCursorPos(&cursorPosition) || !ScreenToClient(gameWindowHandle, &cursorPosition)) {
-				return;
-			}
-			const auto clientWidth = clientRect.right - clientRect.left;
-			const auto clientHeight = clientRect.bottom - clientRect.top;
-			if (clientWidth <= 0 || clientHeight <= 0) {
-				return;
-			}
-
-			a_cursorX = static_cast<float>(cursorPosition.x) / static_cast<float>(clientWidth) * displaySize.x;
-			a_cursorY = static_cast<float>(cursorPosition.y) / static_cast<float>(clientHeight) * displaySize.y;
-			ui::SetCursorPosition(
-				a_cursorX,
-				a_cursorY);
+			a_cursorX = cursorPosition.x;
+			a_cursorY = cursorPosition.y;
+			ui::SetCursorPosition(a_cursorX, a_cursorY);
 		}
 
 		void UpdateImGuiFrameState()
@@ -123,6 +133,7 @@ namespace alchemist::render {
 			auto& io = ImGui::GetIO();
 			io.IniFilename = nullptr;
 			io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+			io.ConfigWindowsMoveFromTitleBarOnly = true;
 			io.MouseDrawCursor = false;
 			ImGui::StyleColorsDark();
 
@@ -293,6 +304,11 @@ namespace alchemist::render {
 				float cursorX = -1.0f;
 				float cursorY = -1.0f;
 				SynchronizeSkyrimCursor(cursorX, cursorY);
+				const bool gameWindowFocused = gameWindowHandle && GetForegroundWindow() == gameWindowHandle;
+				ui::SetGameWindowFocused(gameWindowFocused);
+				if (!gameWindowFocused) {
+					ui::SetCursorPosition(-1.0f, -1.0f);
+				}
 				ui::UpdateImGuiMouseInput();
 				ui::ProcessKeyboardInput();
 				ImGui::NewFrame();

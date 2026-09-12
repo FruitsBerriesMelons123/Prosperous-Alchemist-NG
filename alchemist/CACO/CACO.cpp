@@ -59,7 +59,9 @@ namespace alchemist::caco
 			std::array<std::string_view, 4> ingredientLists;
 			std::array<RE::FormID, 4> ingredientListFormIDs;
 			std::array<std::string_view, 3> durationEffects;
+			std::array<RE::FormID, 3> durationEffectFormIDs;
 			std::array<std::string_view, 3> alternateDurationEffects;
+			std::array<RE::FormID, 3> alternateDurationEffectFormIDs;
 		};
 
 		constexpr std::array<FamilyDefinition, 6> kFamilies{
@@ -69,66 +71,78 @@ namespace alchemist::caco
 					"AlchRestoreHealth",
 					"AlchRestoreHealthBlood",
 					"CACO_RestoreHealthDuration",
-					0x01CCA010,
+					0x00CCA010,
 					{ "CACO_RestoreIngH1st", "CACO_RestoreIngH2nd", "CACO_RestoreIngH3rd", "CACO_RestoreIngH4th" },
 					{ 0x000D03ED, 0x000D03EE, 0x000D03EF, 0x000D03F0 },
 					{ "AlchRestoreHealth_1sec", "AlchRestoreHealth_5sec", "AlchRestoreHealth_10sec" },
-					{ "AlchRestoreHealthBlood_1sec", "AlchRestoreHealthBlood_5sec", "AlchRestoreHealthBlood_10sec" }
+					{ 0x001AA0B6, 0x001AA0B7, 0x001AA0B8 },
+					{ "AlchRestoreHealthBlood_1sec", "AlchRestoreHealthBlood_5sec", "AlchRestoreHealthBlood_10sec" },
+					{ 0x005BDD37, 0x005BDD39, 0x005BDD3A }
 				},
 				{
 					"MagicAlchRestoreMagicka",
 					"AlchRestoreMagicka",
 					"",
 					"CACO_RestoreMagickaDuration",
-					0x01CCA011,
+					0x00CCA011,
 					{ "CACO_RestoreIngM1st", "CACO_RestoreIngM2nd", "CACO_RestoreIngM3rd", "CACO_RestoreIngM4th" },
 					{ 0x000D03F1, 0x000D03F2, 0x000D03F3, 0x000D03F4 },
 					{ "AlchRestoreMagicka_1sec", "AlchRestoreMagicka_5sec", "AlchRestoreMagicka_10sec" },
-					{ "", "", "" }
+					{ 0x001B42BE, 0x001B42BF, 0x001B42C0 },
+					{ "", "", "" },
+					{ 0, 0, 0 }
 				},
 				{
 					"MagicAlchRestoreStamina",
 					"AlchRestoreStamina",
 					"",
 					"CACO_RestoreStaminaDuration",
-					0x01CCA012,
+					0x00CCA012,
 					{ "CACO_RestoreIngS1st", "CACO_RestoreIngS2nd", "CACO_RestoreIngS3rd", "CACO_RestoreIngS4th" },
 					{ 0x000D03F5, 0x000D03F6, 0x000D03F7, 0x000D03F8 },
 					{ "AlchRestoreStamina_1sec", "AlchRestoreStamina_5sec", "AlchRestoreStamina_10sec" },
-					{ "", "", "" }
+					{ 0x001B42BB, 0x001B42BC, 0x001B42BD },
+					{ "", "", "" },
+					{ 0, 0, 0 }
 				},
 				{
 					"MagicAlchDamageHealth",
 					"AlchDamageHealth",
 					"AlchDamageUndeadHealth",
 					"CACO_DamageHealthDuration",
-					0x01CCA013,
+					0x00CCA013,
 					{ "CACO_DamageIngH1st", "CACO_DamageIngH2nd", "CACO_DamageIngH3rd", "CACO_DamageIngH4th" },
 					{ 0x001B93CB, 0x001B93CC, 0x001B93CD, 0x001B93CE },
 					{ "AlchDamageHealth_1sec", "AlchDamageHealth_5sec", "AlchDamageHealth_10sec" },
-					{ "AlchDamageUndead_1sec", "AlchDamageUndead_5sec", "AlchDamageUndead_10sec" }
+					{ 0x001B93C8, 0x001B93C9, 0x001B93CA },
+					{ "AlchDamageUndead_1sec", "AlchDamageUndead_5sec", "AlchDamageUndead_10sec" },
+					{ 0x00316D85, 0x00316D86, 0x00316D7F }
 				},
 				{
 					"MagicAlchDamageMagicka",
 					"AlchDamageMagicka",
 					"",
 					"CACO_DamageMagickaDuration",
-					0x01CCA014,
+					0x00CCA014,
 					{ "CACO_DamageIngM1st", "CACO_DamageIngM2nd", "CACO_DamageIngM3rd", "CACO_DamageIngM4th" },
 					{ 0x001B93CF, 0x001B93D0, 0x001B93D1, 0x001B93D2 },
 					{ "AlchDamageMagicka_1sec", "AlchDamageMagicka_5sec", "AlchDamageMagicka_10sec" },
-					{ "", "", "" }
+					{ 0x001B93C5, 0x001B93C6, 0x001B93C7 },
+					{ "", "", "" },
+					{ 0, 0, 0 }
 				},
 				{
 					"MagicAlchDamageStamina",
 					"AlchDamageStamina",
 					"",
 					"CACO_DamageStaminaDuration",
-					0x01CCA015,
+					0x00CCA015,
 					{ "CACO_DamageIngS1st", "CACO_DamageIngS2nd", "CACO_DamageIngS3rd", "CACO_DamageIngS4th" },
 					{ 0x001B93D3, 0x001B93D4, 0x001B93D5, 0x001B93D6 },
 					{ "AlchDamageStamina_1sec", "AlchDamageStamina_5sec", "AlchDamageStamina_10sec" },
-					{ "", "", "" }
+					{ 0x001B93C2, 0x001B93C3, 0x001B93C4 },
+					{ "", "", "" },
+					{ 0, 0, 0 }
 				}
 			}
 		};
@@ -154,6 +168,7 @@ namespace alchemist::caco
 			bool alchemySettingsReady = false;
 			float alchemyIngredientInitMultiplier = 0.0f;
 			float alchemySkillFactor = 0.0f;
+			RE::TESGlobal* alchemyXPMultiplier = nullptr;
 			std::string pluginName;
 			std::array<FamilyState, kFamilies.size()> families{};
 			std::array<int, kFamilies.size()> durationIndices{};
@@ -166,6 +181,7 @@ namespace alchemist::caco
 			RE::BGSListForm* allPotionList = nullptr;
 			RE::AlchemyItem* cureDisease = nullptr;
 			RE::AlchemyItem* curePoison = nullptr;
+			RE::BGSPerk* durationModifierPerk = nullptr;
 		};
 
 		State g_state;
@@ -348,7 +364,28 @@ namespace alchemist::caco
 						return form;
 					}
 				}
-				return lookup(kLegacyPlugin);
+				if (auto* form = lookup(kLegacyPlugin)) {
+					return form;
+				}
+				static constexpr std::array<std::string_view, 11> kFallbackPlugins{
+					"ccbgssse037-curios.esl",
+					"ccbgssse025-advdsgs.esm",
+					"ccbgssse001-fish.esm",
+					"ccbgssse067-daedinv.esm",
+					"ccbgssse003-zombies.esl",
+					"ccbgssse040-advobgg.esl",
+					"ccasvsse001-almsivi.esm",
+					"ccvsvsse004-beaskpeg.esl",
+					"Dawnguard.esm",
+					"Dragonborn.esm",
+					"Skyrim.esm"
+				};
+				for (const auto plugin : kFallbackPlugins) {
+					if (auto* form = lookup(plugin)) {
+						return form;
+					}
+				}
+				return nullptr;
 			} catch (...) {
 				return nullptr;
 			}
@@ -357,6 +394,23 @@ namespace alchemist::caco
 		bool IsOne(RE::TESGlobal* a_global) noexcept
 		{
 			return a_global && std::isfinite(a_global->value) && a_global->value == 1.0f;
+		}
+
+		bool IsRestoreEffectsDoNotStack() noexcept
+		{
+			bool foundEffect = false;
+			for (std::size_t familyIndex = 0; familyIndex < 3 && familyIndex < g_state.families.size(); ++familyIndex) {
+				for (const auto* effect : g_state.families[familyIndex].durationEffects) {
+					if (!effect) {
+						continue;
+					}
+					foundEffect = true;
+					if (!effect->HasArchetype(RE::EffectArchetypes::ArchetypeID::kPeakValueModifier)) {
+						return false;
+					}
+				}
+			}
+			return foundEffect;
 		}
 
 		int GetDurationIndex(std::size_t a_familyIndex) noexcept
@@ -409,6 +463,11 @@ namespace alchemist::caco
 			if (!a_ingredient) {
 				return false;
 			}
+			const bool hasLists = std::any_of(a_family.ingredientLists.begin(), a_family.ingredientLists.end(),
+				[](const auto* list) { return list != nullptr; });
+			if (!hasLists) {
+				return true;
+			}
 			return std::any_of(a_family.ingredientLists.begin(), a_family.ingredientLists.end(),
 				[a_ingredient](const auto* list) { return list && list->HasForm(a_ingredient); });
 		}
@@ -433,33 +492,42 @@ namespace alchemist::caco
 
 		RE::EffectSetting* ResolveDurationEffect(
 			std::size_t a_familyIndex,
-			const RE::EffectSetting* a_sourceEffect) noexcept
+			const RE::EffectSetting* a_sourceEffect,
+			std::size_t a_durationIndex) noexcept
 		{
 			if (a_familyIndex >= kFamilies.size()) {
 				return nullptr;
 			}
 
 			const auto& family = g_state.families[a_familyIndex];
-			const int durationIndex = GetDurationIndex(a_familyIndex);
-			if (durationIndex < 0 || durationIndex >= 3) {
+			if (a_durationIndex >= 3) {
 				return nullptr;
 			}
 
 			const auto* sourceEditorID = a_sourceEffect ? a_sourceEffect->GetFormEditorID() : nullptr;
-			const bool useAlternate = sourceEditorID &&
-				(ContainsIgnoreCase(sourceEditorID, "Blood") || ContainsIgnoreCase(sourceEditorID, "Undead"));
+			const auto sourceFormID = a_sourceEffect ? a_sourceEffect->GetFormID() & 0x00FFFFFF : 0;
+			const bool useAlternate = (sourceEditorID &&
+				(ContainsIgnoreCase(sourceEditorID, "Blood") || ContainsIgnoreCase(sourceEditorID, "Undead"))) ||
+				sourceFormID == 0x0010DE5F || sourceFormID == 0x00013812 || sourceFormID == 0x000E4857;
 
 			if (useAlternate) {
-				if (family.alternateDurationEffects[durationIndex]) {
-					return family.alternateDurationEffects[durationIndex];
+				if (family.alternateDurationEffects[a_durationIndex]) {
+					return family.alternateDurationEffects[a_durationIndex];
 				}
-				if (family.legacyEffects[durationIndex]) {
-					return family.legacyEffects[durationIndex];
+				if (family.legacyEffects[a_durationIndex]) {
+					return family.legacyEffects[a_durationIndex];
 				}
 				return nullptr;
 			}
 
-			return family.durationEffects[durationIndex];
+			return family.durationEffects[a_durationIndex];
+		}
+
+		RE::EffectSetting* ResolveDurationEffect(
+			std::size_t a_familyIndex,
+			const RE::EffectSetting* a_sourceEffect) noexcept
+		{
+			return ResolveDurationEffect(a_familyIndex, a_sourceEffect, static_cast<std::size_t>(GetDurationIndex(a_familyIndex)));
 		}
 
 		const RE::BGSListForm* FindPotionList(const RE::EffectSetting* a_primaryEffect) noexcept
@@ -622,6 +690,28 @@ namespace alchemist::caco
 			}
 		}
 
+		bool RefreshAlchemySettings() noexcept
+		{
+			float alchemyIngredientInitMultiplier = 0.0f;
+			float alchemySkillFactor = 0.0f;
+			if (!ReadGameSetting("fAlchemyIngredientInitMult", alchemyIngredientInitMultiplier) ||
+				!ReadGameSetting("fAlchemySkillFactor", alchemySkillFactor)) {
+				return false;
+			}
+
+			const bool changed = !g_state.alchemySettingsReady ||
+				g_state.alchemyIngredientInitMultiplier != alchemyIngredientInitMultiplier ||
+				g_state.alchemySkillFactor != alchemySkillFactor;
+			g_state.alchemyIngredientInitMultiplier = alchemyIngredientInitMultiplier;
+			g_state.alchemySkillFactor = alchemySkillFactor;
+			g_state.alchemySettingsReady = true;
+			if (changed && g_state.initialized &&
+				g_state.calculationRevision < (std::numeric_limits<std::uint64_t>::max)()) {
+				++g_state.calculationRevision;
+			}
+			return true;
+		}
+
 		bool CompareCondition(float a_left, float a_right, RE::CONDITION_ITEM_DATA::OpCode a_opCode) noexcept
 		{
 			switch (a_opCode) {
@@ -683,6 +773,7 @@ namespace alchemist::caco
 		{
 			bool result = true;
 			bool first = true;
+			bool prevIsOR = false;
 			for (auto* item = a_item; item; item = item->next) {
 				float comparison = 0.0f;
 				if (!GetConditionComparisonValue(item->data, comparison)) {
@@ -753,11 +844,12 @@ namespace alchemist::caco
 				if (first) {
 					result = conditionResult;
 					first = false;
-				} else if (item->data.flags.isOR) {
+				} else if (prevIsOR) {
 					result = result || conditionResult;
 				} else {
 					result = result && conditionResult;
 				}
+				prevIsOR = item->data.flags.isOR;
 			}
 			return result;
 		}
@@ -775,6 +867,7 @@ namespace alchemist::caco
 			try {
 				bool result = true;
 				bool first = true;
+				bool prevIsOR = false;
 				for (const auto& condition : a_entry->conditions) {
 					if (!condition.head) {
 						continue;
@@ -784,11 +877,12 @@ namespace alchemist::caco
 					if (first) {
 						result = conditionResult;
 						first = false;
-					} else if (condition.head->data.flags.isOR) {
+					} else if (prevIsOR) {
 						result = result || conditionResult;
 					} else {
 						result = result && conditionResult;
 					}
+					prevIsOR = condition.head->data.flags.isOR;
 				}
 				return result;
 			} catch (...) {
@@ -852,6 +946,22 @@ namespace alchemist::caco
 			return IsPerkIdentity(a_perk, 0x00058217, "Poisoner", "AlchPoisoner");
 		}
 
+		bool IsDurationModifierPerk(const RE::BGSPerk* a_perk) noexcept
+		{
+			if (!a_perk) {
+				return false;
+			}
+			if (g_state.durationModifierPerk && a_perk == g_state.durationModifierPerk) {
+				return true;
+			}
+			const auto* editorID = a_perk->GetFormEditorID();
+			if (editorID && EqualsIgnoreCase(editorID, kDurationModifierPerk)) {
+				return true;
+			}
+			const auto* fullName = a_perk->GetFullName();
+			return fullName && EqualsIgnoreCase(fullName, kDurationModifierPerk);
+		}
+
 		bool IsPhysicianEffect(const RE::EffectSetting* a_effect) noexcept
 		{
 			return a_effect && (a_effect->HasKeywordString("MagicAlchRestoreHealth") ||
@@ -870,8 +980,19 @@ namespace alchemist::caco
 			float& a_durationMultiplier) noexcept
 		{
 			const float fallback = std::isfinite(a_fallback) && a_fallback > 0.0f ? a_fallback : 1.0f;
-			const float rankFallback = a_context.alchemistPerkRank > 0 ?
-				1.0f + static_cast<float>(a_context.alchemistPerkRank) * 0.2f : 1.0f;
+			float rankFallback = 1.0f;
+			if (Adapter::IsActive()) {
+				if (!Adapter::IsPotionHandlingEnabled()) {
+					rankFallback = 1.0f;
+				} else if (a_context.alchemistPerkRank == 1) {
+					rankFallback = 1.20f;
+				} else if (a_context.alchemistPerkRank > 1) {
+					rankFallback = 1.0f + 0.20f + static_cast<float>(a_context.alchemistPerkRank - 1) * 0.15f;
+				}
+			} else {
+				rankFallback = a_context.alchemistPerkRank > 0 ?
+					1.0f + static_cast<float>(a_context.alchemistPerkRank) * 0.2f : 1.0f;
+			}
 			const double contextFallback = a_context.captured ?
 				static_cast<double>((std::max)(fallback, rankFallback)) : static_cast<double>(fallback);
 			a_magnitudeMultiplier = static_cast<float>(contextFallback);
@@ -892,6 +1013,7 @@ namespace alchemist::caco
 			bool benefactorEntryPointFound = false;
 			bool poisonerApplied = false;
 			bool seekerApplied = false;
+			const bool disableAllPotionHandling = !Adapter::IsActive() || !Adapter::IsPotionHandlingEnabled();
 
 			const auto applyValue = [&](const RE::BGSPerk* a_perk, float a_value, bool a_affectsMagnitude, bool a_affectsDuration) {
 				if (IsAlchemistPerk(a_perk)) {
@@ -915,13 +1037,14 @@ namespace alchemist::caco
 
 			const auto inspectPerk = [&](const RE::BGSPerk* a_perk) {
 				if (!a_perk || !inspectedPerks.insert(a_perk).second ||
-					(a_perk == a_context.seeker.perk && !a_context.seeker.nativeContract)) {
+					(a_perk == a_context.seeker.perk && !a_context.seeker.nativeContract) ||
+					IsDurationModifierPerk(a_perk)) {
 					return;
 				}
 				const bool benefactorPerk = IsBenefactorPerk(a_perk);
 				const bool poisonerPerk = IsPoisonerPerk(a_perk);
 				if ((benefactorPerk && !algorithm::ShouldApplyBenefactor(
-						a_potion, a_effect && Adapter::HasBeneficialKeyword(a_effect), a_includeTypePerks, a_mixedPotion)) ||
+						a_potion, a_effect && Adapter::HasBeneficialKeyword(a_effect), a_includeTypePerks, a_mixedPotion, disableAllPotionHandling)) ||
 					(poisonerPerk && !algorithm::ShouldApplyPoisoner(
 						a_potion, a_effect && Adapter::HasHarmfulKeyword(a_effect), a_includeTypePerks))) {
 					return;
@@ -948,6 +1071,10 @@ namespace alchemist::caco
 					bool typeSpecific = false;
 					if (!EvaluateEntryConditions(entryPoint, a_effect, a_potion, a_context, effectSpecific, typeSpecific) ||
 						(typeSpecific && !a_includeTypePerks)) {
+						continue;
+					}
+					if (effectSpecific && a_effect && Adapter::IsDurationBased(a_effect) &&
+						std::abs(functionData->data - 0.01f) < 0.001f) {
 						continue;
 					}
 					const bool affectsMagnitude = !a_effect || a_effect->data.flags.all(
@@ -989,7 +1116,8 @@ namespace alchemist::caco
 				a_context.hasBenefactor,
 				benefactorApplied,
 				benefactorEntryPointFound,
-				a_mixedPotion)) {
+				a_mixedPotion,
+				disableAllPotionHandling)) {
 				otherMagnitude *= 1.25;
 				otherDuration *= 1.25;
 			}
@@ -1054,11 +1182,13 @@ namespace alchemist::caco
 						definition.ingredientLists[position], definition.ingredientListFormIDs[position]);
 				}
 				for (std::size_t d = 0; d < 3; ++d) {
-					if (!definition.durationEffects[d].empty()) {
-						family.durationEffects[d] = ResolveEditorID<RE::EffectSetting>(definition.durationEffects[d]);
+					if (!definition.durationEffects[d].empty() || definition.durationEffectFormIDs[d] != 0) {
+						family.durationEffects[d] = ResolveRecord<RE::EffectSetting>(
+							definition.durationEffects[d], definition.durationEffectFormIDs[d]);
 					}
-					if (!definition.alternateDurationEffects[d].empty()) {
-						family.alternateDurationEffects[d] = ResolveEditorID<RE::EffectSetting>(definition.alternateDurationEffects[d]);
+					if (!definition.alternateDurationEffects[d].empty() || definition.alternateDurationEffectFormIDs[d] != 0) {
+						family.alternateDurationEffects[d] = ResolveRecord<RE::EffectSetting>(
+							definition.alternateDurationEffects[d], definition.alternateDurationEffectFormIDs[d]);
 					}
 				}
 				if (i == 0) {
@@ -1067,8 +1197,11 @@ namespace alchemist::caco
 						"DLC1AlchRestoreHealthBlood_5sec",
 						"DLC1AlchRestoreHealthBlood_10sec"
 					};
+					static constexpr std::array<RE::FormID, 3> legacyBloodFormIDs{
+						0x005BDD37, 0x005BDD39, 0x005BDD3A
+					};
 					for (std::size_t d = 0; d < 3; ++d) {
-						family.legacyEffects[d] = ResolveEditorID<RE::EffectSetting>(legacyBloodEffects[d]);
+						family.legacyEffects[d] = ResolveRecord<RE::EffectSetting>(legacyBloodEffects[d], legacyBloodFormIDs[d]);
 					}
 				} else if (i == 3) {
 					static constexpr std::array<std::string_view, 3> legacyUndeadEffects{
@@ -1076,8 +1209,11 @@ namespace alchemist::caco
 						"AlchDamageUndeadHealth_5sec",
 						"AlchDamageUndeadHealth_10sec"
 					};
+					static constexpr std::array<RE::FormID, 3> legacyUndeadFormIDs{
+						0x00316D85, 0x00316D86, 0x00316D7F
+					};
 					for (std::size_t d = 0; d < 3; ++d) {
-						family.legacyEffects[d] = ResolveEditorID<RE::EffectSetting>(legacyUndeadEffects[d]);
+						family.legacyEffects[d] = ResolveRecord<RE::EffectSetting>(legacyUndeadEffects[d], legacyUndeadFormIDs[d]);
 					}
 				}
 			}
@@ -1093,19 +1229,19 @@ namespace alchemist::caco
 			if (!g_state.renamePotions) {
 				g_state.renamePotions = ResolveEditorID<RE::TESGlobal>("CACORenamePotionOption_KRY");
 			}
+			g_state.alchemyXPMultiplier = ResolveEditorID<RE::TESGlobal>("CACO_OptionAlchXPRate");
 			g_state.alchemyEffectsList = ResolveRecord<RE::BGSListForm>(
 				"CACO_AlchemyEffectsList", kAlchemyEffectsListFormID);
 			g_state.allPotionList = ResolveRecord<RE::BGSListForm>(
 				"CACO_AlchemyAllPotionList", kAlchemyAllPotionListFormID);
 			g_state.cureDisease = ResolveEditorID<RE::AlchemyItem>("CureDisease");
 			g_state.curePoison = ResolveEditorID<RE::AlchemyItem>("CurePoison");
+			g_state.durationModifierPerk = ResolveEditorID<RE::BGSPerk>(kDurationModifierPerk);
 			if (g_state.pluginName.empty()) {
 				AdoptPluginName(g_state.alchemyEffectsList);
 				AdoptPluginName(g_state.allPotionList);
 			}
-			g_state.alchemySettingsReady =
-				ReadGameSetting("fAlchemyIngredientInitMult", g_state.alchemyIngredientInitMultiplier) &&
-				ReadGameSetting("fAlchemySkillFactor", g_state.alchemySkillFactor);
+			g_state.alchemySettingsReady = RefreshAlchemySettings();
 			RefreshCalculationRevision();
 
 			const bool coreListsFound = g_state.alchemyEffectsList && g_state.allPotionList;
@@ -1141,6 +1277,7 @@ namespace alchemist::caco
 			return;
 		}
 		try {
+			RefreshAlchemySettings();
 			RefreshOptions();
 			RefreshCalculationRevision();
 		} catch (const std::exception&) {
@@ -1164,6 +1301,59 @@ namespace alchemist::caco
 	bool Adapter::IsActive() noexcept
 	{
 		return g_state.initialized && g_state.active;
+	}
+
+	float Adapter::GetAlchemyIngredientInitMultiplier() noexcept
+	{
+		if (g_state.alchemySettingsReady && g_state.alchemyIngredientInitMultiplier > 0.0f) {
+			return g_state.alchemyIngredientInitMultiplier;
+		}
+		float val = 4.0f;
+		if (ReadGameSetting("fAlchemyIngredientInitMult", val) && val > 0.0f) {
+			return val;
+		}
+		return 4.0f;
+	}
+
+	float Adapter::GetAlchemySkillFactor() noexcept
+	{
+		if (g_state.alchemySettingsReady && g_state.alchemySkillFactor > 0.0f) {
+			return g_state.alchemySkillFactor;
+		}
+		float val = 1.5f;
+		if (ReadGameSetting("fAlchemySkillFactor", val) && val > 0.0f) {
+			return val;
+		}
+		return 1.5f;
+	}
+
+	bool Adapter::TryGetSettings(Settings& a_settings) noexcept
+	{
+		if (!IsDetected()) {
+			return false;
+		}
+
+		try {
+			Refresh();
+			Settings settings;
+			settings.restoreHealthDuration = static_cast<std::int32_t>(GetDurationIndex(0));
+			settings.restoreMagickaDuration = static_cast<std::int32_t>(GetDurationIndex(1));
+			settings.restoreStaminaDuration = static_cast<std::int32_t>(GetDurationIndex(2));
+			settings.restoreEffectsDoNotStack = IsRestoreEffectsDoNotStack();
+			settings.damageHealthDuration = static_cast<std::int32_t>(GetDurationIndex(3));
+			settings.damageMagickaDuration = static_cast<std::int32_t>(GetDurationIndex(4));
+			settings.damageStaminaDuration = static_cast<std::int32_t>(GetDurationIndex(5));
+			settings.disableAllPotionHandling = g_state.disablePotionHandling && IsOne(g_state.disablePotionHandling);
+			settings.alchemyXPMultiplier = g_state.alchemyXPMultiplier && std::isfinite(g_state.alchemyXPMultiplier->value) &&
+				g_state.alchemyXPMultiplier->value >= 0.0f ? g_state.alchemyXPMultiplier->value : 1.0f;
+			settings.alchemyIngredientInitMultiplier = g_state.alchemyIngredientInitMultiplier;
+			settings.alchemySkillFactor = g_state.alchemySkillFactor;
+			settings.impureProcessingEnabled = IsImpureProcessingEnabled();
+			a_settings = settings;
+			return true;
+		} catch (...) {
+			return false;
+		}
 	}
 
 	std::uint64_t Adapter::GetCalculationRevision() noexcept
@@ -1270,6 +1460,9 @@ namespace alchemist::caco
 			durationPerkMultiplier);
 		a_magnitudeMultiplier = baseEffectiveness * magnitudePerkMultiplier;
 		a_durationMultiplier = baseEffectiveness * durationPerkMultiplier;
+		if (IsDurationBased(a_effect)) {
+			a_durationMultiplier = algorithm::CalculateDurationBasedIngredientPowerFactor(a_durationMultiplier);
+		}
 		if (!std::isfinite(a_magnitudeMultiplier) || a_magnitudeMultiplier <= 0.0f ||
 			!std::isfinite(a_durationMultiplier) || a_durationMultiplier <= 0.0f) {
 			return false;
@@ -1292,8 +1485,10 @@ namespace alchemist::caco
 			!std::isfinite(a_fallbackAlchemistMultiplier) || a_fallbackAlchemistMultiplier <= 0.0f) {
 			return false;
 		}
+		const float initMult = GetAlchemyIngredientInitMultiplier();
+		const float skillFactor = GetAlchemySkillFactor();
 		const float baseEffectiveness = algorithm::CalculateVanillaAlchemyEffectiveness(
-			a_alchemyLevel, 1.0f);
+			a_alchemyLevel, 1.0f, 1.0f, initMult, skillFactor);
 		if (!std::isfinite(baseEffectiveness) || baseEffectiveness <= 0.0f) {
 			return false;
 		}
@@ -1327,20 +1522,30 @@ namespace alchemist::caco
 
 	bool Adapter::IsDurationBased(const RE::EffectSetting* a_effect) noexcept
 	{
-		if (!a_effect) {
-			return false;
+		return a_effect && a_effect->HasKeywordString(kDurationBasedKeyword);
+	}
+
+	std::int32_t Adapter::FindFamily(const RE::EffectSetting* a_effect) noexcept
+	{
+		return ::alchemist::caco::FindFamily(a_effect);
+	}
+
+	float Adapter::GetFamilyDurationSeconds(std::int32_t a_familyIndex) noexcept
+	{
+		if (!IsActive() || a_familyIndex < 0 ||
+			static_cast<std::size_t>(a_familyIndex) >= kFamilies.size()) {
+			return 1.0f;
 		}
-		if (a_effect->HasKeywordString(kDurationBasedKeyword)) {
-			return true;
+
+		// CACO's duration globals store the fixed 1-, 5-, and 10-second variant index.
+		switch (GetDurationIndex(static_cast<std::size_t>(a_familyIndex))) {
+		case 1:
+			return 5.0f;
+		case 2:
+			return 10.0f;
+		default:
+			return 1.0f;
 		}
-		if (!a_effect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsDuration)) {
-			return false;
-		}
-		// CACO reclassifies effects like Silence, Resist Disease, and Slow to scale with duration
-		// instead of magnitude. The no-magnitude flag is not reliable on these records, but
-		// power-affects-magnitude being false is the validated signal.
-		return a_effect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kNoMagnitude) ||
-			!a_effect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsMagnitude);
 	}
 
 	RE::EffectSetting* Adapter::ResolveIngredientEffect(
@@ -1357,6 +1562,25 @@ namespace alchemist::caco
 		}
 		if (auto* activeEffect = ResolveDurationEffect(static_cast<std::size_t>(familyIndex), a_sourceEffect)) {
 			return activeEffect;
+		}
+		return a_sourceEffect;
+	}
+
+	RE::EffectSetting* Adapter::ResolveIngredientEffect(
+		const RE::IngredientItem* a_ingredient,
+		RE::EffectSetting* a_sourceEffect,
+		std::size_t a_durationIndex) noexcept
+	{
+		if (!IsActive() || !a_ingredient || !a_sourceEffect) {
+			return a_sourceEffect;
+		}
+		const int familyIndex = FindFamily(a_sourceEffect);
+		if (familyIndex < 0 || !IsIngredientListedInFamily(
+				a_ingredient, g_state.families[static_cast<std::size_t>(familyIndex)])) {
+			return a_sourceEffect;
+		}
+		if (auto* variantEffect = ResolveDurationEffect(static_cast<std::size_t>(familyIndex), a_sourceEffect, a_durationIndex)) {
+			return variantEffect;
 		}
 		return a_sourceEffect;
 	}

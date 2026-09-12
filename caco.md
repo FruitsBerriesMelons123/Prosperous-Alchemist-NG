@@ -1,5 +1,9 @@
 # CACO Potion Costs, Values, and Prosperous Alchemist Compatibility
 
+> [!IMPORTANT]
+> **CACO Potion Handling Test Policy:**
+> The native adapter detects CACO's potion-handling, impurity, reweight, and rename options and has conditional modeling paths for live configurations where those options are enabled. However, CACO's scripted potion handling is buggy, slow, and makes automated value capture unreliable because the adjusted value may require closing the alchemy lab before it can be checked. Repository-supported automated captures therefore keep `CACO_OptionDisableAllPotionHandling = 1` and `CACO_OptionImpurePotions = 0`. Do not enable CACO potion handling or generate test requests for `DisableAllPotionHandling = 0` or `ImpurePotionProcessing = 1`.
+
 ## Combined Alchemy Plus and CACO evaluation
 
 The production evaluator supports CACO and Alchemy Plus independently and together. When both adapters report active settings, Automatic mode uses CACO's live records and game settings first, applies Alchemy Plus's configured magnitude/duration rounding to the constructed effect input, and uses that post-rounding contribution for shared-effect priority, effect ordering, and the pre-adjustment gold total. Alchemy Plus's optional signed impure-cost correction is applied before CACO's optional truncating 20% impure-potion adjustment. This composition preserves the four supported modes: vanilla, Alchemy Plus only, CACO only, and both adapters.
@@ -11,6 +15,14 @@ This document details the potion-cost and potion-value mechanics in the Complete
 * **Historical baseline:** The original discrepancy was evaluated against the vanilla Prosperous Alchemist path; the current production evaluator includes the CACO adapter described below.
 * **Third-Party Mods:** The adapter supports CACO and Alchemy Plus independently and in combination; the historical source comparison below isolates CACO behavior where noted.
 * **Historical problem statement:** Earlier builds miscalculated CACO potion values—such as predicting 5,463 gold for a Jarrin Root, Nordic Barnacle, and Salmon Roe mixture that actually crafts for 93 gold—because they relied on vanilla cost formulas, ignored CACO's base-record rebalances, and omitted CACO's post-creation Papyrus logic. The current adapter addresses the supported live-record and post-processing portions without mutating the active menu.
+
+## Ingredient selection order review
+
+The inspected CACO Papyrus sources do not establish a CACO-specific ingredient-order bug. `CACO_CreatePotionPlayerScript` receives `OnItemAdded` only after Skyrim has created the potion (`caco_createpotionplayerscript.psc:89-105`). `CACO_AdjustPotionThread` then operates on the completed potion reference: impurity handling loops over its effect slots and applies the same transformation to each (`caco_adjustpotionthread.psc:238-254`), while renaming reads the engine-provided primary effect at slot 0 (`:93-110`). `CACO_CrucibleScript` also reads the completed potion's effect 0 and only uses its magnitude/duration for one-effect quality replacement (`caco_cruciblescript.psc:33-124`).
+
+The duration-maintenance scripts iterate CACO form lists and set an ingredient effect slot to 1, 5, or 10 seconds (`caco_mcmscript.psc:1835-1849`; `caco_playerloadgamealias.psc:531-556`); those list positions are effect indices, not the order in which the player selects ingredients. The source review found no ordinary potion-path Papyrus variable, event, loop, or random call that records or uses ingredient A/B/C click order. Therefore, if controlled gameplay demonstrates an order difference, it must be attributed to Skyrim's native alchemy construction/effect ordering, a distinct ingredient form/state, another mod/native hook, or an uninspected binary implementation—not to the CACO Papyrus scripts reviewed here.
+
+The available SkyUI source does not prove the proposed mechanism either. `CraftingMenu.onItemSelect` forwards the selected displayed list index to the native `ChooseItem` delegate, and `onCraftButtonPress` forwards `CraftButtonPress` (`source/actionscript/CraftingMenu/CraftingMenu.as:428-432,492-497`). The ActionScript does not expose the native ingredient array, selection timing, parent record, or potency/value calculation. Thus player reports can justify controlled testing, but not a source-backed claim that menu registration order causes CACO-specific potency or value changes.
 
 ## Key Technical Requirements for Compatibility
 
@@ -371,7 +383,20 @@ CACO_IngrDamageMagicka4th [LVLI:01CCA070]
 CACO_IngrDamageStamina1st [LVLI:01CCA071]
 CACO_IngrDamageStamina2nd [LVLI:01CCA072]
 CACO_IngrDamageStamina3rd [LVLI:01CCA073]
-CACO_IngrDamageStamina4th [LVLI:01CCA074]
+
+## Kryptopyr's Automated Patches Compatibility
+
+`kryptopyr's Automated Patches` is a patch collection (including `cc-rarecurios_caco_patch.esp` and `cc-fishing_caco_patch.esp`) that integrates Creation Club DLC content with CACO.
+
+### Key Changes & Ingredient Standardization:
+1. **Ingredient Replacements & Substitutions**:
+   - `cc-rarecurios_caco_patch.esp` standardizes Rare Curios with CACO, replacing Creation Club Rare Curios `Aloe Vera Leaves` (`0x0060D0` in `ccbgssse037-curios.esl`) with CACO's native `Aloe Vera` (`CACO_Aloe_SF`, FormID `0x00A100AD` in `Complete Alchemy & Cooking Overhaul.esp`). When `cc-rarecurios_caco_patch.esp` is active, Skyrim uses `Aloe Vera` rather than `Aloe Vera Leaves`.
+2. **FormList Manipulator (FLM) Mappings**:
+   - Other Rare Curios ingredients (`Comberry` `0x004806`, `Bog Beacon` `0x004D6C`, `Ambrosia` `0x004836`, `Roobrush` `0x004819`) retain their original local FormIDs from `ccbgssse037-curios.esl` and are registered into CACO's duration/effect FormLists dynamically via `cc-rarecurios_caco_flm.ini`.
+3. **Graceful Handling (Present vs Absent Patches)**:
+   - **Papyrus Provisioning Test Scripts (`ProsperousAlchemistTests.psc`)**: Automatically attempts to provision CACO's `Aloe Vera` (`0x00A100AD` from `Complete Alchemy & Cooking Overhaul.esp`) first. If the resulting count is 0 (i.e. running in Vanilla mode without CACO or the patch), it falls back to provisioning `0x0060D0` from `ccbgssse037-curios.esl`.
+   - **SKSE Plugin Core (`alchemist.dll`)**: Dynamically resolves loaded `MagicEffect` and `Ingredient` records via live FormIDs and EditorIDs. It transparently processes whichever variant (`Aloe Vera` or `Aloe Vera Leaves`) exists in the active load order.
+   - **Prediction & Verification Harness (`potion_prediction_test.py`)**: Supports both `Aloe Vera` (CACO CSVs) and `Aloe Vera Leaves` (Vanilla CSVs) in row-by-row confirmed CSV audits.
 
 ## Current Prosperous Alchemist compatibility status
 

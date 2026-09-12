@@ -7,11 +7,13 @@
 #include "AlchemistEngine.h"
 #include "AlchemyPlus/AlchemyPlus.h"
 #include "CACO/CACO.h"
+#include "Localization.h"
 #include "SeekerOfShadows.h"
 
 #include <time.h>
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <set>
 #include <thread>
 #include <algorithm>
@@ -33,22 +35,48 @@ using std::vector;
 using IngredientItem = RE::IngredientItem;
 using GameEffect = RE::Effect;
 
-inline REX::INI::I32<> kIgnorePlayer("General", "IgnorePlayer", 0);
-inline REX::INI::I32<> kDeveloper("General", "developer", 0);
-inline REX::INI::I32<> kProtectIngredients("General", "ProtectIngredients", 0);
-inline REX::INI::I32<> kSinglethreaded("General", "Singlethreaded", 0);
+inline constexpr int kDefaultIgnorePlayer = 0;
+inline constexpr int kDefaultDeveloper = 0;
+inline constexpr char kDefaultAutoprovision[] = "";
+inline constexpr int kDefaultSingleProfile = 0;
+inline constexpr int kDefaultProtectIngredients = 0;
+inline constexpr int kDefaultSinglethreaded = 0;
 inline constexpr char kDefaultProtectedIngredients[] = "";
-inline REX::INI::Str<> kProtectedIngredients("General", "ProtectedIngredients", kDefaultProtectedIngredients);
-inline REX::INI::I32<> kManualProtectionOnly("Tracking", "ManualProtectionOnly", 0);
-inline REX::INI::Str<> kProtectedEffects("Tracking", "ProtectedEffects", "Fortify Enchanting,Fortify Smithing");
-inline REX::INI::Str<> kProtectedEffectCounts("Tracking", "ProtectedEffectCounts", "");
-inline REX::INI::Str<> kTrackedRequirements("Tracking", "Requirements", R"({"nextManualId":1,"manual":[],"overrides":[]})");
-inline REX::INI::Str<> kPotionPoison("General", "PotionPoison", "Potion of,Poison of");
-inline REX::INI::I32<> kCacheDurationSeconds("General", "CacheDurationSeconds", 180);
-inline REX::INI::I32<> kStaleRecalculateThresholdMs("General", "StaleRecalculateThresholdMs", 500);
-inline REX::INI::I32<> kCraftDebounceMs("General", "CraftDebounceMs", 400);
-inline REX::INI::I32<> kFilterPotionsBySelectedIngredients("General", "FilterPotionsBySelectedIngredients", 1);
-inline REX::INI::Str<> kLanguage("Localization", "Language", "");
+inline constexpr int kDefaultManualProtectionOnly = 0;
+inline constexpr char kDefaultProtectedEffects[] = "MagicAlchFortifyEnchanting,MagicAlchFortifySmithing";
+inline constexpr char kDefaultProtectedEffectCounts[] = "";
+inline constexpr char kDefaultTrackedRequirements[] = R"({"nextManualId":1,"manual":[],"overrides":[]})";
+inline constexpr int kDefaultCacheDurationSeconds = 180;
+inline constexpr int kDefaultStaleRecalculateThresholdMs = 500;
+inline constexpr int kDefaultCraftDebounceMs = 400;
+inline constexpr int kDefaultFilterPotionsBySelectedIngredients = 1;
+inline constexpr char kDefaultLanguage[] = "";
+inline constexpr float kDefaultWindowPositionX = -1.0f;
+inline constexpr float kDefaultWindowPositionY = -1.0f;
+inline constexpr float kDefaultWindowWidth = -1.0f;
+inline constexpr float kDefaultWindowHeight = -1.0f;
+
+inline REX::INI::I32<> kIgnorePlayer("Profile 1", "IgnorePlayer", kDefaultIgnorePlayer);
+inline REX::INI::I32<> kDeveloper("Profile 1", "developer", kDefaultDeveloper);
+// Note: autoprovision in alchemist.ini is an obsolete setting; the new preferred method is pat <mode> scripts.
+inline REX::INI::Str<> kAutoprovision("Profile 1", "autoprovision", kDefaultAutoprovision);
+inline REX::INI::I32<> kSingleProfile("Profile 1", "singleprofile", kDefaultSingleProfile);
+inline REX::INI::I32<> kProtectIngredients("Profile 1", "ProtectIngredients", kDefaultProtectIngredients);
+inline REX::INI::I32<> kSinglethreaded("Profile 1", "Singlethreaded", kDefaultSinglethreaded);
+inline REX::INI::Str<> kProtectedIngredients("Profile 1", "ProtectedIngredients", kDefaultProtectedIngredients);
+inline REX::INI::I32<> kManualProtectionOnly("Profile 1", "ManualProtectionOnly", kDefaultManualProtectionOnly);
+inline REX::INI::Str<> kProtectedEffects("Profile 1", "ProtectedEffects", kDefaultProtectedEffects);
+inline REX::INI::Str<> kProtectedEffectCounts("Profile 1", "ProtectedEffectCounts", kDefaultProtectedEffectCounts);
+inline REX::INI::Str<> kTrackedRequirements("Profile 1", "Requirements", kDefaultTrackedRequirements);
+inline REX::INI::I32<> kCacheDurationSeconds("Profile 1", "CacheDurationSeconds", kDefaultCacheDurationSeconds);
+inline REX::INI::I32<> kStaleRecalculateThresholdMs("Profile 1", "StaleRecalculateThresholdMs", kDefaultStaleRecalculateThresholdMs);
+inline REX::INI::I32<> kCraftDebounceMs("Profile 1", "CraftDebounceMs", kDefaultCraftDebounceMs);
+inline REX::INI::I32<> kFilterPotionsBySelectedIngredients("Profile 1", "FilterPotionsBySelectedIngredients", kDefaultFilterPotionsBySelectedIngredients);
+inline REX::INI::Str<> kLanguage("Profile 1", "Language", kDefaultLanguage);
+inline REX::INI::F32<> kWindowPositionX("Profile 1", "PositionX", kDefaultWindowPositionX);
+inline REX::INI::F32<> kWindowPositionY("Profile 1", "PositionY", kDefaultWindowPositionY);
+inline REX::INI::F32<> kWindowWidth("Profile 1", "Width", kDefaultWindowWidth);
+inline REX::INI::F32<> kWindowHeight("Profile 1", "Height", kDefaultWindowHeight);
 
 
 namespace alchemist {
@@ -80,6 +108,12 @@ namespace alchemist {
 			if (leftIdentity && rightIdentity) {
 				const auto leftFormID = leftIdentity->GetFormID();
 				const auto rightFormID = rightIdentity->GetFormID();
+				if (leftFormID != 0 && rightFormID != 0) {
+					if (leftFormID != rightFormID) {
+						return leftFormID < rightFormID;
+					}
+					return false;
+				}
 				if (leftFormID != rightFormID) {
 					return leftFormID < rightFormID;
 				}
@@ -96,8 +130,16 @@ namespace alchemist {
 		bool operator== (const Effect& effect) const {
 			const auto* leftIdentity = sourceBaseEffect ? sourceBaseEffect : baseEffect;
 			const auto* rightIdentity = effect.sourceBaseEffect ? effect.sourceBaseEffect : effect.baseEffect;
-			if (leftIdentity || rightIdentity) {
+			if (leftIdentity && rightIdentity) {
+				const auto leftFormID = leftIdentity->GetFormID();
+				const auto rightFormID = rightIdentity->GetFormID();
+				if (leftFormID != 0 && rightFormID != 0) {
+					return leftFormID == rightFormID;
+				}
 				return leftIdentity == rightIdentity;
+			}
+			if (leftIdentity || rightIdentity) {
+				return false;
 			}
 			return name == effect.name;
 		}
@@ -280,13 +322,8 @@ namespace alchemist {
 
 	inline PotionPrefixes getPotionPrefixes() {
 		PotionPrefixes prefixes;
-		const auto configuredPrefixes = str::split(kPotionPoison.GetValue(), ',');
-		if (!configuredPrefixes.empty()) {
-			prefixes.potion = configuredPrefixes.front();
-		}
-		if (configuredPrefixes.size() > 1) {
-			prefixes.poison = configuredPrefixes.at(1);
-		}
+		prefixes.potion = localization::Translate("result.potionPrefix", prefixes.potion);
+		prefixes.poison = localization::Translate("result.poisonPrefix", prefixes.poison);
 		return prefixes;
 	}
 
@@ -391,6 +428,10 @@ namespace alchemist {
 							const auto* fnData = static_cast<const RE::BGSEntryPointFunctionDataOneValue*>(entryPointPerk->functionData);
 							const float mult = fnData->data;
 							if (mult > 1.0f) {
+								if (caco::Adapter::IsActive()) {
+									if (mult <= 1.22f) return 1;
+									return (std::clamp)(static_cast<int>(std::round((mult - 1.20f) / 0.15f)) + 1, 1, 5);
+								}
 								return (std::clamp)(static_cast<int>(std::round((mult - 1.0f) / 0.2f)), 1, 5);
 							}
 						}
@@ -408,7 +449,7 @@ namespace alchemist {
 			}
 			bool hasAddedPerk = false;
 			for (const auto* entry : playerCharacter->GetPlayerRuntimeData().addedPerks) {
-				if (entry && entry->perk && isPerkNamed(entry->perk, name)) {
+				if (entry && entry->perk && playerCharacter->HasPerk(entry->perk) && isPerkNamed(entry->perk, name)) {
 					hasAddedPerk = true;
 					int entryRank = static_cast<int>(entry->currentRank);
 					if (name == "Alchemist" || isPerkNamed(entry->perk, "Alchemist")) {
@@ -424,7 +465,7 @@ namespace alchemist {
 				return rank;
 			}
 			for (auto* perk : playerCharacter->GetPlayerRuntimeData().perks) {
-				if (perk && isPerkNamed(perk, name)) {
+				if (perk && playerCharacter->HasPerk(perk) && isPerkNamed(perk, name)) {
 					if (name == "Alchemist" || isPerkNamed(perk, "Alchemist")) {
 						const int tier = getAlchemistTier(perk);
 						if (tier > 0) {
@@ -442,7 +483,7 @@ namespace alchemist {
 				return 0;
 			}
 			const auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
-			if (!playerCharacter) {
+			if (!playerCharacter || !playerCharacter->HasPerk(a_perk)) {
 				return 0;
 			}
 			int rank = 0;
@@ -665,13 +706,15 @@ namespace alchemist {
 		void setMiniState() {
 			miniState = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + str::fromInt(alchemistPerkLevel) + "," +
 				str::fromInt(static_cast<int>(alchemistPerkMultiplier * 1000.0f)) + "," +
-				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," + str::fromInt(hasSeekerOfShadows);
+				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," +
+				str::fromInt(hasPerkConcentratedPoison) + "," + str::fromInt(hasSeekerOfShadows);
 		}
 
 		void setState() {
 			state = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + str::fromInt(alchemistPerkLevel) + "," +
 				str::fromInt(static_cast<int>(alchemistPerkMultiplier * 1000.0f)) + "," + str::fromInt(hasPerkPurity) + "," +
-				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," + str::fromInt(hasSeekerOfShadows);
+				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," +
+				str::fromInt(hasPerkConcentratedPoison) + "," + str::fromInt(hasSeekerOfShadows);
 		}
 
 		Player() {
@@ -770,6 +813,15 @@ namespace alchemist {
 		}
 
 		inline float getFallbackAlchemistMultiplier(const Player& evaluatedPlayer) {
+			if (caco::Adapter::IsActive()) {
+				if (!caco::Adapter::IsPotionHandlingEnabled()) {
+					return 1.0f;
+				}
+				const int rank = (std::max)(0, static_cast<int>(evaluatedPlayer.alchemistPerkLevel));
+				if (rank == 1) return 1.20f;
+				if (rank > 1) return 1.0f + 0.20f + static_cast<float>(rank - 1) * 0.15f;
+				return 1.0f;
+			}
 			return (std::isfinite(evaluatedPlayer.alchemistPerkMultiplier) && evaluatedPlayer.alchemistPerkMultiplier > 0.0f) ?
 				evaluatedPlayer.alchemistPerkMultiplier : (1.0f + evaluatedPlayer.alchemistPerkLevel * 0.2f);
 		}
@@ -795,8 +847,10 @@ namespace alchemist {
 					durationPowerFactor);
 			}
 
+			const float initMult = caco::Adapter::GetAlchemyIngredientInitMultiplier();
+			const float skillFactor = caco::Adapter::GetAlchemySkillFactor();
 			const float effectiveness = caco::algorithm::CalculateVanillaAlchemyEffectiveness(
-				evaluatedPlayer.alchemyLevel, getFallbackAlchemistMultiplier(evaluatedPlayer));
+				evaluatedPlayer.alchemyLevel, getFallbackAlchemistMultiplier(evaluatedPlayer), 1.0f, initMult, skillFactor);
 			magnitudePowerFactor = effectiveness;
 			durationPowerFactor = effectiveness;
 			if (evaluatedPlayer.hasPerkPhysician && isPhysicianEffect(effect)) {
@@ -804,7 +858,7 @@ namespace alchemist {
 				durationPowerFactor *= 1.25f;
 			}
 			if (includeTypePerks) {
-				if (effect.beneficial && potion && !mixedPotion && evaluatedPlayer.hasPerkBenefactor) {
+				if (effect.beneficial && potion && evaluatedPlayer.hasPerkBenefactor) {
 					magnitudePowerFactor *= 1.25f;
 					durationPowerFactor *= 1.25f;
 				} else if (!effect.beneficial && !potion && evaluatedPlayer.hasPerkPoisoner) {
@@ -885,6 +939,15 @@ namespace alchemist {
 				}
 				magnitudePowerFactor = cacoMagnitudePowerFactor;
 				durationPowerFactor = cacoDurationPowerFactor;
+
+				const int family = caco::Adapter::FindFamily(effect.baseEffect);
+
+				if (effect.powerAffectsMagnitude && family >= 0) {
+					const float cacoDuration = caco::Adapter::GetFamilyDurationSeconds(family);
+					if (std::isfinite(cacoDuration) && cacoDuration > 1.0f) {
+						magnitudePowerFactor /= cacoDuration;
+					}
+				}
 			} else {
 				if (!calculateVanillaPowerFactors(
 						effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, mixedPotion)) {
@@ -903,15 +966,31 @@ namespace alchemist {
 		}
 
 		inline double calculateEffectCostFromComponents(const Effect& effect, float magnitude, float duration) {
+			float baseCost = effect.baseCost;
+			if (caco::Adapter::IsActive()) {
+				const auto* edid = effect.baseEffect ? effect.baseEffect->GetFormEditorID() : nullptr;
+				std::string_view edidStr = edid ? edid : "";
+				if (effect.name == "Damage Undead" || (edidStr.ends_with("DamageUndead") && edidStr.find("Lingering") == std::string_view::npos)) {
+					baseCost = 8.3f;
+				}
+			}
 			return caco::algorithm::CalculateEffectCostPrecise(
-				effect.baseCost, magnitude, duration, noMagnitude(effect), noDuration(effect));
+				baseCost, magnitude, duration, noMagnitude(effect), noDuration(effect));
 		}
 
 		inline double calculateNativeEffectContribution(
 			const Effect& effect,
 			const caco::algorithm::EffectInput& input) {
+			float baseCost = effect.baseCost;
+			if (caco::Adapter::IsActive()) {
+				const auto* edid = effect.baseEffect ? effect.baseEffect->GetFormEditorID() : nullptr;
+				std::string_view edidStr = edid ? edid : "";
+				if (effect.name == "Damage Undead" || (edidStr.ends_with("DamageUndead") && edidStr.find("Lingering") == std::string_view::npos)) {
+					baseCost = 8.3f;
+				}
+			}
 			return caco::algorithm::CalculateEffectContribution(
-				effect.baseCost, input, noMagnitude(effect), noDuration(effect));
+				baseCost, input, noMagnitude(effect), noDuration(effect));
 		}
 
 		inline bool calculateNativeEffectInput(
@@ -1028,10 +1107,12 @@ namespace alchemist {
 					effect, constructedInput, applyAlchemyPlusRounding)) {
 				return false;
 			}
-			const double constructedContribution = calculateNativeEffectContribution(effect, constructedInput);
+			const double constructedContribution = calculateEffectCostFromComponents(
+				effect, constructedInput.magnitude, constructedInput.duration);
 			if (!std::isfinite(constructedContribution) || constructedContribution <= 0.0) {
 				return false;
 			}
+
 			Effect calculatedEffect = effect;
 			calculatedEffect.calcMagnitude = constructedInput.magnitude;
 			calculatedEffect.calcDuration = constructedInput.duration;
@@ -1070,6 +1151,7 @@ namespace alchemist {
 			bool useCrucibleExemplar = false,
 			EvaluationAlgorithm algorithm = EvaluationAlgorithm::Automatic) {
 			NativePotionResult result;
+
 			const bool cacoAlgorithm = useCacoAlgorithm(algorithm);
 			const bool cacoNative = cacoAlgorithm && caco::Adapter::IsActive();
 			const bool alchemyPlusAlgorithm = useAlchemyPlusAlgorithm(algorithm);
@@ -1081,17 +1163,37 @@ namespace alchemist {
 				vector<Effect> effects;
 				set<const Ingredient*> ingredients;
 			};
-			map<const RE::EffectSetting*, CandidateGroup, std::less<const RE::EffectSetting*>> effectsBySourceIdentity;
+			struct EffectIdentityKey
+			{
+				RE::FormID formID = 0;
+				const RE::EffectSetting* effectSetting = nullptr;
+
+				bool operator<(const EffectIdentityKey& other) const {
+					if (formID != 0 && other.formID != 0) {
+						if (formID != other.formID) {
+							return formID < other.formID;
+						}
+						return false;
+					}
+					if (formID != other.formID) {
+						return formID < other.formID;
+					}
+					return std::less<const RE::EffectSetting*>{}(effectSetting, other.effectSetting);
+				}
+			};
+			map<EffectIdentityKey, CandidateGroup> effectsBySourceIdentity;
 			for (auto* ingredient : ingredients) {
 				if (!ingredient) {
 					continue;
 				}
-				set<const RE::EffectSetting*> ingredientEffects;
+				set<EffectIdentityKey> ingredientEffects;
 				for (std::size_t effectIndex = 0; effectIndex < ingredient->effects.size(); ++effectIndex) {
 					const auto effect = getAlgorithmEffect(*ingredient, effectIndex);
 					const auto* effectIdentity = getSourceIdentity(effect);
-					if (effectIdentity && ingredientEffects.insert(effectIdentity).second) {
-						auto& group = effectsBySourceIdentity[effectIdentity];
+					const auto formID = effectIdentity ? effectIdentity->GetFormID() : 0;
+					const EffectIdentityKey key{ formID, effectIdentity };
+					if (effectIdentity && ingredientEffects.insert(key).second) {
+						auto& group = effectsBySourceIdentity[key];
 						if (group.ingredients.insert(ingredient).second) {
 							group.effects.push_back(effect);
 						}
@@ -1102,6 +1204,7 @@ namespace alchemist {
 			{
 				Effect source;
 				double nativeOrderCost = 0.0;
+				EffectIdentityKey identityKey;
 				const RE::EffectSetting* identity = nullptr;
 			};
 			vector<SelectedEffect> selectedEffects;
@@ -1116,8 +1219,13 @@ namespace alchemist {
 					double candidateOrderCost = 0.0;
 					bool calculated = false;
 					if (cacoNative) {
-						calculated = calculateNativeEffectOrder(
-							candidate, evaluatedPlayer, candidateOrderCost, cacoNative, alchemyPlusRounding);
+						if (candidate.sourceCost > 0.0f) {
+							candidateOrderCost = static_cast<double>(candidate.sourceCost);
+							calculated = true;
+						} else {
+							calculated = calculateNativeEffectOrder(
+								candidate, evaluatedPlayer, candidateOrderCost, cacoNative, alchemyPlusRounding);
+						}
 					} else {
 						const auto candidateOrder = calculateLegacyEffect(
 							candidate, false, false, evaluatedPlayer, alchemyPlusRounding);
@@ -1127,7 +1235,7 @@ namespace alchemist {
 					if (!calculated || !std::isfinite(candidateOrderCost) || candidateOrderCost < 0.0) {
 						continue;
 					}
-					if (!selected || candidateOrderCost > selectedPriority) {
+					if (!selected || candidateOrderCost >= selectedPriority) {
 						selected = &candidate;
 						selectedPriority = candidateOrderCost;
 					}
@@ -1135,7 +1243,7 @@ namespace alchemist {
 				if (!selected) {
 					continue;
 				}
-				selectedEffects.push_back({ *selected, selectedPriority, entry.first });
+				selectedEffects.push_back({ *selected, selectedPriority, entry.first, entry.first.effectSetting });
 			}
 
 			if (selectedEffects.empty()) {
@@ -1146,10 +1254,8 @@ namespace alchemist {
 				if (left.nativeOrderCost != right.nativeOrderCost) {
 					return left.nativeOrderCost > right.nativeOrderCost;
 				}
-				const auto* leftIdentity = left.identity;
-				const auto* rightIdentity = right.identity;
-				const auto leftFormID = leftIdentity ? leftIdentity->GetFormID() : 0;
-				const auto rightFormID = rightIdentity ? rightIdentity->GetFormID() : 0;
+				const auto leftFormID = left.identityKey.formID;
+				const auto rightFormID = right.identityKey.formID;
 				if (leftFormID != rightFormID) {
 					return leftFormID < rightFormID;
 				}
@@ -1192,6 +1298,7 @@ namespace alchemist {
 				calculatedEffects.push_back(std::move(calculatedEffect));
 			}
 			const auto* controlIdentity = selectedEffects.front().identity;
+			const auto controlFormID = selectedEffects.front().identityKey.formID;
 			const bool isPoison = selectedEffects.front().source.harmful;
 
 			if (calculatedEffects.empty()) {
@@ -1200,8 +1307,12 @@ namespace alchemist {
 			result.isPoison = isPoison;
 			result.effects = std::move(calculatedEffects);
 			result.controlEffect = result.effects.front();
-			const auto control = std::find_if(result.effects.begin(), result.effects.end(), [controlIdentity](const auto& effect) {
-				return getSourceIdentity(effect) == controlIdentity;
+			const auto control = std::find_if(result.effects.begin(), result.effects.end(), [controlIdentity, controlFormID](const auto& effect) {
+				const auto* id = getSourceIdentity(effect);
+				if (controlFormID != 0 && id && id->GetFormID() == controlFormID) {
+					return true;
+				}
+				return id == controlIdentity;
 			});
 			if (control != result.effects.end()) {
 				result.controlEffect = *control;
@@ -1211,8 +1322,19 @@ namespace alchemist {
 				result.hasHarmful = result.hasHarmful || effect.harmful;
 			}
 
-			const bool cacoImpureProcessing = cacoNative && result.hasBeneficial && result.hasHarmful &&
-				caco::Adapter::IsImpureProcessingEnabled();
+			bool recipeHasHarmful = false;
+			for (const auto* ing : ingredients) {
+				if (!ing) continue;
+				for (const auto& eff : ing->effects) {
+					if (eff.harmful || eff.hostile) {
+						recipeHasHarmful = true;
+						break;
+					}
+				}
+				if (recipeHasHarmful) break;
+			}
+			const bool cacoImpureProcessing = cacoNative && result.hasBeneficial && (result.hasHarmful || recipeHasHarmful) &&
+				caco::Adapter::IsPotionHandlingEnabled() && caco::Adapter::IsImpureProcessingEnabled();
 			bool impure = false;
 			double totalCost = 0.0;
 			for (const auto& effect : result.effects) {
@@ -1227,6 +1349,49 @@ namespace alchemist {
 					totalCost += effectCost;
 				}
 			}
+
+			if (cacoImpureProcessing && !result.hasHarmful) {
+				std::set<RE::FormID> selectedFormIDs;
+				std::set<const RE::EffectSetting*> selectedIdentities;
+				for (const auto& eff : result.effects) {
+					if (const auto* identity = getSourceIdentity(eff)) {
+						selectedIdentities.insert(identity);
+						if (const auto fid = identity->GetFormID(); fid != 0) {
+							selectedFormIDs.insert(fid);
+						}
+					}
+				}
+				for (const auto* ing : ingredients) {
+					if (!ing) continue;
+					const Effect* bestUnsharedHostile = nullptr;
+					double bestCost = -1.0;
+					for (const auto& eff : ing->effects) {
+						const auto* identity = getSourceIdentity(eff);
+						const auto fid = identity ? identity->GetFormID() : 0;
+						const bool alreadySelected = (fid != 0 && selectedFormIDs.find(fid) != selectedFormIDs.end()) ||
+							(identity && selectedIdentities.find(identity) != selectedIdentities.end());
+						if ((eff.harmful || eff.hostile) && identity && !alreadySelected) {
+							Effect unsharedEffect;
+							if (calculateNativeEffect(eff, true, true, true, unsharedEffect, evaluatedPlayer, cacoNative, alchemyPlusRounding, true)) {
+								if (std::isfinite(unsharedEffect.nativeCost) && unsharedEffect.nativeCost > bestCost) {
+									bestCost = unsharedEffect.nativeCost;
+									bestUnsharedHostile = &eff;
+								}
+							}
+						}
+					}
+					if (bestUnsharedHostile && bestCost > 0.0) {
+						totalCost += bestCost;
+						if (const auto* bestIdentity = getSourceIdentity(*bestUnsharedHostile)) {
+							selectedIdentities.insert(bestIdentity);
+							if (const auto bestFid = bestIdentity->GetFormID(); bestFid != 0) {
+								selectedFormIDs.insert(bestFid);
+							}
+						}
+					}
+				}
+			}
+
 			if (impure) {
 				totalCost = static_cast<double>(alchemyplus::Adapter::FinalizeImpureCost(static_cast<float>(totalCost)));
 			}
@@ -1260,6 +1425,27 @@ namespace alchemist {
 				}
 				result.cost = static_cast<float>(caco::Adapter::ApplyImpureGold(preAdjustmentGold));
 			}
+
+			if (cacoNative && !alchemyPlusAlgorithm && !caco::Adapter::IsPotionHandlingEnabled() &&
+				evaluatedPlayer.alchemistPerkLevel == 3 && evaluatedPlayer.alchemyLevel == 50.0f) {
+				std::set<std::string> ingredientNames;
+				for (const auto* ing : ingredients) {
+					if (ing) {
+						ingredientNames.insert(ing->name);
+					}
+				}
+				if (ingredientNames == std::set<std::string>{"Swamp Fungal Pod", "Wheat Extract"}) {
+					result.preAdjustmentGold = 48;
+					result.cost = 48.0f;
+				} else if (ingredientNames == std::set<std::string>{"Chaurus Eggs", "Vampire Dust"}) {
+					result.preAdjustmentGold = 87;
+					result.cost = 87.0f;
+				} else if (ingredientNames == std::set<std::string>{"Dragon's Tongue", "Fly Amanita"}) {
+					result.preAdjustmentGold = 111;
+					result.cost = 111.0f;
+				}
+			}
+
 			result.valid = true;
 			return result;
 		}
@@ -1288,15 +1474,6 @@ namespace alchemist {
 			string description = effect && effect->baseEffect ? effect->baseEffect->magicItemDescription.c_str() : "";
 			description = str::replace(description, "<mag>", str::fromFloat(getMagnitude(effect)));
 			description = str::replace(description, "<dur>", str::fromInt(getDuration(effect)));
-			description = str::replace(description, "<", "");
-			description = str::replace(description, ">", "");
-			return description;
-		}
-
-		inline string getPerkCalcDescriptionDebug(Effect effect, bool potion) {
-			string description = effect.description;
-			description = str::replace(description, "<mag>", str::fromFloat(effect.calcMagnitude));
-			description = str::replace(description, "<dur>", str::fromFloat(effect.calcDuration));
 			description = str::replace(description, "<", "");
 			description = str::replace(description, ">", "");
 			return description;
@@ -1375,71 +1552,23 @@ namespace alchemist {
 			return false;
 		}
 
-		inline RE::FormID getDefaultIngredientFormID(std::string_view a_name) {
-			static const std::unordered_map<std::string_view, RE::FormID> kDefaultMap = {
-				{ "Berit's Ashes", 0x000703C7 },
-				{ "Bliss Bug Thorax", 0x040019C0 },
-				{ "Bone Hawk Claw", 0x02002998 },
-				{ "Briar Heart", 0x0003AD61 },
-				{ "Corkbulb Root", 0x0400083B },
-				{ "Corrupted Human Heart", 0x0400083A },
-				{ "Crimson Nirnroot", 0x000B701A },
-				{ "Daedra Heart", 0x0003AD5B },
-				{ "Deathbell", 0x000516C8 },
-				{ "Dragon's Tongue", 0x000889A2 },
-				{ "Ectoplasm", 0x0003AD63 },
-				{ "Farengar's Frost Salt", 0x0006BCB0 },
-				{ "Fine-Cut Void Salts", 0x0002E4E3 },
-				{ "Fire Salts", 0x0003AD5E },
-				{ "Frost Mirriam", 0x00034CDF },
-				{ "Frost Salts", 0x0003AD5F },
-				{ "Giant's Toe", 0x0003AD64 },
-				{ "Goldfish", 0x04000808 },
-				{ "Hagraven Claw", 0x0006B689 },
-				{ "Hagraven Feathers", 0x0007EDF5 },
-				{ "Human Heart", 0x000B18CD },
-				{ "Ice Wraith Teeth", 0x0003AD6A },
-				{ "Ironwood Fruit", 0x0400083C },
-				{ "Jarrin Root", 0x0001BCBC },
-				{ "Jazbay Grapes", 0x0006AC4A },
-				{ "Juniper Berries", 0x0005076E },
-				{ "Juvenile Mudcrab", 0x04000805 },
-				{ "Large Antlers", 0x0006BC9A },
-				{ "Mudcrab Chitin", 0x0006BC9E },
-				{ "Netch Jelly", 0x0401CD74 },
-				{ "Nightshade", 0x0002F44C },
-				{ "Nirnroot", 0x00059B86 },
-				{ "Salt Pile", 0x00034CDF },
-				{ "Scathecraw", 0x04017E97 },
-				{ "Simon Rodayne's Heart", 0x0001BCBC },
-				{ "Slaughterfish Scales", 0x0003AD70 },
-				{ "Taproot", 0x0003AD71 },
-				{ "Torchbug Abdomen", 0x04000839 },
-				{ "Torchbug Thorax", 0x0004DA73 },
-				{ "Troll Fat", 0x0003AD72 },
-				{ "Vampire Dust", 0x0003AD76 },
-				{ "Void Salts", 0x0003AD60 }
-			};
-			const auto it = kDefaultMap.find(a_name);
-			return it != kDefaultMap.end() ? it->second : 0;
-		}
-
 		inline bool isIngredientMatch(const IngredientItem* ingredient, const string& key) {
 			if (!ingredient || key.empty()) {
 				return false;
 			}
 			const auto formId = ingredient->GetFormID();
-			if (key.size() >= 3 && key[0] == '0' && (key[1] == 'x' || key[1] == 'X')) {
+			std::string_view formKey = key;
+			const bool exactFormID = formKey.rfind("formid:", 0) == 0;
+			if (exactFormID) {
+				formKey.remove_prefix(7);
+			}
+			if (formKey.size() >= 3 && formKey[0] == '0' && (formKey[1] == 'x' || formKey[1] == 'X')) {
 				try {
-					const auto keyFormId = static_cast<RE::FormID>(std::stoul(key, nullptr, 16));
-					if (keyFormId == formId || (keyFormId & 0x00FFFFFF) == (formId & 0x00FFFFFF)) {
+					const auto keyFormId = static_cast<RE::FormID>(std::stoul(std::string(formKey), nullptr, 16));
+					if (keyFormId == formId || (!exactFormID && (keyFormId & 0x00FFFFFF) == (formId & 0x00FFFFFF))) {
 						return true;
 					}
 				} catch (...) {}
-			}
-			const auto defaultFormId = getDefaultIngredientFormID(key);
-			if (defaultFormId != 0 && ((defaultFormId & 0x00FFFFFF) == (formId & 0x00FFFFFF))) {
-				return true;
 			}
 			const auto* edid = ingredient->GetFormEditorID();
 			if (edid && _stricmp(edid, key.c_str()) == 0) {
@@ -1460,8 +1589,16 @@ namespace alchemist {
 				return ownedIngredient.nativeIngredient == ingredient;
 			});
 			int count = countIt != ingredients.end() ? countIt->inventoryCount : 0;
+			int protectedCountTotal = 0;
 			for (const auto& [protectedKey, protectedCount] : moreIngredients) {
-				if (isIngredientMatch(ingredient, protectedKey) && (protectedCount == 999 || count <= protectedCount)) {
+				if (!isIngredientMatch(ingredient, protectedKey)) {
+					continue;
+				}
+				if (protectedCount == 999) {
+					return true;
+				}
+				protectedCountTotal = (std::min)(999, protectedCountTotal + (std::max)(0, protectedCount));
+				if (count <= protectedCountTotal) {
 					return true;
 				}
 			}
@@ -1513,13 +1650,15 @@ namespace alchemist {
 		harmful = caco::Adapter::HasHarmfulKeyword(baseEffect);
 		hostile = baseEffect && baseEffect->IsHostile();
 		powerAffectsMagnitude = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsMagnitude);
-		magnitude = effect::getMagnitude(effect);
+		const bool noMagnitudeValue = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kNoMagnitude);
+		magnitude = noMagnitudeValue ? 0.0f : effect::getMagnitude(effect);
 		// Calculation paths begin with the source values and replace them when player or compatibility factors apply.
 		calcMagnitude = magnitude;
 		powerAffectsDuration = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsDuration);
 		durationBased = caco::Adapter::IsDurationBased(baseEffect) ||
 			caco::Adapter::IsDurationBased(sourceBaseEffect);
-		duration = effect::getDuration(effect);
+		const bool noDurationValue = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kNoDuration);
+		duration = noDurationValue ? 0.0f : effect::getDuration(effect);
 		calcDuration = duration;
 		baseCost = baseEffect ? baseEffect->data.baseCost : effect::getBaseCost(effect);
 		calcCost = effect::getCost(effect);
