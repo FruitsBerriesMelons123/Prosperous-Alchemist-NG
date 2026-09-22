@@ -803,6 +803,35 @@ namespace alchemist::ui {
 			return nullptr;
 		}
 
+		std::size_t GetProtectedIngredientCount()
+		{
+			if (kProtectIngredients.GetValue() == 0) {
+				return 0;
+			}
+
+			std::set<std::string> keys;
+
+			// Custom static protected ingredients from settings
+			for (const auto& token : str::split(kProtectedIngredients.GetValue(), ',')) {
+				if (token.empty()) {
+					continue;
+				}
+				const auto parts = str::split(token, '|');
+				if (!parts.empty() && !parts.front().empty()) {
+					const auto* ingredient = FindIngredientByKey(parts.front());
+					keys.insert(ingredient ? tracker::GetIngredientKey(ingredient->GetFormID()) : parts.front());
+				}
+			}
+
+			// Active tracked requirements (quests, craftables, atronach forge, selected effects)
+			for (const auto& [key, _] : tracker::GetProtectedIngredients()) {
+				const auto* ingredient = FindIngredientByKey(key);
+				keys.insert(ingredient ? tracker::GetIngredientKey(ingredient->GetFormID()) : key);
+			}
+
+			return keys.size();
+		}
+
 		void LoadProtectedIngredients()
 		{
 			protectedIngredients.clear();
@@ -1027,7 +1056,16 @@ namespace alchemist::ui {
 		{
 			const auto name = a_identity.name.empty() ? Text("profiles.unknown", "Unknown") : a_identity.name;
 			const auto race = a_identity.race.empty() ? Text("profiles.unknown", "Unknown") : a_identity.race;
-			const auto gender = a_identity.gender.empty() ? Text("profiles.unknown", "Unknown") : a_identity.gender;
+
+			std::string gender;
+			if (a_identity.gender == "Male") {
+				gender = Text("profiles.genderMale", "Male");
+			} else if (a_identity.gender == "Female") {
+				gender = Text("profiles.genderFemale", "Female");
+			} else {
+				gender = a_identity.gender.empty() ? Text("profiles.unknown", "Unknown") : a_identity.gender;
+			}
+
 			return FormatText("profiles.identity", "{name} | {race} | {gender}", {
 				{ "name", name },
 				{ "race", race },
@@ -1354,7 +1392,9 @@ namespace alchemist::ui {
 				ImGui::SetKeyboardFocusHere();
 				focusSearch = false;
 			}
+			ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
 			ImGui::InputTextWithHint("##RecipeSearch", searchHint.c_str(), searchText, sizeof(searchText));
+			ImGui::PopItemFlag();
 			searchInputFocused.store(ImGui::IsItemActive(), std::memory_order_release);
 			searchRectMin = ImGui::GetItemRectMin();
 			searchRectMax = ImGui::GetItemRectMax();
@@ -1747,6 +1787,8 @@ namespace alchemist::ui {
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.08f, 0.06f, 0.90f));
 			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
+			const bool protectionEnabled = kProtectIngredients.GetValue() != 0;
+			const auto protectedCount = protectionEnabled ? GetProtectedIngredientCount() : 0;
 			if (ImGui::BeginChild("RecipePaginationFooter", ImVec2(0.0f, footerChildHeight), true, ImGuiWindowFlags_NoScrollbar)) {
 				if (isUpdating || (totalPotions == 0 && (progress.isUpdating || (progress.progressFraction > 0.0f && progress.progressFraction < 1.0f)))) {
 					ImGui::AlignTextToFramePadding();
@@ -1763,10 +1805,16 @@ namespace alchemist::ui {
 					}
 				} else if (pageInfo.totalPages <= 1) {
 					ImGui::AlignTextToFramePadding();
-					const auto potionCountText = FormatText(
-						"pagination.potions",
-						"{count} potions",
-						{{ "count", std::to_string(totalPotions) }});
+					const auto potionCountText = protectionEnabled ?
+						FormatText(
+							"pagination.potionsWithProtected",
+							"{count} potions ({protected} protected ingredients)",
+							{ { "count", std::to_string(totalPotions) },
+							  { "protected", std::to_string(protectedCount) } }) :
+						FormatText(
+							"pagination.potions",
+							"{count} potions",
+							{ { "count", std::to_string(totalPotions) } });
 					ImGui::TextColored(ImVec4(0.92f, 0.82f, 0.45f, 1.0f), "%s", potionCountText.c_str());
 				} else {
 					const float btnPaddingX = 5.0f;
@@ -1804,13 +1852,21 @@ namespace alchemist::ui {
 
 					ImGui::SameLine();
 					ImGui::AlignTextToFramePadding();
-				const auto pageText = FormatText(
-					"pagination.page",
-					"Page {page} of {pages} ({count} potions)",
-					{{ "page", std::to_string(currentPage) },
-						{ "pages", std::to_string(pageInfo.totalPages) },
-						{ "count", std::to_string(totalPotions) }});
-				ImGui::TextColored(ImVec4(0.92f, 0.82f, 0.45f, 1.0f), "%s", pageText.c_str());
+					const auto pageText = protectionEnabled ?
+						FormatText(
+							"pagination.pageWithProtected",
+							"Page {page} of {pages} ({count} potions, {protected} protected ingredients)",
+							{ { "page", std::to_string(currentPage) },
+							  { "pages", std::to_string(pageInfo.totalPages) },
+							  { "count", std::to_string(totalPotions) },
+							  { "protected", std::to_string(protectedCount) } }) :
+						FormatText(
+							"pagination.page",
+							"Page {page} of {pages} ({count} potions)",
+							{ { "page", std::to_string(currentPage) },
+							  { "pages", std::to_string(pageInfo.totalPages) },
+							  { "count", std::to_string(totalPotions) } });
+					ImGui::TextColored(ImVec4(0.92f, 0.82f, 0.45f, 1.0f), "%s", pageText.c_str());
 
 					for (int p = currentPage + 1; p <= endNext; ++p) {
 						ImGui::SameLine();
@@ -2600,8 +2656,18 @@ namespace alchemist::ui {
 				ImGui::Checkbox(Text("tracking.onlyRunning", "Only running").c_str(), &trackingOnlyRunning);
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(140.0f);
-				const char* questGroupingItems = "No grouping\0By type\0By mod\0";
-				ImGui::Combo("##TrackingQuestGroup", &trackingQuestGroupMode, questGroupingItems);
+				const std::array<std::string, 3> questGroupLabels = {
+					Text("tracking.questGroupNone", "No grouping"),
+					Text("tracking.questGroupType", "By type"),
+					Text("tracking.questGroupMod", "By mod")
+				};
+				std::string questGroupingItems;
+				for (const auto& label : questGroupLabels) {
+					questGroupingItems += label;
+					questGroupingItems.push_back('\0');
+				}
+				questGroupingItems.push_back('\0');
+				ImGui::Combo("##TrackingQuestGroup", &trackingQuestGroupMode, questGroupingItems.c_str());
 				std::size_t matchingQuestCount = 0;
 				for (const auto& quest : quests) {
 					matchingQuestCount += (!trackingOnlyRunning || quest.running) && questMatchesDetection(quest) ? 1 : 0;

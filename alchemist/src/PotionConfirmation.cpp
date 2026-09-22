@@ -759,6 +759,10 @@ namespace alchemist::confirmations
 
 	void BeginAlchemySession() noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			sessionActive = false;
+			return;
+		}
 		try {
 			for (auto& observation : diagnosticObservations) {
 				diagnosticHistory.push_back(std::move(observation));
@@ -792,21 +796,28 @@ namespace alchemist::confirmations
 		sessionBaseline = {};
 		pendingInventoryChanges = {};
 		lastInventoryEvidence = {};
-		diagnosticCaptureUntil = std::chrono::steady_clock::now() + kPostMenuDiagnosticCapture;
+		if (kDeveloper.GetValue() == 1) {
+			diagnosticCaptureUntil = std::chrono::steady_clock::now() + kPostMenuDiagnosticCapture;
+		} else {
+			diagnosticCaptureUntil = {};
+		}
 	}
 
 	bool IsSessionActive() noexcept
 	{
-		return sessionActive;
+		return kDeveloper.GetValue() == 1 && sessionActive;
 	}
 
 	bool IsObservationCaptureActive() noexcept
 	{
-		return diagnosticCaptureActive();
+		return kDeveloper.GetValue() == 1 && diagnosticCaptureActive();
 	}
 
 	bool IsDrainReady() noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return false;
+		}
 		if (!sessionActive || (pendingInventoryChanges.netDeltas.empty() && pendingInventoryChanges.removedIngredients.empty())) {
 			return true;
 		}
@@ -819,6 +830,9 @@ namespace alchemist::confirmations
 
 	void ObserveInventoryChange(std::uint32_t a_formID, std::int64_t a_delta) noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return;
+		}
 		try {
 			if (!diagnosticCaptureActive()) {
 				return;
@@ -854,6 +868,9 @@ namespace alchemist::confirmations
 
 	void RecordCraftedPotions(const Player& a_player) noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return;
+		}
 		try {
 			if (!sessionActive) {
 				return;
@@ -957,6 +974,9 @@ namespace alchemist::confirmations
 
 	bool ExportPotionObservations() noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return false;
+		}
 		try {
 			const auto pluginDirectory = paths::GetPluginDirectory();
 			if (pluginDirectory.empty()) {
@@ -1024,6 +1044,9 @@ namespace alchemist::confirmations
 
 	void DrainPendingConfirmations(const Player& a_player) noexcept
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return;
+		}
 		try {
 			if (!sessionActive) {
 				BeginAlchemySession();

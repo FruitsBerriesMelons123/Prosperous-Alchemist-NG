@@ -1,5 +1,7 @@
 #include "CACO.h"
 
+#include "Localization.h"
+
 #include <RE/A/AlchemyItem.h>
 #include <RE/B/BGSKeyword.h>
 #include <RE/B/BGSListForm.h>
@@ -1672,7 +1674,7 @@ namespace alchemist::caco
 		try {
 			std::string quality;
 			if (a_impure) {
-				quality = "Impure ";
+				quality = localization::Translate("caco.qualityImpure", "Impure ");
 			} else if (!IsCureEffect(a_primaryEffect)) {
 				const auto* compareList = FindPotionList(a_primaryEffect);
 				std::size_t qualityIndex = 0;
@@ -1682,11 +1684,26 @@ namespace alchemist::caco
 					durationBased, comparisonPosition, qualityIndex)) {
 					return false;
 				}
-				static constexpr std::array<std::string_view, 5> harmfulQualities{ "Weak ", "Standard ", "Potent ", "Malign ", "Devastating " };
-				static constexpr std::array<std::string_view, 5> beneficialQualities{ "Weak ", "Standard ", "Quality ", "Potent ", "Grand " };
-				quality = std::string(a_isPoison ? harmfulQualities[qualityIndex] : beneficialQualities[qualityIndex]);
+				if (a_isPoison) {
+					static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> harmful = {
+						std::make_pair("caco.qualityWeak", "Weak "),
+						std::make_pair("caco.qualityStandard", "Standard "),
+						std::make_pair("caco.qualityPotent", "Potent "),
+						std::make_pair("caco.qualityMalign", "Malign "),
+						std::make_pair("caco.qualityDevastating", "Devastating ")
+					};
+					quality = localization::Translate(harmful[qualityIndex].first, harmful[qualityIndex].second);
+				} else {
+					static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> beneficial = {
+						std::make_pair("caco.qualityWeak", "Weak "),
+						std::make_pair("caco.qualityStandard", "Standard "),
+						std::make_pair("caco.qualityQuality", "Quality "),
+						std::make_pair("caco.qualityPotent", "Potent "),
+						std::make_pair("caco.qualityGrand", "Grand ")
+					};
+					quality = localization::Translate(beneficial[qualityIndex].first, beneficial[qualityIndex].second);
+				}
 			}
-
 			const auto prefix = a_isPoison ? a_poisonPrefix : a_potionPrefix;
 			a_name = quality;
 			a_name += prefix;
@@ -1695,7 +1712,7 @@ namespace alchemist::caco
 			}
 			a_name += a_primaryName;
 			if (a_effectCount == 2 && !a_secondaryName.empty()) {
-				a_name += " & ";
+				a_name += localization::Translate("caco.effectSeparator", " & ");
 				a_name += a_secondaryName;
 			}
 			return true;

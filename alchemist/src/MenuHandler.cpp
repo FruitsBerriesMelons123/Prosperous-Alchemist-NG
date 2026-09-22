@@ -3,6 +3,7 @@
 #include "AlchemistWindow.h"
 #include "AlchemistEngine.h"
 #include "DeveloperTestHub.h"
+#include "IngredientTracker.h"
 #include "PotionConfirmation.h"
 #include "main.h"
 
@@ -32,6 +33,10 @@ namespace alchemist::menu {
 
 		void QueueConfirmationDrainTask(std::uint64_t a_generation)
 		{
+			if (kDeveloper.GetValue() != 1) {
+				confirmationQueued.store(false, std::memory_order_release);
+				return;
+			}
 			auto* taskInterface = SKSE::GetTaskInterface();
 			if (!taskInterface) {
 				confirmationQueued.store(false, std::memory_order_release);
@@ -55,6 +60,9 @@ namespace alchemist::menu {
 
 		void QueueConfirmationRecording()
 		{
+			if (kDeveloper.GetValue() != 1) {
+				return;
+			}
 			bool expected = false;
 			if (!confirmationQueued.compare_exchange_strong(expected, true)) {
 				return;
@@ -241,6 +249,9 @@ namespace alchemist::menu {
 					menuGeneration.fetch_add(1, std::memory_order_acq_rel);
 					ui::SetVisible(true);
 					engine::NotifyAlchemyMenuOpened();
+					if (kProtectIngredients.GetValue() != 0) {
+						tracker::RefreshDetection();
+					}
 					QueueRecalculation();
 				} else {
 					nativeAlchemyOpen.store(false, std::memory_order_release);
@@ -289,10 +300,12 @@ namespace alchemist::menu {
 					return RE::BSEventNotifyControl::kContinue;
 				}
 				const auto eventMagnitude = eventCount < 0 ? -eventCount : eventCount;
-				confirmations::ObserveInventoryChange(
-					form->GetFormID(),
-					addedToPlayer ? eventMagnitude : -eventMagnitude);
-				QueueConfirmationRecording();
+				if (kDeveloper.GetValue() == 1) {
+					confirmations::ObserveInventoryChange(
+						form->GetFormID(),
+						addedToPlayer ? eventMagnitude : -eventMagnitude);
+					QueueConfirmationRecording();
+				}
 				QueueRecalculation();
 				return RE::BSEventNotifyControl::kContinue;
 			}
@@ -363,7 +376,9 @@ namespace alchemist::menu {
 						if (!active) {
 							return;
 						}
-						confirmations::DrainPendingConfirmations(player);
+						if (kDeveloper.GetValue() == 1) {
+							confirmations::DrainPendingConfirmations(player);
+						}
 						RefreshAlchemyMenu(player.hasPerkPurity);
 					});
 				}, force);

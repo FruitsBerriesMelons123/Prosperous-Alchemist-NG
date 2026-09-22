@@ -1847,6 +1847,9 @@ namespace alchemist::devhub {
 
 	void Open()
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return;
+		}
 		{
 			std::scoped_lock lock(state.mutex);
 			state.open = true;
@@ -1889,6 +1892,9 @@ namespace alchemist::devhub {
 
 	bool ShouldSuppressInventoryRecalculation()
 	{
+		if (kDeveloper.GetValue() != 1) {
+			return false;
+		}
 		std::scoped_lock lock(state.mutex);
 		return state.open && state.busy;
 	}

@@ -1,5 +1,6 @@
 #include "IngredientTracker.h"
 
+#include "Localization.h"
 #include "main.h"
 #include "ProfileManager.h"
 
@@ -949,7 +950,7 @@ namespace alchemist::tracker {
 					}
 					result.push_back(Requirement{
 						.key = MakeConstructibleKey(recipe->GetFormID(), ingredient->GetFormID()),
-						.source = "Crafting: " + createdName,
+						.source = localization::Format("tracking.sourceCrafting", "Crafting: {name}", { { "name", createdName } }),
 						.detail = std::move(detail),
 						.ingredient = candidate->name,
 						.ingredientFormID = candidate->formID,
@@ -981,7 +982,7 @@ namespace alchemist::tracker {
 					}
 					result.push_back(Requirement{
 						.key = MakeEffectKey(selectedEffect.formIDValue, ingredient->GetFormID()),
-						.source = "Ingredient effect: " + selectedEffect.name,
+						.source = localization::Format("tracking.sourceEffect", "Ingredient effect: {name}", { { "name", selectedEffect.name } }),
 						.detail = "Effect FormID: " + selectedEffect.key + (selectedEffect.editorID.empty() ? std::string{} : "; editor ID: " + selectedEffect.editorID),
 						.ingredient = ingredient->GetFullName(),
 						.ingredientFormID = ingredient->GetFormID(),
@@ -1033,7 +1034,9 @@ namespace alchemist::tracker {
 
 				const auto path = ForgePathText(reference);
 				const auto resultName = ForgeResultName(root, reference.recipeIndex);
-				const auto source = resultName.empty() ? "Atronach Forge" : "Atronach Forge: " + resultName;
+				const auto source = resultName.empty() ?
+					localization::Translate("tracking.sourceForgeDefault", "Atronach Forge") :
+					localization::Format("tracking.sourceForge", "Atronach Forge: {name}", { { "name", resultName } });
 				const auto detail = "Root: " + std::string(root.name) + " (" + FormIDText(root.formID) + "); result: " +
 					(resultName.empty() ? std::string("unavailable") : resultName) + "; recipe path: " + path +
 					"; selected ingredient: " + candidate->name + " (" + FormIDText(reference.ingredientFormID) + ")";
@@ -1084,7 +1087,7 @@ namespace alchemist::tracker {
 
 		void DoSetQuestStage(std::uint32_t a_formID, std::uint16_t a_stage, bool a_force)
 		{
-			if (!IsTrackingEnabled()) {
+			if (!IsTrackingEnabled() || kDeveloper.GetValue() != 1) {
 				return;
 			}
 			auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(a_formID);
@@ -1117,7 +1120,7 @@ namespace alchemist::tracker {
 
 		void DoSetQuestObjective(std::uint32_t a_formID, std::uint16_t a_objective, ObjectiveAction a_action)
 		{
-			if (!IsTrackingEnabled()) {
+			if (!IsTrackingEnabled() || kDeveloper.GetValue() != 1) {
 				return;
 			}
 			auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(a_formID);
@@ -1201,7 +1204,9 @@ namespace alchemist::tracker {
 			return false;
 		}
 		auto detected = ScanDetectedRequirements();
-		auto quests = ScanQuestInfo(RE::TESDataHandler::GetSingleton());
+		auto quests = kDeveloper.GetValue() == 1 ?
+			ScanQuestInfo(RE::TESDataHandler::GetSingleton()) :
+			std::vector<QuestInfo>{};
 		std::scoped_lock lock(stateMutex);
 		LoadStateLocked();
 		const bool changed = detected.size() != detectedRequirements.size() ||
@@ -1286,7 +1291,7 @@ namespace alchemist::tracker {
 
 	std::vector<QuestInfo> GetQuests()
 	{
-		if (!IsTrackingEnabled()) {
+		if (!IsTrackingEnabled() || kDeveloper.GetValue() != 1) {
 			return {};
 		}
 		std::scoped_lock lock(stateMutex);
@@ -1484,7 +1489,7 @@ namespace alchemist::tracker {
 
 	void RequestQuestStage(std::uint32_t a_formID, std::uint16_t a_stage, bool a_force)
 	{
-		if (!IsTrackingEnabled()) {
+		if (!IsTrackingEnabled() || kDeveloper.GetValue() != 1) {
 			return;
 		}
 		const auto* tasks = SKSE::GetTaskInterface();
@@ -1500,7 +1505,7 @@ namespace alchemist::tracker {
 
 	void RequestQuestObjective(std::uint32_t a_formID, std::uint16_t a_objective, ObjectiveAction a_action)
 	{
-		if (!IsTrackingEnabled()) {
+		if (!IsTrackingEnabled() || kDeveloper.GetValue() != 1) {
 			return;
 		}
 		const auto* tasks = SKSE::GetTaskInterface();

@@ -550,7 +550,9 @@ namespace alchemist {
 	void makePotions()
 	{
 		initAlchemist();
-		confirmations::DrainPendingConfirmations(player);
+		if (kDeveloper.GetValue() == 1) {
+			confirmations::DrainPendingConfirmations(player);
+		}
 		modsettings::RefreshAndSynchronize(player);
 		generatePotions(true);
 	}
@@ -558,7 +560,9 @@ namespace alchemist {
 	void makePotionsST()
 	{
 		initAlchemist();
-		confirmations::DrainPendingConfirmations(player);
+		if (kDeveloper.GetValue() == 1) {
+			confirmations::DrainPendingConfirmations(player);
+		}
 		modsettings::RefreshAndSynchronize(player);
 		generatePotions(false);
 	}

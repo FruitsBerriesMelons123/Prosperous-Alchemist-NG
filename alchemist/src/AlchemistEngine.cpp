@@ -1013,7 +1013,9 @@ namespace alchemist::engine {
 			return;
 		}
 		auto snapshot = CaptureSnapshot();
-		confirmations::DrainPendingConfirmations(player);
+		if (kDeveloper.GetValue() == 1) {
+			confirmations::DrainPendingConfirmations(player);
+		}
 
 		{
 			std::scoped_lock lock(snapshotMutex);
@@ -1533,14 +1535,18 @@ namespace alchemist::engine {
 
 	void NotifyAlchemyMenuOpened()
 	{
-		confirmations::BeginAlchemySession();
+		if (kDeveloper.GetValue() == 1) {
+			confirmations::BeginAlchemySession();
+		}
 		std::scoped_lock lock(masterCacheMutex);
 		masterCache.hasMenuClosedTime = false;
 	}
 
 	void NotifyAlchemyMenuClosed()
 	{
-		confirmations::EndAlchemySession();
+		if (kDeveloper.GetValue() == 1) {
+			confirmations::EndAlchemySession();
+		}
 		std::scoped_lock lock(masterCacheMutex);
 		masterCache.menuClosedTime = std::chrono::steady_clock::now();
 		masterCache.hasMenuClosedTime = true;
