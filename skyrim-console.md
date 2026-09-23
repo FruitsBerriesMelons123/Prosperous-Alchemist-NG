@@ -14,31 +14,74 @@ To provide stable test execution, we utilize a custom Papyrus script bundled wit
 
 ### Commands & Exact State Applied
 Once compiled and deployed, you can use the following stable console commands to set up testing states:
-- `pat vanilla` (or `pat v`):
-  - **Alchemy Level:** 100 | **Fortify Alchemy:** 0 | **Perks:** None (rank 0)
-  - **GameSettings:** `fAlchemyIngredientInitMult = 5.0`, `fAlchemySkillFactor = 2.0`
-- `pat ap [1..4]` (or `pat a [1..4]`):
-  - **Block 1 (`pat ap`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5` | AP Custom Rounding 10/2, `impureCostFix = False`
-  - **Block 2 (`pat ap 2`):** Skill 50 | Fortify 25 | Perks: Alchemist 3 | `InitMult = 5.0`, `SkillFactor = 2.0` | Staged by `pat-ap.py`
-  - **Block 3 (`pat ap 3`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5` | AP Default Rounding 25/5, `impureCostFix = True`
-  - **Block 4 (`pat ap 4`):** Skill 100 | Fortify 0 | Perks: Alchemist 5, Physician, Benefactor | `InitMult = 4.0`, `SkillFactor = 1.5` | AP High Rounding 50/10, `impureCostFix = True`
-- `pat vanilla [1..4]` (or `pat v [1..4]`):
-  - **Block 1 (`pat vanilla`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 5.0`, `SkillFactor = 2.0`
-  - **Block 2 (`pat vanilla 2`):** Skill 50 | Fortify 50 | Perks: Alchemist 2, Physician | `InitMult = 4.0`, `SkillFactor = 1.5`
-  - **Block 3 (`pat vanilla 3`):** Skill 100 | Fortify 0 | Perks: Alchemist 5, Physician, Benefactor, Poisoner, Purity, Seeker of Shadows | `InitMult = 4.0`, `SkillFactor = 1.5`
-  - **Block 4 (`pat vanilla 4`):** Skill 15 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5` (Starter Level 15 Baseline)
-- `pat caco [1..4]` (or `pat c [1..4]`):
-  - **Block 1 (`pat caco`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1) | `DisableAllPotionHandling = 1`, `ImpurePotionProcessing = 0`
-  - **Block 2 (`pat caco 2`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2) | `DisableAllPotionHandling = 1`, `ImpurePotionProcessing = 0`
-  - **Block 3 (`pat caco 3`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 5.0`, `SkillFactor = 2.0` | Durations = 0s (index 0) | Click Order Matrix (`Roobrush`, `Slaughterfish Egg`, `Large Antlers`)
-  - **Block 4 (`pat caco 4`):** Skill 50 | Fortify 30 | Perks: Alchemist 3, Physician | `InitMult = 3.0`, `SkillFactor = 3.0` | Mixed Durations (RestH 5s, RestM 10s, DmgH 0s)
-- `pat caco-ap [1..4]` (or `pat ca [1..4]`):
+- `pat vanilla [1..10, changed]` (or `pat v [1..10, changed]`):
+  - **Block 1 (`pat vanilla`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 2 (`pat vanilla 2`):** Skill 100 | Fortify 0 | Perks: Alchemist 1 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 3 (`pat vanilla 3`):** Skill 100 | Fortify 0 | Perks: Alchemist 3 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 4 (`pat vanilla 4`):** Skill 100 | Fortify 0 | Perks: Alchemist 5 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 5 (`pat vanilla 5`):** Skill 100 | Fortify 0 | Perks: Physician | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 6 (`pat vanilla 6`):** Skill 100 | Fortify 0 | Perks: Benefactor | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 7 (`pat vanilla 7`):** Skill 100 | Fortify 0 | Perks: Poisoner | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 8 (`pat vanilla 8`):** Skill 100 | Fortify 0 | Perks: Purity & Full Perks | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 9 (`pat vanilla 9`):** Skill 100 | Fortify 50 | Perks: Seeker of Shadows & Gear | `InitMult = 5.0`, `SkillFactor = 2.0`
+  - **Block 10 (`pat vanilla 10`):** Skill 50 | Fortify 50 | Perks: Alchemist 2, Physician | `InitMult = 4.0`, `SkillFactor = 1.5`
+- `pat ap [1..10, changed]` (or `pat a [1..10, changed]`):
+  - **Block 1 (`pat ap`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5` | AP Custom Rounding 10/2
+  - **Block 2 (`pat ap 2`):** Skill 100 | Fortify 0 | Perks: Alchemist 3 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 3 (`pat ap 3`):** Skill 100 | Fortify 0 | Perks: Physician, Benefactor | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 4 (`pat ap 4`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5` | AP Default Rounding, ImpureFix=True
+  - **Block 5 (`pat ap 5`):** Skill 100 | Fortify 0 | Perks: Poisoner | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 6 (`pat ap 6`):** Skill 100 | Fortify 0 | Perks: Purity | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 7 (`pat ap 7`):** Skill 100 | Fortify 0 | Perks: Full Tree | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 8 (`pat ap 8`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 5.0`, `SkillFactor = 2.0` | High Rounding 30/6
+  - **Block 9 (`pat ap 9`):** Skill 100 | Fortify 50 | Perks: Gear & Perks | `InitMult = 4.5`, `SkillFactor = 1.8`
+  - **Block 10 (`pat ap 10`):** Skill 50 | Fortify 50 | Perks: Skill 50 Non-100 | `InitMult = 4.0`, `SkillFactor = 1.5`
+- `pat caco [1..10, changed]` (or `pat c [1..10, changed]`):
+  - **Block 1 (`pat caco`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1)
+  - **Block 2 (`pat caco 2`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2)
+  - **Block 3 (`pat caco 3`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 5.0`, `SkillFactor = 2.0` | Durations = 0s (index 0)
+  - **Block 4 (`pat caco 4`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 0s (index 0)
+  - **Block 5 (`pat caco 5`):** Skill 100 | Fortify 0 | Perks: Alchemist 2 | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1)
+  - **Block 6 (`pat caco 6`):** Skill 100 | Fortify 0 | Perks: Physician | `InitMult = 3.0`, `SkillFactor = 3.0` | Mixed Durations
+  - **Block 7 (`pat caco 7`):** Skill 100 | Fortify 0 | Perks: Poisoner | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2)
+  - **Block 8 (`pat caco 8`):** Skill 100 | Fortify 0 | Perks: Benefactor | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1)
+  - **Block 9 (`pat caco 9`):** Skill 100 | Fortify 50 | Perks: Purity Gear | `InitMult = 3.0`, `SkillFactor = 3.0` | Mixed Durations
+  - **Block 10 (`pat caco 10`):** Skill 50 | Fortify 50 | Perks: Skill 50 Non-100 | `InitMult = 3.0`, `SkillFactor = 3.0`
+- `pat caco-ap [1..10, changed]` (or `pat ca [1..10, changed]`):
   - **Block 1 (`pat caco-ap`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 0s (index 0) | AP Default Rounding 25/5
-  - **Block 2 (`pat caco-ap 2`):** Skill 100 | Fortify 0 | Perks: Alchemist 4 | `InitMult = 4.0`, `SkillFactor = 1.5` | Durations = 0s (index 0) | AP Default Rounding 25/5
-  - **Block 3 (`pat caco-ap 3`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1) | AP Custom Rounding 10/2
-  - **Block 4 (`pat caco-ap 4`):** Skill 50 | Fortify 20 | Perks: Alchemist 2, Physician, Benefactor | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2) | AP Custom Rounding 10/2
+  - **Block 2 (`pat caco-ap 2`):** Skill 100 | Fortify 0 | Perks: Alchemist 4 | `InitMult = 4.0`, `SkillFactor = 1.5` | Durations = 0s (index 0)
+  - **Block 3 (`pat caco-ap 3`):** Skill 100 | Fortify 0 | Perks: Physician | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1)
+  - **Block 4 (`pat caco-ap 4`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1) | AP Low Rounding 10/2
+  - **Block 5 (`pat caco-ap 5`):** Skill 100 | Fortify 0 | Perks: Poisoner | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2)
+  - **Block 6 (`pat caco-ap 6`):** Skill 100 | Fortify 0 | Perks: Benefactor | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2)
+  - **Block 7 (`pat caco-ap 7`):** Skill 100 | Fortify 0 | Perks: Purity | `InitMult = 3.0`, `SkillFactor = 3.0` | Mixed Durations
+  - **Block 8 (`pat caco-ap 8`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 5.0`, `SkillFactor = 2.0` | Durations = 10s (index 2) | High Rounding 30/6
+  - **Block 9 (`pat caco-ap 9`):** Skill 100 | Fortify 50 | Perks: Full Tree | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 5s (index 1)
+  - **Block 10 (`pat caco-ap 10`):** Skill 50 | Fortify 50 | Perks: Skill 50 Non-100 | `InitMult = 3.0`, `SkillFactor = 3.0` | Durations = 10s (index 2)
+- `pat requiem [1..10, changed]` (or `pat r [1..10, changed]`):
+  - **Block 1 (`pat requiem`):** Skill 100 | Fortify 0 | Perks: Alchemical Lore 1 | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 2 (`pat requiem 2`):** Skill 100 | Fortify 0 | Perks: Lore 1 + 2 | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 3 (`pat requiem 3`):** Skill 100 | Fortify 0 | Perks: Improved Elixirs Only | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 4 (`pat requiem 4`):** Skill 100 | Fortify 0 | Perks: Improved Poisons Only | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 5 (`pat requiem 5`):** Skill 100 | Fortify 0 | Perks: Purification Process Only | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 6 (`pat requiem 6`):** Skill 100 | Fortify 0 | Perks: No Lore Unperked Gate Check | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 7 (`pat requiem 7`):** Skill 100 | Fortify 0 | Perks: Improved Elixirs + Improved Poisons | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 8 (`pat requiem 8`):** Skill 100 | Fortify 0 | Perks: Full Tree | `InitMult = 4.0`, `SkillFactor = 1.1`
+  - **Block 9 (`pat requiem 9`):** Skill 100 | Fortify 50 | Perks: Gear & Changed GameSettings | `InitMult = 4.5`, `SkillFactor = 1.8`
+  - **Block 10 (`pat requiem 10`):** Skill 50 | Fortify 50 | Perks: Skill 50 Non-100 | `InitMult = 4.0`, `SkillFactor = 1.1`
+- `pat apothecary [1..10, changed]` (or `pat apot [1..10, changed]`):
+  - **Block 1 (`pat apothecary`):** Skill 100 | Fortify 0 | Perks: None | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 2 (`pat apothecary 2`):** Skill 100 | Fortify 0 | Perks: Alchemist 1 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 3 (`pat apothecary 3`):** Skill 100 | Fortify 0 | Perks: Alchemist 3 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 4 (`pat apothecary 4`):** Skill 100 | Fortify 0 | Perks: Alchemist 5 | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 5 (`pat apothecary 5`):** Skill 100 | Fortify 50 | Perks: Peerless Gear | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 6 (`pat apothecary 6`):** Skill 100 | Fortify 0 | Perks: Changed GameSettings | `InitMult = 4.5`, `SkillFactor = 1.8`
+  - **Block 7 (`pat apothecary 7`):** Skill 100 | Fortify 0 | Perks: Fortify Skill & Regen Rate Branches | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 8 (`pat apothecary 8`):** Skill 100 | Fortify 0 | Perks: Restore Attribute & Generic Branches | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 9 (`pat apothecary 9`):** Skill 100 | Fortify 0 | Perks: Alchemist 2 Mixed | `InitMult = 4.0`, `SkillFactor = 1.5`
+  - **Block 10 (`pat apothecary 10`):** Skill 50 | Fortify 50 | Perks: Skill 50 Non-100 | `InitMult = 4.0`, `SkillFactor = 1.5`
 - `pat default <mode>` (or `pat d <mode>`):
-  - Subcommand alias to apply canonical default state for any given mode (`vanilla`, `caco`, `ap`, `caco-ap`).
+  - Subcommand alias to apply canonical default state (Skill 100, Fortify 0, no perks) for any given mode (`vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, `apothecary`). The Requiem default includes Alchemical Lore 1 so potions appear in the potion list.
 
 ---
 
@@ -58,7 +101,9 @@ Once compiled and deployed, you can use the following stable console commands to
     - `python pat-caco.py`
     - `python pat-ap.py`
     - `python pat-caco-ap.py`
-  - Pre-launch Python scripts configure MO2 enabled plugins (`modlist.txt`) and `AlchemyPlus.json` on disk. In-game `pat <mode> [test number]` commands automatically clear existing ingredient inventory, provision 99 count of each required ingredient, and log the next test recipes line-by-line in the console. If a `pat` command is executed while already inside the Alchemy Lab UI, press **F** while the Alchemy Lab menu is focused to refresh and display the newly provisioned ingredient list without exiting the lab.
+    - `python pat-requiem.py` for Requiem blocks 1 and 2
+    - `python pat-requiem-2.py` for Requiem blocks 3 and 4
+  - Pre-launch Python scripts configure MO2 enabled plugins (`modlist.txt`), `AlchemyPlus.json`, and Requiem's enabled state on disk. Requiem scripts enable Requiem and disable CACO and Alchemy Plus. Every in-game `pat <mode> [variant]` command automatically handles 100% of state resetting and inventory cleanup at the beginning of the setup function in Papyrus (clearing all player ingredients, stripping all 14 alchemy perks & Seeker of Shadows, unequipping Fortify Alchemy gear & resetting actor values to 0, and resetting engine GameSettings & mod option globals) BEFORE provisioning 99 count of each required test ingredient for that block and logging test recipes line-by-line in the console. Running `pat <mode> [variant]` is completely self-contained with zero manual overhead for the user. If a `pat` command is executed while already inside the Alchemy Lab UI, press **F** while the Alchemy Lab menu is focused to refresh and display the newly provisioned ingredient list without exiting the lab.
   - Instruct the user to run the appropriate Python script on disk before starting Skyrim for each test mode.
 
 ### 2. Alchemy Plus Has No ESP Plugin
@@ -73,7 +118,8 @@ Once compiled and deployed, you can use the following stable console commands to
 - **Engine GameSettings (`GMST`): Use `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`.** This is the pattern used by `ProsperousAlchemistTests.psc`; do not replace it with the nonexistent Papyrus API `Utility.SetGameSettingFloat`.
 
 ### 5. Mandatory Recipe Craftability Validation (`validate_ingredient_combination`)
-- Always validate candidate ingredient pairs/trios using `validate_ingredient_combination(ingredients, caco_enabled)` in `pat_config_helper.py` before adding them to `ProsperousAlchemistTests.psc` or presenting test plans to the user.
+- Always validate candidate ingredient pairs/trios using `validate_ingredient_combination(ingredients, caco_enabled, requiem_enabled)` in `pat_config_helper.py` before adding them to `ProsperousAlchemistTests.psc` or presenting test plans to the user.
+- Use `ingredients-requiem.csv` when `requiem_enabled=True`, `ingredients-caco.csv` when CACO is enabled, and `ingredients-vanilla.csv` otherwise.
 - Ensure every ingredient pair shares at least one alchemy effect and produces a valid craftable potion/poison in Skyrim. Never guess ingredient combinations.
 
 ---
@@ -84,14 +130,15 @@ Always use these verified FormIDs in Papyrus scripts and tests:
 
 | Form Name | Type | FormID | Source Plugin | Notes |
 |---|---|---|---|---|
-| **Alchemist Rank 1** | Perk | `0x000BE127` | `Skyrim.esm` | +20% potion/poison strength |
-| **Alchemist Rank 2** | Perk | `0x000C07CA` | `Skyrim.esm` | +40% potion/poison strength |
+| **Alchemist Rank 1 / Alchemical Lore 1** | Perk | `0x000BE127` | `Skyrim.esm` | Vanilla rank 1 or Requiem Alchemical Lore 1 |
+| **Alchemist Rank 2 / Alchemical Lore 2** | Perk | `0x000C07CA` | `Skyrim.esm` | Vanilla rank 2 or Requiem Alchemical Lore 2 |
 | **Alchemist Rank 3** | Perk | `0x000C07CB` | `Skyrim.esm` | +60% potion/poison strength |
 | **Alchemist Rank 4** | Perk | `0x000C07CC` | `Skyrim.esm` | +80% potion/poison strength |
 | **Alchemist Rank 5** | Perk | `0x000C07CD` | `Skyrim.esm` | +100% potion/poison strength |
 | **Physician** | Perk | `0x00058215` | `Skyrim.esm` | +25% restore health/magicka/stamina |
 | **Benefactor** | Perk | `0x00058216` | `Skyrim.esm` | +25% beneficial potion strength |
 | **Poisoner** | Perk | `0x00058217` | `Skyrim.esm` | +25% poison strength/duration |
+| **Purification Process / Purity** | Perk | `0x0005821D` | `Skyrim.esm` | Requiem purification and vanilla purity behavior |
 
 ---
 

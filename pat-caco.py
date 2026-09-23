@@ -7,6 +7,6 @@ if __name__ == "__main__":
     apply_mode_config(
         mode_name="CACO",
         caco_enabled=True,
-        ap_enabled=False,
         ap_json_data=ap_json,
     )
+    print("Next in-game command: run 'pat caco'")

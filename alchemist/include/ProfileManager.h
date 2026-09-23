@@ -49,6 +49,6 @@ namespace alchemist::profiles {
 	[[nodiscard]] bool CloneProfile(int a_sourceProfileIndex);
 	[[nodiscard]] bool RenameProfile(int a_profileIndex, const std::string& a_profileName);
 	[[nodiscard]] bool DeleteProfile(int a_profileIndex);
-	void UpdateExternalSnapshots(std::string a_player, std::string a_caco, std::string a_alchemyPlus);
+	void UpdateExternalSnapshots(std::string a_player, std::string a_caco, std::string a_alchemyPlus, std::string a_requiem = {});
 	bool SaveCurrentProfile();
 }

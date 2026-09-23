@@ -8,11 +8,14 @@ if __name__ == "__main__":
         mag_mult=5.0,
         dur_thresh=15.0,
         dur_mult=5.0,
+        overrides={
+            "Skyrim.esm|0x0003EB15": {"magnitudeThreshold": 25.0, "magnitudeMult": 5.0},
+        },
         impure_cost_fix=True,
     )
     apply_mode_config(
         mode_name="AP-2",
-        caco_enabled=False,
         ap_enabled=True,
         ap_json_data=ap_json,
     )
+    print("Next in-game command: run 'pat ap 4'")

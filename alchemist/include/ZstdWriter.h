@@ -75,6 +75,7 @@ public:
 			}
 		} while (remaining > 0);
 
+		fflush(_file);
 		ZSTD_freeCCtx(_cctx);
 		fclose(_file);
 		_cctx = nullptr;

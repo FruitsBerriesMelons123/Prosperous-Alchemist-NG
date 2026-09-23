@@ -2,6 +2,8 @@
 
 #include <RE/Skyrim.h>
 
+#include "PluginUtils.h"
+
 #include <string_view>
 
 namespace alchemist::seeker
@@ -14,19 +16,16 @@ namespace alchemist::seeker
 
 	inline RE::SpellItem* GetSpell()
 	{
-		auto* dataHandler = RE::TESDataHandler::GetSingleton();
-		return dataHandler ? dataHandler->LookupForm<RE::SpellItem>(kSpellLocalFormID, kDragonborn) : nullptr;
+		return plugin_utils::LookupFormFlexible<RE::SpellItem>(kSpellLocalFormID, kDragonborn);
 	}
 
 	inline RE::BGSPerk* GetPerk()
 	{
-		auto* dataHandler = RE::TESDataHandler::GetSingleton();
-		return dataHandler ? dataHandler->LookupForm<RE::BGSPerk>(kPerkLocalFormID, kDragonborn) : nullptr;
+		return plugin_utils::LookupFormFlexible<RE::BGSPerk>(kPerkLocalFormID, kDragonborn);
 	}
 
 	inline RE::TESGlobal* GetRewardGlobal()
 	{
-		auto* dataHandler = RE::TESDataHandler::GetSingleton();
-		return dataHandler ? dataHandler->LookupForm<RE::TESGlobal>(kRewardGlobalLocalFormID, kDragonborn) : nullptr;
+		return plugin_utils::LookupFormFlexible<RE::TESGlobal>(kRewardGlobalLocalFormID, kDragonborn);
 	}
 }

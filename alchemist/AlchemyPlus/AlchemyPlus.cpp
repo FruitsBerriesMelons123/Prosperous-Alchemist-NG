@@ -1,5 +1,7 @@
 #include "AlchemyPlus.h"
 
+#include "PluginUtils.h"
+
 #include <Windows.h>
 
 #include <RE/B/BSResourceNiBinaryStream.h>
@@ -158,39 +160,7 @@ namespace alchemist::alchemyplus {
 			}
 
 			try {
-				auto* dataHandler = RE::TESDataHandler::GetSingleton();
-				if (!dataHandler) {
-					return nullptr;
-				}
-				auto* form = dataHandler->LookupForm(formID, plugin);
-				if (!form) {
-					if (plugin == "Complete Alchemy & Cooking Overhaul.esp") {
-						form = dataHandler->LookupForm(formID, "Complete Alchemy & Cooking Overhaul.esm");
-					} else if (plugin == "Complete Alchemy & Cooking Overhaul.esm") {
-						form = dataHandler->LookupForm(formID, "Complete Alchemy & Cooking Overhaul.esp");
-					} else if (plugin == "Skyrim.esm") {
-						static constexpr std::array<std::string_view, 11> kCcDlcPlugins{
-							"Update.esm",
-							"Dawnguard.esm",
-							"Dragonborn.esm",
-							"ccbgssse037-curios.esl",
-							"ccbgssse025-advdsgs.esm",
-							"ccbgssse001-fish.esm",
-							"ccbgssse067-daedinv.esm",
-							"ccbgssse003-zombies.esl",
-							"ccbgssse040-advobgg.esl",
-							"ccasvsse001-almsivi.esm",
-							"ccvsvsse004-beaskpeg.esl"
-						};
-						for (const auto pName : kCcDlcPlugins) {
-							if (auto* f = dataHandler->LookupForm(formID, pName)) {
-								form = f;
-								break;
-							}
-						}
-					}
-				}
-				return form ? form->As<RE::EffectSetting>() : nullptr;
+				return plugin_utils::LookupFormFlexible<RE::EffectSetting>(formID, plugin);
 			} catch (...) {
 				return nullptr;
 			}
@@ -234,6 +204,7 @@ namespace alchemist::alchemyplus {
 		{
 			const auto iterator = a_root.find("roundedPotency");
 			if (iterator == a_root.end() || !iterator->is_object() || !ReadEnabled(*iterator)) {
+				a_state = {};
 				return false;
 			}
 
@@ -244,6 +215,7 @@ namespace alchemist::alchemyplus {
 				!ReadFiniteNumber(*iterator, "durationThreshold", state.duration.threshold) ||
 				!ReadFiniteNumber(*iterator, "durationMult", state.duration.multiple) ||
 				state.magnitude.multiple <= 0.0f || state.duration.multiple <= 0.0f) {
+				a_state = {};
 				return false;
 			}
 
@@ -454,5 +426,41 @@ namespace alchemist::alchemyplus {
 	const nlohmann::json* Adapter::GetConfiguration() noexcept
 	{
 		return g_detected && g_configurationLoaded ? &g_configuration : nullptr;
+	}
+
+	void Adapter::ApplyConfigurationJson(const nlohmann::json& a_configuration) noexcept
+	{
+		if (!g_detected) {
+			return;
+		}
+		try {
+			if (!a_configuration.is_object()) {
+				g_active = false;
+				g_configurationLoaded = false;
+				g_impureCostFixEnabled = false;
+				g_configuration.clear();
+				g_rounding = {};
+				return;
+			}
+			g_configuration = a_configuration;
+			g_configurationLoaded = true;
+			const bool roundingActive = ReadRoundingConfiguration(g_configuration, g_rounding);
+			if (!roundingActive) {
+				g_rounding = {};
+			}
+			g_impureCostFixEnabled = ReadFeatureEnabled(g_configuration, "impureCostFix");
+			g_active = roundingActive || g_impureCostFixEnabled;
+		} catch (...) {
+			g_active = false;
+			g_configurationLoaded = false;
+			g_impureCostFixEnabled = false;
+			g_configuration.clear();
+			g_rounding = {};
+		}
+	}
+
+	void Adapter::RestoreConfiguration() noexcept
+	{
+		Refresh();
 	}
 }

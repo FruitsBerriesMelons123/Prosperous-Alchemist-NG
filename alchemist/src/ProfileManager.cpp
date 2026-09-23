@@ -72,6 +72,7 @@ namespace alchemist::profiles {
 			std::string playerSnapshot;
 			std::string cacoSnapshot;
 			std::string alchemyPlusSnapshot;
+			std::string requiemSnapshot;
 		};
 
 		std::mutex profileMutex;
@@ -339,6 +340,7 @@ namespace alchemist::profiles {
 			a_profile.playerSnapshot = GetValue(a_file, a_section, "Player", a_profile.playerSnapshot);
 			a_profile.cacoSnapshot = GetValue(a_file, a_section, "CACO", a_profile.cacoSnapshot);
 			a_profile.alchemyPlusSnapshot = GetValue(a_file, a_section, "AlchemyPlus", a_profile.alchemyPlusSnapshot);
+			a_profile.requiemSnapshot = GetValue(a_file, a_section, "Requiem", a_profile.requiemSnapshot);
 			const auto validateSnapshot = [&recordFailure](const char* a_key, const std::string& a_snapshot) {
 				if (a_snapshot.empty()) {
 					return true;
@@ -359,6 +361,7 @@ namespace alchemist::profiles {
 			valid = validateSnapshot("Player", a_profile.playerSnapshot) && valid;
 			valid = validateSnapshot("CACO", a_profile.cacoSnapshot) && valid;
 			valid = validateSnapshot("AlchemyPlus", a_profile.alchemyPlusSnapshot) && valid;
+			valid = validateSnapshot("Requiem", a_profile.requiemSnapshot) && valid;
 			if (!valid && a_failureReason && a_failureReason->empty()) {
 				recordFailure("one or more scalar, flag, or floating-point values are invalid");
 			}
@@ -489,6 +492,7 @@ namespace alchemist::profiles {
 			a_file.SetValue(section.c_str(), "Player", a_profile.playerSnapshot.c_str());
 			a_file.SetValue(section.c_str(), "CACO", a_profile.cacoSnapshot.c_str());
 			a_file.SetValue(section.c_str(), "AlchemyPlus", a_profile.alchemyPlusSnapshot.c_str());
+			a_file.SetValue(section.c_str(), "Requiem", a_profile.requiemSnapshot.c_str());
 		}
 
 		std::size_t FindSectionHeader(std::string_view a_data, std::size_t a_start, std::string_view a_name = {})
@@ -1004,6 +1008,13 @@ namespace alchemist::profiles {
 					break;
 				}
 			}
+			if (result.characterID == 0 && !result.name.empty() && !result.race.empty()) {
+				result.characterID = static_cast<std::uint32_t>(
+					std::hash<std::string>{}(result.name + "#" + result.race));
+				if (result.characterID == 0) {
+					result.characterID = 1;
+				}
+			}
 			return result;
 		}
 
@@ -1321,7 +1332,7 @@ namespace alchemist::profiles {
 			if (activeProfile != 0 && !selectionLost) {
 				auto* active = FindProfileLocked(activeProfile);
 				const bool activeIsForced = active && forcedProfile != 0 && activeProfile == forcedProfile;
-				if (active && (activeIsForced || (forcedProfile == 0 && IsIdentityMatch(active->identity, identity)))) {
+				if (active && (activeIsForced || (forcedProfile == 0 && (IsIdentityMatch(active->identity, identity) || (!identity.name.empty() && active->identity.name == identity.name))))) {
 					if (!SameIdentity(active->identity, identity)) {
 						BindProfileIdentityLocked(*active, identity);
 						SaveProfilesLocked();
@@ -1425,23 +1436,23 @@ namespace alchemist::profiles {
 	{
 		Initialize();
 		const auto currentIdentity = CaptureIdentity();
-		if (!currentIdentity.IsKnown()) {
+		if (currentIdentity.name.empty() || currentIdentity.race.empty()) {
 			return false;
 		}
 
 		std::unique_lock lock(profileMutex);
 		EnsureInitializedLocked();
-		if (profileTransitioning.load(std::memory_order_acquire) || awaitingNewGameCharacterID || awaitingGameLoadCharacterID) {
+		if (profileTransitioning.load(std::memory_order_acquire) || awaitingNewGameCharacterID) {
 			return false;
 		}
+		awaitingGameLoadCharacterID = false;
+
 		const int forcedProfile = FindSingleProfileLocked();
 		if (forcedProfile != 0 && a_profileIndex != forcedProfile) {
 			return false;
 		}
 		auto* profile = FindProfileLocked(a_profileIndex);
-		const bool characterIDMatches = profile && (a_profileIndex == forcedProfile || IsIdentityMatch(profile->identity, currentIdentity));
-		const bool canBindUnassignedProfile = profile && profile->identity.characterID == 0;
-		if (!profile || (!characterIDMatches && !canBindUnassignedProfile)) {
+		if (!profile) {
 			return false;
 		}
 
@@ -1547,6 +1558,7 @@ namespace alchemist::profiles {
 		created.playerSnapshot.clear();
 		created.cacoSnapshot.clear();
 		created.alchemyPlusSnapshot.clear();
+		created.requiemSnapshot.clear();
 
 		profileTransitioning.store(true, std::memory_order_release);
 		profileGeneration.fetch_add(1, std::memory_order_acq_rel);
@@ -1670,7 +1682,7 @@ namespace alchemist::profiles {
 		return false;
 	}
 
-	void UpdateExternalSnapshots(std::string a_player, std::string a_caco, std::string a_alchemyPlus)
+	void UpdateExternalSnapshots(std::string a_player, std::string a_caco, std::string a_alchemyPlus, std::string a_requiem)
 	{
 		Initialize();
 		const auto generation = profileGeneration.load(std::memory_order_acquire);
@@ -1682,20 +1694,24 @@ namespace alchemist::profiles {
 			return;
 		}
 		if (auto* profile = FindProfileLocked(activeProfile)) {
-			if (profile->playerSnapshot == a_player && profile->cacoSnapshot == a_caco && profile->alchemyPlusSnapshot == a_alchemyPlus) {
+			if (profile->playerSnapshot == a_player && profile->cacoSnapshot == a_caco &&
+				profile->alchemyPlusSnapshot == a_alchemyPlus && profile->requiemSnapshot == a_requiem) {
 				return;
 			}
 			const auto previousPlayerSnapshot = profile->playerSnapshot;
 			const auto previousCacoSnapshot = profile->cacoSnapshot;
 			const auto previousAlchemyPlusSnapshot = profile->alchemyPlusSnapshot;
+			const auto previousRequiemSnapshot = profile->requiemSnapshot;
 			CaptureSettings(*profile);
 			profile->playerSnapshot = std::move(a_player);
 			profile->cacoSnapshot = std::move(a_caco);
 			profile->alchemyPlusSnapshot = std::move(a_alchemyPlus);
+			profile->requiemSnapshot = std::move(a_requiem);
 			if (!SaveProfilesLocked()) {
 				profile->playerSnapshot = previousPlayerSnapshot;
 				profile->cacoSnapshot = previousCacoSnapshot;
 				profile->alchemyPlusSnapshot = previousAlchemyPlusSnapshot;
+				profile->requiemSnapshot = previousRequiemSnapshot;
 			}
 		}
 	}

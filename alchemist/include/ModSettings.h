@@ -8,13 +8,13 @@ namespace alchemist
 
 	struct ConfirmationSettings
 	{
-		std::string caco;
-		std::string alchemyPlus;
+		std::string modSettings = "{}";
 	};
 
 	namespace modsettings
 	{
 		void RefreshAndSynchronize(const Player& a_player) noexcept;
+		[[nodiscard]] ConfirmationSettings GetConfirmationSettings(const Player& a_player) noexcept;
 		[[nodiscard]] ConfirmationSettings GetConfirmationSettings() noexcept;
 	}
 }

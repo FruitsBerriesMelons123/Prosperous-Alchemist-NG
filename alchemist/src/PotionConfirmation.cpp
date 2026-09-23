@@ -1,11 +1,15 @@
 #include "PotionConfirmation.h"
 
 #include "AlchemyPlus/AlchemyPlus.h"
+#include "Apothecary/Apothecary.h"
 #include "CACO/CACO.h"
+#include "Requiem/Requiem.h"
 #include "MenuHandler.h"
 #include "ModSettings.h"
 #include "PluginPaths.h"
 #include "main.h"
+
+#include <nlohmann/json.hpp>
 
 #include <Windows.h>
 
@@ -33,13 +37,12 @@ namespace alchemist::confirmations
 		constexpr char kFileName[] = "alchemist.potions-confirmed.csv";
 		constexpr char kAllFileName[] = "alchemist.potions-confirmed-all.csv";
 		constexpr char kObservationFileName[] = "alchemist.potion-observations.csv";
-		constexpr std::array<std::string_view, 15> kObservationHeader{
+		constexpr std::array<std::string_view, 14> kObservationHeader{
 			"session_id",
 			"event_sequence",
 			"potion_add_index",
 			"mode",
-			"caco_settings",
-			"alchemy_plus_settings",
+			"mod_settings",
 			"potion_form_id",
 			"potion_event_delta",
 			"potion_value",
@@ -51,7 +54,7 @@ namespace alchemist::confirmations
 			"ingredient_selection_order"
 		};
 		constexpr auto kPostMenuDiagnosticCapture = std::chrono::seconds(10);
-		constexpr std::array<std::string_view, 20> kHeader{
+		constexpr std::array<std::string_view, 18> kHeader{
 			"mode",
 			"ingredients",
 			"actual_value",
@@ -63,9 +66,7 @@ namespace alchemist::confirmations
 			"poisoner",
 			"purity",
 			"seeker_of_shadows",
-			"concentrated_poison",
-			"caco_settings",
-			"alchemy_plus_settings",
+			"mod_settings",
 			"alchemist_perk_multiplier",
 			"ingredient_details",
 			"potion_form_id",
@@ -122,8 +123,7 @@ namespace alchemist::confirmations
 			std::uint64_t eventSequence = 0;
 			std::uint64_t potionAddIndex = 0;
 			std::string mode;
-			std::string cacoSettings;
-			std::string alchemyPlusSettings;
+			std::string modSettings;
 			std::uint32_t formID = 0;
 			std::int64_t delta = 0;
 			PotionSnapshot snapshot;
@@ -241,6 +241,12 @@ namespace alchemist::confirmations
 
 		std::string mode()
 		{
+			if (requiem::Adapter::IsActive()) {
+				return "Requiem";
+			}
+			if (apothecary::Adapter::IsActive()) {
+				return "Apothecary";
+			}
 			const bool cacoActive = caco::Adapter::IsActive();
 			const bool alchemyPlusActive = alchemyplus::Adapter::IsActive();
 			if (cacoActive && alchemyPlusActive) {
@@ -459,9 +465,41 @@ namespace alchemist::confirmations
 			return fields;
 		}
 
+		bool isLegacy21ColumnHeader(const std::vector<std::string>& a_fields)
+		{
+			return a_fields.size() == 21 &&
+				   a_fields[0] == "mode" &&
+				   a_fields[12] == "caco_settings" &&
+				   a_fields[13] == "alchemy_plus_settings" &&
+				   a_fields[14] == "requiem_settings";
+		}
+
+		bool isLegacy20ColumnHeader(const std::vector<std::string>& a_fields)
+		{
+			return a_fields.size() == 20 &&
+				   a_fields[0] == "mode" &&
+				   a_fields[12] == "caco_settings" &&
+				   a_fields[13] == "alchemy_plus_settings" &&
+				   a_fields[14] == "alchemist_perk_multiplier";
+		}
+
+		bool isLegacy19ColumnHeader(const std::vector<std::string>& a_fields)
+		{
+			return a_fields.size() == 19 &&
+				   a_fields[0] == "mode" &&
+				   a_fields[11] == "concentrated_poison" &&
+				   a_fields[12] == "mod_settings";
+		}
+
 		bool isCompatibleHeader(const std::vector<std::string>& a_fields)
 		{
-			return !a_fields.empty() && a_fields.size() <= kHeader.size() &&
+			if (a_fields.empty()) {
+				return false;
+			}
+			if (isLegacy21ColumnHeader(a_fields) || isLegacy20ColumnHeader(a_fields) || isLegacy19ColumnHeader(a_fields)) {
+				return true;
+			}
+			return a_fields.size() <= kHeader.size() &&
 				std::equal(a_fields.begin(), a_fields.end(), kHeader.begin(),
 					[](const std::string& a_field, std::string_view a_expected) { return a_field == a_expected; });
 		}
@@ -474,13 +512,66 @@ namespace alchemist::confirmations
 				return true;
 			}
 
-			if (!isCompatibleHeader(a_records.front())) {
+			const bool isLegacy21 = isLegacy21ColumnHeader(a_records.front());
+			const bool isLegacy20 = isLegacy20ColumnHeader(a_records.front());
+			const bool isLegacy19 = isLegacy19ColumnHeader(a_records.front());
+			if (!isLegacy21 && !isLegacy20 && !isLegacy19 && !isCompatibleHeader(a_records.front())) {
 				return false;
 			}
-			a_records.front() = expectedHeader;
-			for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
-				record->resize(expectedHeader.size());
+
+			if (isLegacy21) {
+				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
+					if (record->size() >= 21) {
+						const std::string& m = (*record)[0];
+						std::string modSetting = "{}";
+						if (m == "Requiem") {
+							modSetting = (*record)[14];
+						} else if (m == "CACO") {
+							modSetting = (*record)[12];
+						} else if (m == "AP") {
+							modSetting = (*record)[13];
+						} else if (m == "CACO+AP") {
+							nlohmann::json combined = nlohmann::json::object();
+							try { combined["caco"] = nlohmann::json::parse((*record)[12]); } catch (...) {}
+							try { combined["alchemyPlus"] = nlohmann::json::parse((*record)[13]); } catch (...) {}
+							modSetting = combined.dump();
+						}
+						(*record)[12] = std::move(modSetting);
+						record->erase(record->begin() + 13, record->begin() + 15);
+						record->erase(record->begin() + 11);
+					}
+					record->resize(expectedHeader.size());
+				}
+			} else if (isLegacy20) {
+				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
+					if (record->size() >= 20) {
+						const std::string& m = (*record)[0];
+						std::string modSetting = "{}";
+						if (m == "CACO") {
+							modSetting = (*record)[12];
+						} else if (m == "AP") {
+							modSetting = (*record)[13];
+						}
+						(*record)[12] = std::move(modSetting);
+						record->erase(record->begin() + 13);
+						record->erase(record->begin() + 11);
+					}
+					record->resize(expectedHeader.size());
+				}
+			} else if (isLegacy19) {
+				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
+					if (record->size() >= 19) {
+						record->erase(record->begin() + 11);
+					}
+					record->resize(expectedHeader.size());
+				}
+			} else {
+				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
+					record->resize(expectedHeader.size());
+				}
 			}
+
+			a_records.front() = expectedHeader;
 			return true;
 		}
 
@@ -642,9 +733,7 @@ namespace alchemist::confirmations
 				a_player.hasPerkPoisoner ? "1" : "0",
 				a_player.hasPerkPurity ? "1" : "0",
 				a_player.hasSeekerOfShadows ? "1" : "0",
-				a_player.hasPerkConcentratedPoison ? "1" : "0",
-				a_settings.caco,
-				a_settings.alchemyPlus,
+				a_settings.modSettings,
 				formatFloat(a_player.alchemistPerkMultiplier),
 				std::move(a_ingredientDetails),
 				std::move(a_potionFormID),
@@ -697,8 +786,7 @@ namespace alchemist::confirmations
 					return a_event.alchemyItem && a_event.delta > 0;
 				}));
 			observation.mode = mode();
-			observation.cacoSettings = settings.caco;
-			observation.alchemyPlusSettings = settings.alchemyPlus;
+			observation.modSettings = settings.modSettings;
 			observation.formID = a_formID;
 			observation.delta = a_delta;
 			observation.snapshot = capturePotionSnapshot(inventory, a_formID);
@@ -1003,8 +1091,7 @@ namespace alchemist::confirmations
 					std::to_string(a_observation.eventSequence),
 					std::to_string(a_observation.potionAddIndex),
 					a_observation.mode,
-					a_observation.cacoSettings,
-					a_observation.alchemyPlusSettings,
+					a_observation.modSettings,
 					formatFormID(a_observation.formID),
 					std::to_string(a_observation.delta),
 					snapshot.hasInventoryValue ? std::to_string(snapshot.inventoryValue) : "unavailable",
@@ -1042,7 +1129,7 @@ namespace alchemist::confirmations
 		}
 	}
 
-	void DrainPendingConfirmations(const Player& a_player) noexcept
+	void DrainPendingConfirmations([[maybe_unused]] const Player& a_player) noexcept
 	{
 		if (kDeveloper.GetValue() != 1) {
 			return;
@@ -1055,9 +1142,28 @@ namespace alchemist::confirmations
 			if (!IsDrainReady()) {
 				return;
 			}
-			RecordCraftedPotions(a_player);
+			initAlchemist();
+			RecordCraftedPotions(player);
 		} catch (const std::exception&) {
 		} catch (...) {
+		}
+	}
+
+	std::string GetActiveModeLabel() noexcept
+	{
+		return mode();
+	}
+
+	bool ReadConfirmedPotionRecords(std::vector<std::vector<std::string>>& a_records) noexcept
+	{
+		try {
+			const auto pluginDirectory = paths::GetPluginDirectory();
+			if (pluginDirectory.empty()) {
+				return false;
+			}
+			return loadRecords(pluginDirectory / kFileName, a_records);
+		} catch (...) {
+			return false;
 		}
 	}
 }

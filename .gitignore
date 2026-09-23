@@ -1,5 +1,5 @@
 # Custom entries
-scratch/
+scratch*
 chats/
 temp_build_start.txt
 potions-predicted-*

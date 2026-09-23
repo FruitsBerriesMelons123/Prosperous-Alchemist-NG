@@ -21,6 +21,8 @@ MODES = [
     "potions-predicted-ap",
     "potions-predicted-caco-ap",
     "potions-predicted-caco",
+    "potions-predicted-requiem",
+    "potions-predicted-apothecary",
 ]
 
 EXTENSIONS = [".csv.zst", ".csv"]

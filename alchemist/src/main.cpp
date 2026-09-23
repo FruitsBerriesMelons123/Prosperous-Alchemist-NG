@@ -2,6 +2,7 @@
 #include "PotionConfirmation.h"
 #include "AlchemistEngine.h"
 #include "AlchemyPlus/AlchemyPlus.h"
+#include "Requiem/Requiem.h"
 #include "DeveloperTestHub.h"
 #include "IngredientTracker.h"
 #include "MenuHandler.h"
@@ -571,6 +572,8 @@ namespace alchemist {
 	void initAlchemist() {
 		caco::Adapter::Refresh();
 		alchemyplus::Adapter::Refresh();
+		requiem::Adapter::Refresh();
+		apothecary::Adapter::Refresh();
 		int ignorePlayer = kIgnorePlayer.GetValue();
 		auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
 		if (!playerCharacter) {
@@ -578,7 +581,7 @@ namespace alchemist {
 		}
 		if (ignorePlayer == 0) {
 			player.init();
-			player.fortifyAlchemyLevel = 0;
+			player.setState();
 		} else {
 			player = Player();
 			player.alchemyLevel = 15.0f;
@@ -589,10 +592,12 @@ namespace alchemist {
 			player.hasPerkPhysician = false;
 			player.hasPerkBenefactor = false;
 			player.hasPerkPoisoner = false;
-			player.hasPerkConcentratedPoison = false;
 			player.hasSeekerOfShadows = false;
 			player.alchemyEvaluationContext = {};
 			player.alchemyEvaluationContext.captured = true;
+			player.requiemContext = {};
+			player.requiemContext.hasUnperkedKeyword = true;
+			player.requiemContext.captured = true;
 			player.setState();
 		}
 		auto inventory = playerCharacter->GetInventory();
@@ -603,40 +608,6 @@ namespace alchemist {
 				Ingredient ownedIngredient(ingredient);
 				ownedIngredient.inventoryCount = entry.first;
 				ingredientCount.insert(std::move(ownedIngredient));
-			}
-		}
-
-		if (ignorePlayer == 0) {
-			for (const auto& [form, entry] : inventory) {
-				if (!entry.second || !entry.second->IsWorn()) {
-					continue;
-				}
-				if (auto* enchantment = entry.second->GetEnchantment()) {
-					for (auto* effect : enchantment->effects) {
-						if (effect::isFortifyAlchemy(effect)) {
-							player.fortifyAlchemyLevel += effect::getMagnitude(effect);
-						}
-					}
-				}
-			}
-
-			if (const auto* playerCharacter = RE::PlayerCharacter::GetSingleton()) {
-				if (auto* magicTarget = const_cast<RE::PlayerCharacter*>(playerCharacter)->GetMagicTarget()) {
-					if (auto* activeEffects = magicTarget->GetActiveEffectList()) {
-						for (const auto* activeEffect : *activeEffects) {
-							if (!activeEffect || activeEffect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled)) {
-								continue;
-							}
-							if (activeEffect->flags.any(RE::ActiveEffect::Flag::kEnchanting) ||
-								(activeEffect->spell && activeEffect->spell->Is(RE::FormType::Enchantment))) {
-								continue;
-							}
-							if (effect::isFortifyAlchemy(activeEffect->GetBaseObject())) {
-								player.fortifyAlchemyLevel += activeEffect->GetMagnitude();
-							}
-						}
-					}
-				}
 			}
 		}
 
@@ -670,10 +641,6 @@ namespace alchemist {
 				ingredients.insert(Ingredient(ingredient));
 			}
 		}
-		if (ignorePlayer == 0) {
-			player.captureAlchemyEvaluationContext();
-			player.setState();
-		}
 	}
 
 }
@@ -703,6 +670,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* msg)
 	}
 	if (msg->type == SKSE::MessagingInterface::kDataLoaded) {
 		alchemist::caco::Adapter::Initialize();
+		alchemist::requiem::Adapter::Initialize();
+		alchemist::apothecary::Adapter::Initialize();
 	}
 	if (msg->type == SKSE::MessagingInterface::kInputLoaded) {
 		alchemist::alchemyplus::Adapter::Initialize();

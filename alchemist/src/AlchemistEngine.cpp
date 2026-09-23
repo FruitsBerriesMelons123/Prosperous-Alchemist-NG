@@ -1264,6 +1264,7 @@ namespace alchemist::engine {
 		result.alchemyPlusActive = alchemyplus::Adapter::IsActive();
 		result.cacoActive = caco::Adapter::IsActive();
 		result.combinedActive = result.alchemyPlusActive && result.cacoActive;
+		result.requiemActive = requiem::Adapter::IsActive();
 
 		std::vector<Ingredient> availableIngredients;
 		for (auto* nativeIngredient : dataHandler->GetFormArray<IngredientItem>()) {
@@ -1273,10 +1274,12 @@ namespace alchemist::engine {
 		}
 		result.ingredientCount = availableIngredients.size();
 
-		const std::array<EvaluationAlgorithm, 4> algorithms{
+		const std::array<EvaluationAlgorithm, 6> algorithms{
 			EvaluationAlgorithm::Vanilla,
 			EvaluationAlgorithm::AlchemyPlus,
 			EvaluationAlgorithm::CACO,
+			EvaluationAlgorithm::Requiem,
+			EvaluationAlgorithm::Apothecary,
 			EvaluationAlgorithm::Automatic
 		};
 		result.algorithms.reserve(algorithms.size());
@@ -1290,7 +1293,9 @@ namespace alchemist::engine {
 				availableIngredients.size() * (availableIngredients.size() - 1) * (availableIngredients.size() - 2) / 6 : 0;
 			algorithmResult.liveCompatibilityRecords = algorithm == EvaluationAlgorithm::AlchemyPlus ?
 				result.alchemyPlusActive : algorithm == EvaluationAlgorithm::CACO ? result.cacoActive :
-				algorithm == EvaluationAlgorithm::Automatic && (result.alchemyPlusActive || result.cacoActive);
+				algorithm == EvaluationAlgorithm::Requiem ? result.requiemActive :
+				algorithm == EvaluationAlgorithm::Apothecary ? apothecary::Adapter::IsActive() :
+				algorithm == EvaluationAlgorithm::Automatic && (result.alchemyPlusActive || result.cacoActive || result.requiemActive || apothecary::Adapter::IsActive());
 
 			const bool useCacoNative = algorithm == EvaluationAlgorithm::CACO && caco::Adapter::IsActive();
 			std::vector<std::vector<const RE::EffectSetting*>> effectIdentities;

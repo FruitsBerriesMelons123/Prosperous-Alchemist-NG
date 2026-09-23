@@ -16,3 +16,4 @@ if __name__ == "__main__":
         ap_enabled=True,
         ap_json_data=ap_json,
     )
+    print("Next in-game command: run 'pat caco-ap'")

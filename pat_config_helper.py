@@ -20,15 +20,23 @@ def refresh_mo2_if_running() -> None:
         )
         if "ModOrganizer.exe" in res.stdout:
             subprocess.run([str(config.MO2_EXECUTABLE), "refresh"], check=False)
+            time.sleep(0.35)
     except Exception:
         pass
 
 
-def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool) -> tuple[bool, str]:
+def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool = False, requiem_enabled: bool = False, apothecary_enabled: bool = False) -> tuple[bool, str]:
     """Validate whether an ingredient combination can craft a potion in Skyrim."""
     import csv
     repo_root = Path(__file__).resolve().parent
-    csv_file = repo_root / ("ingredients-caco.csv" if caco_enabled else "ingredients-vanilla.csv")
+    if apothecary_enabled:
+        csv_file = repo_root / "ingredients-apothecary.csv"
+    elif requiem_enabled:
+        csv_file = repo_root / "ingredients-requiem.csv"
+    elif caco_enabled:
+        csv_file = repo_root / "ingredients-caco.csv"
+    else:
+        csv_file = repo_root / "ingredients-vanilla.csv"
     if not csv_file.exists():
         return (True, "CSV file not found, skipping validation")
 
@@ -84,10 +92,11 @@ def build_ap_json(
     dur_mult: float = 5.0,
     overrides: Optional[Dict[str, Any]] = None,
     impure_cost_fix: bool = True,
+    rounded_potency_enabled: bool = True,
 ) -> Dict[str, Any]:
     rounded_potency: Dict[str, Any] = {
         "$comment": "Round effect potency to a multiple above a threshold.",
-        "enabled": True,
+        "enabled": rounded_potency_enabled,
         "magnitudeThreshold": mag_thresh,
         "magnitudeMult": mag_mult,
         "durationThreshold": dur_thresh,
@@ -138,17 +147,30 @@ def extract_settings(json_data: Dict[str, Any]) -> Dict[str, Any]:
     return res
 
 
-def update_mo2_modlist(caco_enabled: bool, ap_enabled: bool) -> None:
+def update_mo2_modlist(
+    caco_enabled: bool = False,
+    ap_enabled: bool = False,
+    requiem_enabled: bool = False,
+    apothecary_enabled: bool = False,
+) -> None:
     modlist_path = config.MO2_DEFAULT_PROFILE_DIR / "modlist.txt"
     if not modlist_path.exists():
         return
 
     pa_ng_mod_name = config.PA_NG_MOD_DIR.name
+    requiem_mod_name = getattr(config, "REQUIEM_MOD_DIR", Path("Requiem - The Roleplaying Overhaul")).name
+    apothecary_mod_name = getattr(config, "APOTHECARY_MOD_DIR", Path("Apothecary - An Alchemy Overhaul")).name
 
     target_states = {
-        config.CACO_MOD_DIR.name: (caco_enabled, "disabled"),
-        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled, "disabled"),
-        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled, "disabled"),
+        config.CACO_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
+        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
+        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
+        requiem_mod_name: (requiem_enabled, "disabled"),
+        "Requiem": (requiem_enabled, "disabled"),
+        "Requiem - The Roleplaying Overhaul": (requiem_enabled, "disabled"),
+        apothecary_mod_name: (apothecary_enabled, "disabled"),
+        "Apothecary": (apothecary_enabled, "disabled"),
+        "Apothecary - An Alchemy Overhaul": (apothecary_enabled, "disabled"),
         pa_ng_mod_name: (True, "enabled"),
     }
 
@@ -161,36 +183,18 @@ def update_mo2_modlist(caco_enabled: bool, ap_enabled: bool) -> None:
             if mod_name in target_states:
                 initial_states[mod_name] = line.startswith("+")
 
-    # Pass 1: Set CACO, Patches, AP to target states, and temporarily disable PA NG to trigger MO2 reload
-    pass1_lines = []
-    for line in lines:
-        if line.startswith("+") or line.startswith("-"):
-            mod_name = line[1:]
-            if mod_name in target_states:
-                should_enable = False if mod_name == pa_ng_mod_name else target_states[mod_name][0]
-                prefix = "+" if should_enable else "-"
-                pass1_lines.append(prefix + mod_name)
-                continue
-        pass1_lines.append(line)
-
-    modlist_path.write_text("\n".join(pass1_lines) + "\n", encoding="utf-8")
-    refresh_mo2_if_running()
-    time.sleep(0.25)
-
-    # Pass 2: Re-enable PA NG
-    pass2_lines = []
+    new_lines = []
     for line in lines:
         if line.startswith("+") or line.startswith("-"):
             mod_name = line[1:]
             if mod_name in target_states:
                 should_enable = target_states[mod_name][0]
                 prefix = "+" if should_enable else "-"
-                pass2_lines.append(prefix + mod_name)
+                new_lines.append(prefix + mod_name)
                 continue
-        pass2_lines.append(line)
+        new_lines.append(line)
 
-    modlist_path.write_text("\n".join(pass2_lines) + "\n", encoding="utf-8")
-    refresh_mo2_if_running()
+    modlist_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
     for mod_name, (final_state, default_str) in target_states.items():
         init_state = initial_states.get(mod_name)
@@ -221,7 +225,11 @@ def restore_mo2_loadorder() -> None:
                 )
 
 
-def sync_mo2_plugins_txt(caco_enabled: bool) -> None:
+def sync_mo2_plugins_txt(
+    caco_enabled: bool = False,
+    requiem_enabled: bool = False,
+    apothecary_enabled: bool = False,
+) -> None:
     plugins_path = config.MO2_DEFAULT_PROFILE_DIR / "plugins.txt"
     if not plugins_path.exists():
         return
@@ -232,6 +240,15 @@ def sync_mo2_plugins_txt(caco_enabled: bool) -> None:
         "cc-fishing_caco_patch.esp",
         "cc-saints&seducers_caco_patch.esp",
     ]
+    requiem_plugins = [
+        "requiem.esp",
+    ]
+    apothecary_plugins = [
+        "apothecary.esp",
+        "apothecary - saints & seducers patch.esp",
+        "apothecary - fishing patch.esp",
+        "apothecary - rare curios patch.esp",
+    ]
     lines = plugins_path.read_text(encoding="utf-8").splitlines()
     new_lines = []
     modified = False
@@ -239,6 +256,16 @@ def sync_mo2_plugins_txt(caco_enabled: bool) -> None:
         raw = line.lstrip("*").lower()
         if raw in caco_plugins:
             new_line = f"*{line.lstrip('*')}" if caco_enabled else line.lstrip("*")
+            if new_line != line:
+                modified = True
+            new_lines.append(new_line)
+        elif raw in requiem_plugins:
+            new_line = f"*{line.lstrip('*')}" if requiem_enabled else line.lstrip("*")
+            if new_line != line:
+                modified = True
+            new_lines.append(new_line)
+        elif raw in apothecary_plugins:
+            new_line = f"*{line.lstrip('*')}" if apothecary_enabled else line.lstrip("*")
             if new_line != line:
                 modified = True
             new_lines.append(new_line)
@@ -257,14 +284,25 @@ def safe_exists(p: Path) -> bool:
 
 def apply_mode_config(
     mode_name: str,
-    caco_enabled: bool,
-    ap_enabled: bool,
     ap_json_data: Dict[str, Any],
+    caco_enabled: bool = False,
+    ap_enabled: bool = False,
+    requiem_enabled: bool = False,
+    apothecary_enabled: bool = False,
 ) -> None:
     # 1. Update MO2 modlist, restore load order, and sync plugins.txt
-    update_mo2_modlist(caco_enabled=caco_enabled, ap_enabled=ap_enabled)
+    update_mo2_modlist(
+        caco_enabled=caco_enabled,
+        ap_enabled=ap_enabled,
+        requiem_enabled=requiem_enabled,
+        apothecary_enabled=apothecary_enabled,
+    )
     restore_mo2_loadorder()
-    sync_mo2_plugins_txt(caco_enabled=caco_enabled)
+    sync_mo2_plugins_txt(
+        caco_enabled=caco_enabled and not requiem_enabled and not apothecary_enabled,
+        requiem_enabled=requiem_enabled,
+        apothecary_enabled=apothecary_enabled,
+    )
     refresh_mo2_if_running()
 
     # 2. Target JSON files

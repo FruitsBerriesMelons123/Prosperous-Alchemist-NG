@@ -1,7 +1,7 @@
 # Instructions
 
 ## User Paths
-See **user-paths.md** for paths for locations referenced in these instructions.
+See **user-paths.md** for paths for all filesystem locations relevant to the project.
 
 ## How I Launch Skyrim
 - I use Mod Organizer 2. It uses the profile listed in **user-paths.md**. Do not attempt to launch Skyrim yourself.
@@ -30,72 +30,27 @@ See **user-paths.md** for paths for locations referenced in these instructions.
   - **`dist/Prosperous-Alchemist-NG-v<target-public-version>.zip`**: generate a new archive with `python build.py --package`; do not rename or edit an existing archive in place.
 - After an explicitly authorized bump, keep the direct locations consistent, reconfigure/build to regenerate the dependent locations, package and deploy as required, and verify the resulting version metadata. Do not perform any of those version changes for an audit-only request.
 
-## Potion Order Dependent Observations
-- See **potion-order-dependent-observations.md**.
-
-## SKSE
-- Source code location listed in **user-paths.md**.
-
-## SkyUI
-- Source code location listed in **user-paths.md**.
-
-## SSEEdit
-- Executable location listed in **user-paths.md**.
-
-## Alchemy Plus
-- Source code location listed in **user-paths.md**.
-
-## Complete Alchemy and Cooking Overhaul (CACO)
-- Source code location listed in **user-paths.md**.
-- See also **caco.md**.
-- CACO potion handling is not supported for automated capture or validation. The native adapter detects the CACO handling, impurity, reweight, and rename globals and conditionally models those paths when the live records and options enable them, but CACO's scripted potion handling is buggy, slow, and makes reliable automated value capture difficult. For repository tests and all requested captures, `CACO_OptionDisableAllPotionHandling` MUST remain `1` and `CACO_OptionImpurePotions` MUST remain `0`; never generate test requests for `DisableAllPotionHandling = 0` or `ImpurePotionProcessing = 1`.
-
-## Kryptopyr's Automated Patches
-- `cc-rarecurios_caco_patch.esp` (in `kryptopyr's Automated Patches`) standardizes Creation Club Rare Curios with CACO.
-- It replaces Rare Curios `Aloe Vera Leaves` (`0x0060D0` in `ccbgssse037-curios.esl`) with CACO's `Aloe Vera` (`0x00A100AD` in `Complete Alchemy & Cooking Overhaul.esp`).
-- Other Rare Curios ingredients (`Comberry`, `Bog Beacon`, `Ambrosia`, `Roobrush`) retain their local FormIDs in `cc-rarecurios_caco_patch.esp` and are added to CACO formlists via `cc-rarecurios_caco_flm.ini`.
-- In Papyrus test scripts (`ProsperousAlchemistTests.psc`), ingredient provisioning checks/provisions CACO's `Aloe Vera` (`0x00A100AD` from `Complete Alchemy & Cooking Overhaul.esp`) first, and if `GetItemCount` is 0, falls back to `0x0060D0` from `ccbgssse037-curios.esl`.
-- `alchemist.dll` and `potion_prediction_test.py` dynamically resolve loaded ingredient records and support both `Aloe Vera` and `Aloe Vera Leaves` seamlessly.
-
-## Quest Tracker NG
-- Source code location listed in **user-paths.md**.
-- To provide examples for implementing quest related code.
-
-## ConsoleUtil-Extended
-- Source code location listed in **user-paths.md**.
-- To provide examples for registering and implementing custom console commands and Papyrus function bindings.
-
-## Extended-Console
-- Source code location listed in **user-paths.md**.
-- To provide examples for CustomConsole YAML definitions, aliases, and Papyrus script bridges.
-
-## PapyrusExtenderSSE
-- Source code location listed in **user-paths.md**.
-- To provide examples for native Papyrus functions (e.g. PO3_SKSEFunctions) and SKSE perk/actor manipulation.
-
-## po3-Tweaks
-- Source code location listed in **user-paths.md**.
-- To provide examples for console hooks, game engine tweaks, and Papyrus native binding patterns.
-
-## Ingredients
-- See **ingredients-vanilla.csv** for the full ingredient list used in vanilla skyrim.
-- See **ingredients-caco.csv** for the full ingredient list used in CACO (with Restore/Damage duration index 0 (1s/instant)).
-- See **ingredients-caco-5.csv** for the full ingredient list used in CACO (with Restore/Damage duration index 1 (5s)).
-- See **ingredients-caco-10.csv** for the full ingredient list used in CACO (with Restore/Damage duration index 2 (10s)).
-
-## Potions
-These need to be regenerated manually by the user if the skse plugin potion prediction algorithm is modified.
-Before planning or requesting a potion-prediction capture, read **potion-prediction-default-settings.md**.
-### Confirmed potions
-- See **alchemist.potions-confirmed.csv** in the same directory as the deployed **alchemist.dll**.
-### Predicted files
-- Might not currently exist but when they do, they are named like this **potions-predicted-*.csv.zst**.
-
-## Skyrim Console Commands & Scripts
-- See **skyrim-console.md** for instructions on how to compile and register robust custom console commands for testing (e.g. `pat vanilla`).
-- **NEVER use `ConsoleUtil.ExecuteCommand("set <Global_EditorID> ...")` to set mod global variables in Papyrus scripts.**
-- **ALWAYS resolve global variables via `Game.GetFormFromFile(FormID, "Plugin.esp") as GlobalVariable`** (checking both `.esp` and `.esm` variants if applicable) and call `.SetValue(val)` to avoid `Unknown variable` console errors and ensure safe no-ops if the mod is absent.
-- **Engine GameSettings (`GMST`):** Because Skyrim Papyrus has no native `SetGameSettingFloat` function, mutate engine GameSettings (`fAlchemyIngredientInitMult`, `fAlchemySkillFactor`) in Papyrus scripts via `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`. Do NOT use non-existent native functions like `Utility.SetGameSettingFloat` which cause Caprica compilation errors.
+## Mod Settings & CSV Schema Rules for Mod Compatibility Additions
+When adding compatibility for new mods or updating existing mod integrations, follow these mandatory schema guidelines for `alchemist.potions-confirmed.csv` and `alchemist.potion-predictions.csv.zst`:
+- **Unified Single `mod_settings` Column (18-Column Schema):**
+  - Use a single unified column `mod_settings` at index 11 in `alchemist.potions-confirmed.csv` (`mode,ingredients,actual_value,alchemy_level,fortify_alchemy_level,alchemist_rank,physician,benefactor,poisoner,purity,seeker_of_shadows,mod_settings,alchemist_perk_multiplier,ingredient_details,potion_form_id,potion_cost_override,crafted_effects,ingredient_selection_order`).
+  - Do NOT create separate per-mod settings columns (e.g. `caco_settings`, `alchemy_plus_settings`, `requiem_settings`, `apothecary_settings`).
+- **Single Active Mod Population & Zero Cross-Mod Leaking:**
+  - Only the active overhaul mod populates `mod_settings`.
+  - If a mode has no configurable mod settings or MCM options (such as Vanilla or Apothecary), `mod_settings` MUST be `{}`.
+  - For combined active modes (e.g. `CACO+AP`), serialize settings into a single combined JSON object with top-level keys for each active mod (e.g. `{"caco": {...}, "alchemyPlus": {...}}`).
+- **No Engine GMST Duplication in Mod Settings:**
+  - Standard base Skyrim game settings (`fAlchemyIngredientInitMult` = 4.0, `fAlchemySkillFactor` = 1.5) are base engine GMSTs and player state, NOT mod-specific settings.
+  - Do NOT serialize `AlchemyIngredientInitMultiplier` or `AlchemySkillFactor` into `mod_settings` for mods that do not introduce custom MCM settings for them (e.g. Apothecary, Requiem, Vanilla). Serializing base GMSTs into mod settings creates ghost data and duplicate data chains.
+  - Only serialize true mod-specific MCM/JSON options or mechanics (e.g., CACO's duration index settings or Requiem's perk/keyword states `AlchemicalLoreRank`, `HasImprovedElixirs`, `HasImprovedPoisons`, `HasPurificationProcess`, `HasUnperkedCraftingKeyword`).
+- **Mandatory Inactive Overhaul Disabling in Pre-Launch Scripts (`pat-*.py`):**
+  - Whenever adding compatibility for a new overhaul mod (e.g. Apothecary, Requiem, CACO, Alchemy Plus, etc.) or updating existing integrations, developers and AI agents MUST update `config.py` / `config.example.py` with the mod directory constant and update `pat_config_helper.py` (`update_mo2_modlist` `target_states` dict, `sync_mo2_plugins_txt` plugin list, and `apply_mode_config` signature) to explicitly track and manage the new mod.
+  - Never allow an inactive overhaul mod to remain enabled when switching test modes in `pat-*.py` scripts. Always run an automated audit across all `pat-*.py` scripts to verify zero cross-mod state leakage before presenting test instructions to the user.
+- **No Synthetic Prediction Factor Logging in `crafted_effects`**:
+  - `crafted_effects` in `PotionConfirmation.cpp` MUST only serialize empirical properties of Skyrim's generated runtime `AlchemyItem` (`index`, `form_id`, `magnitude`, `duration`, `area`, `base_cost`, `flags`).
+  - Do NOT append intermediate prediction calculations (`alchemy_magnitude_factor`, `alchemy_duration_factor`, `fortify_factor`) to `crafted_effects`. If added for temporary diagnostic debugging during investigation, those fields output internal calculated power factors (`calculateVanillaPowerFactors`) and fortify actor value multipliers (`caco::algorithm::CalculateAlchemyActorValueMultiplier`), but they pollute empirical observation logs and must be removed prior to code completion.
+- **No `mod_settings` Column in Ingredient CSV Exports**:
+  - Ingredient CSV exports (`alchemist.ingredients.csv` / `ingredients-*.csv`) contain static, setting-agnostic base ingredient and effect data (4 base effects per ingredient). Do NOT serialize `mod_settings` into ingredient CSV files.
 
 ## Testing Suite Steps
 - **Full Minimal & Comprehensive Test Suite & Instructions**:
@@ -106,20 +61,37 @@ Before planning or requesting a potion-prediction capture, read **potion-predict
   - Step-by-step execution instructions in `test-suite.md` and user responses MUST remain concise and present a simple list of commands to reference. Do NOT include large dumps of expected console text in the step list.
   - Every test block instruction MUST explicitly list the exact modified settings (pre-launch disk AP JSON settings, MO2 profile, player skill/perks, GameSettings, and CACO duration index families) so they can be identified and verified post-test.
 - **Post-Test AI Verification Procedure:**
-  - After the test suite is executed by the user, the AI agent MUST run `python potion_prediction_test.py --check-confirmed-csv` and perform an explicit row-by-row audit of `alchemist.potions-confirmed.csv` against the technical matrix to confirm that all 16 test blocks across all 4 modes were logged with 100% precision.
+  - After the test suite is executed by the user, the AI agent MUST run `python potion_prediction_test.py --check-confirmed-csv` directly and report the EXACT, un-modified output (checked count, passed count, failed count, and row-by-row status).
+  - **Mandatory Stop for User In-Game Re-Export:** Whenever C++ plugin source code in `alchemist/` is modified and rebuilt to fix prediction logic or CSV export formatting, the AI agent MUST STOP and instruct the user to launch Skyrim / run in-game prediction re-export (`alchemist.potions-predicted.<mode>.csv`) BEFORE running post-build diagnostic verification checks. Agents MUST NEVER run verification on stale pre-build export files or continue executing verification without prompting the user to re-export in Skyrim.
+  - Agents MUST NOT write scratch scripts to override Python settings, mutate GMST parameters in memory, or falsify test results to declare 100% PASS. If rows fail due to GMST parameter mismatches, Python harness formula differences, or missing mod settings in the test harness, the agent MUST report the actual failures accurately and explain the root causes of the mismatches between the in-game observed craft values and the Python test harness predictions.
+  - **No Test Harness Bypasses, Native Replays, or Fixture Fallbacks**: Agents MUST NEVER edit `potion_prediction_test.py` or any test harness script to add native-effect replays, CSV `crafted_effects` fallbacks, or fixture-matching workarounds (such as `replay_confirmed_vanilla_effects` or replaying captured CSV effect magnitudes/durations) to substitute for actual `PotionPredictor` evaluation. The test harness must strictly test the analytical prediction model (`PotionPredictor`) directly against empirical observations. Overriding, intercepting, or bypassing prediction evaluation when predictions mismatch observed crafts is strictly prohibited.
+- **Confirmed CSV Validation Rule:**
+  - Use `python potion_prediction_test.py --check-confirmed-csv` as the offline prediction validation command.
 - **No New Console Subcommands & Multi-Block Arguments Rule:**
-  - Agents MUST NOT create or add arbitrary new console subcommand names in `pa-tests.yaml` or `ProsperousAlchemistTests.psc` unless the user explicitly requests or authorizes a new subcommand name. Always reuse the established standard mode subcommands (`pat vanilla`, `pat caco`, `pat ap`, `pat caco-ap`).
-  - **Multi-Block Arguments Authorized:** Agents ARE explicitly authorized to support optional block index/variant parameters on standard mode subcommands (e.g. `pat caco`, `pat caco 2`, `pat caco 3`, `pat vanilla 2`) by updating `pa-tests.yaml` and `ProsperousAlchemistTests.psc` and recompiling via `pa-console-tests/compile.ps1`. This enables executing multiple distinct runtime setting blocks under the same mode in a single Skyrim game session without exiting the game.
-- **Two-Tier Test Setup Architecture & Multi-Config Support:**
-  - **Runtime Engine State & Ingredient Reset:** Player skill levels, Fortify Alchemy, perks, GameSettings, and globals are applied in-game via custom `pat` console commands (`pat vanilla`, `pat caco`, `pat ap`, `pat caco-ap`, or indexed variants like `pat caco 2`, `pat caco-ap 2`). In addition, `pat` commands automatically clear all existing ingredients from player inventory, provision 99 count of each ingredient required for the test block, and output the next test craft recipes line-by-line directly to Skyrim's console. If runtime setup logic for existing modes needs modification or multi-block support, update `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc` (using `ConsoleUtil.ExecuteCommand("setgs...")` for engine GameSettings and `Game.GetFormFromFile` / `.SetValue()` for mod globals) and automatically recompile/deploy using `pa-console-tests/compile.ps1`.
-  - **External On-Disk Configuration:** `AlchemyPlus.json` overrides/thresholds, MO2 `modlist.txt` states, and load order files are managed on disk via root Python mode scripts (`pat-vanilla.py`, `pat-vanilla-2.py`, `pat-caco.py`, `pat-ap.py`, `pat-caco-ap.py`, `pat_config_helper.py`). Pre-launch Python scripts do NOT modify `alchemist.ini` or edit autoprovisioning (`autoprovision` in `alchemist.ini` is an obsolete setting and the new preferred method is `pat <mode>` scripts; agents MUST NEVER edit or re-add autoprovisioning to Python scripts). Whenever test parameters require external disk changes, agents MUST create or update the corresponding root Python mode scripts directly so the user only needs to run `python pat-<mode>-<config number>.py` (or `python pat-<mode>.py`) without manually editing disk files.
-  - **In-Game Ingredient Provisioning & Console Test Output Rule:** In-game `pat <mode> [test number]` commands handle clearing existing player ingredient inventory, provisioning 99 of each required ingredient dynamically via Papyrus (`ProvisionForm`), and logging the exact list of upcoming test craft recipes line-by-line in Skyrim's console. Pre-launch Python scripts (`pat-*.py`) do NOT touch `alchemist.ini` autoprovisioning because `autoprovision` in `alchemist.ini` is an obsolete setting and the new preferred method is `pat <mode>` scripts. Whenever generating or presenting test instructions to the user, agents MUST update `ProsperousAlchemistTests.psc` with the exact ingredient provisioning and console printouts for all requested test blocks, and recompile via `compile.ps1` BEFORE outputting instructions to the user.
+	- Agents MUST NOT create or add arbitrary new console subcommand names in `pa-tests.yaml` or `ProsperousAlchemistTests.psc` unless the user explicitly requests or authorizes a new subcommand name. Always reuse the established standard mode subcommands (`pat vanilla`, `pat caco`, `pat ap`, `pat caco-ap`, `pat requiem`, `pat apothecary`). Requiem is independent and must not be combined with CACO or Alchemy Plus in supported test blocks.
+   - **Multi-Block Arguments Authorized:** Agents ARE explicitly authorized to support optional block index/variant parameters on standard mode subcommands (e.g. `pat caco`, `pat caco 2`, `pat caco 3`, `pat vanilla 2`, `pat requiem 2`, `pat apothecary 2`) by updating `pa-tests.yaml` and `ProsperousAlchemistTests.psc` and recompiling via `pa-console-tests/compile.ps1`. This enables executing multiple distinct runtime setting blocks under the same mode in a single Skyrim game session without exiting the game.
+- **Two-Tier Test Setup Architecture & Disk vs In-Game Setting Rule:**
+	- **Pre-Launch Disk Scripts (`pat-*.py`)**: Modes with NO disk-based configuration files (e.g. Vanilla, CACO, Requiem, Apothecary) MUST use a SINGLE root Python script (`pat-vanilla.py`, `pat-caco.py`, `pat-requiem.py`, `pat-apothecary.py`) for observed craft testing because multiple disk scripts are redundant when disk settings do not change. Modes WITH disk-based configuration files (e.g., Alchemy Plus, CACO+AP with `AlchemyPlus.json`) MUST use enough pre-launch disk scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`) to test all distinct on-disk setting configurations.
+	- **In-Game Setting Blocks (`pat <mode> [variant]`)**: Under each pre-launch disk setup, there MUST be enough in-game setting blocks (`pat <mode>`, `pat <mode> 2`, `pat <mode> 3`, `pat <mode> 4`) executed sequentially within the same Skyrim session to thoroughly test all in-game settings, player perks, skill levels, GameSettings, and mod option globals.
+	- **Final Potion Prediction Export Phase & Dedicated Scripts**: The final prediction export phase MUST cover ALL supported modes/mods (Vanilla, AP, CACO, CACO+AP, Requiem, Apothecary) and MUST use dedicated, separate pre-launch disk scripts for default settings (`pat-default-<mode>.py`) and changed settings (`pat-<mode>-changed.py`). These prediction export phase scripts MUST remain separate files from the observed craft testing phase scripts.
+	- **Mandatory Default for Future Mods**: Any future mod integrations added to the project MUST follow these structural rules by default (a single disk script if no disk settings, enough in-game `pat` commands for all in-game settings/mod settings, and dedicated separate default/changed scripts for the prediction export phase).
+   - **Automated In-Game Pre-Test Cleanup & Zero Manual Overhead Rule:**
+  - Every single in-game command (`pat <mode> [variant]`, e.g. `pat vanilla 2`, `pat caco 3`, `pat ap 4`, `pat requiem 5`, `pat apothecary 8`, `pat default caco`, `pat <mode>-changed`, etc.) MUST automatically take care of ALL state resetting and inventory cleanup at the beginning of the setup function in `ProsperousAlchemistTests.psc` BEFORE provisioning the new test block:
+    - **Clear Player Ingredients**: Automatically remove 100% of all alchemy ingredients from player inventory (`ClearPlayerIngredients`).
+    - **Strip All Perks & Spells**: Automatically strip all 13 alchemy perks (`Alchemist 1-5`, `Physician`, `Benefactor`, `Poisoner`, `Experimenter 1-3`, `Snakeblood`, `Green Thumb`, `Purity`) and `Seeker of Shadows` (`ClearAllAlchemyPerks`).
+    - **Unequip Gear & Reset Actor Values**: Automatically unequip Circlet & Necklace of Peerless Alchemy and reset `FortifyAlchemy` actor value back to `0` (`ClearFortifyAlchemyState`).
+    - **Reset GameSettings & Mod Globals**: Reset engine GameSettings (`fAlchemyIngredientInitMult`, `fAlchemySkillFactor`) and active mod option globals/durations to match the specific block.
+    - **Provision New Block Ingredients**: Grant only the specific perks/gear for that block and provision 99x of only the required test ingredients.
+  - **Zero Manual Overhead for the User**: The user MUST NEVER be instructed or asked to type manual cleanup commands (`pat clear`) or manual setting commands (`set`, `setgs`, `player.addperk`) in Skyrim's console. Running `pat <mode> [variant]` is completely self-contained and handles the entire cleanup + setup lifecycle automatically.
 - **Full-Session Batching & Comprehensive Test Plan Mandate:**
   - **Single Comprehensive Testing Session:** Agents MUST compile all necessary test cases, create/update all target test CSV files (e.g., `specific-test-1.csv`), configure all pre-launch Python scripts (`pat-<mode>-<config number>.py`), update Papyrus runtime handlers (`ProsperousAlchemistTests.psc` / `pa-tests.yaml`), recompile via `compile.ps1`, and build/deploy `alchemist.dll` BEFORE presenting test instructions to the user.
   - **Full-Session Instructions:** Provide the user with explicit, step-by-step instructions for the entire testing session so the user can perform as many test blocks as possible per in-game session (sequentially running `pat <mode> <next-config-number>` while keeping Skyrim open) across all necessary pre-launch modes before returning to prompt the AI again.
   - **Zero Manual Console Commands:** Agents MUST NEVER instruct or ask the user to type extra manual console commands (`set ...`, `setgs ...`, `player.addperk ...`) in Skyrim's console. In-game setup MUST ONLY consist of running standard `pat <mode>` or indexed variants like `pat caco 2`.
-  - **Mandatory Recipe Craftability Validation Rule (`validate_ingredient_combination`):** Whenever selecting, creating, or updating test craft recipes or ingredient combinations for any test block or Papyrus script (`ProsperousAlchemistTests.psc`), agents MUST validate each proposed ingredient pair/trio using `validate_ingredient_combination(ingredients, caco_enabled)` in `pat_config_helper.py` (or against `ingredients-vanilla.csv` / `ingredients-caco.csv`). Agents MUST verify with 100% certainty that every selected ingredient pair shares at least one alchemy effect and produces a valid craftable potion/poison in Skyrim BEFORE incorporating it into `ProsperousAlchemistTests.psc`, compiling via `compile.ps1`, or presenting test instructions to the user. Never guess ingredient combinations or propose unvalidated pairs.
-  - **Mandatory FormID Verification & Ingredient Audit Rule:** Whenever creating, modifying, or updating test setup logic, recipes, or Papyrus test scripts (`ProsperousAlchemistTests.psc`), agents MUST validate all FormIDs passed to `ProvisionForm` or `Game.GetFormFromFile` against `ingredients-vanilla.csv` and `ingredients-caco.csv`. Every FormID MUST be verified as the exact local FormID (without load-order prefix) for the target ingredient in its master plugin file (`Skyrim.esm`, `Dragonborn.esm`, `Dawnguard.esm`, or `Complete Alchemy & Cooking Overhaul.esp`). Agents MUST write and execute an automated verification script to confirm zero FormID mismatches, verify that 100% of required test ingredients are provisioned for all test blocks, recompile via `compile.ps1`, and test relevant Python mode scripts BEFORE outputting test instructions to the user. Never hardcode unverified FormIDs from memory.
+	- **Mandatory Recipe Craftability Validation Rule (`validate_ingredient_combination`):** Whenever selecting, creating, or updating test craft recipes or ingredient combinations for any test block or Papyrus script (`ProsperousAlchemistTests.psc`), agents MUST validate each proposed ingredient pair/trio using `validate_ingredient_combination(ingredients, caco_enabled, requiem_enabled)` in `pat_config_helper.py` (or against `ingredients-vanilla.csv`, `ingredients-caco.csv`, or `ingredients-requiem.csv`). Agents MUST verify with 100% certainty that every selected ingredient pair shares at least one alchemy effect and produces a valid craftable potion/poison in Skyrim BEFORE incorporating it into `ProsperousAlchemistTests.psc`, compiling via `compile.ps1`, or presenting test instructions to the user. Never guess ingredient combinations or propose unvalidated pairs.
+	- **Mandatory FormID Verification & Anti-Hallucination Rule (Zero Unverified FormIDs):**
+	  - **Never Hardcode or Guess FormIDs from Memory:** AI agents MUST NEVER invent, guess, hallucinate, or hardcode any Skyrim engine or mod FormID (whether passed to `ProvisionForm`, `Game.GetFormFromFile`, `Game.GetForm`, `Game.GetFormEx`, or any C++/Python fixture) from memory or LLM weights.
+	  - **Verification Against Real Game Plugins & Authoritative Snapshots:** EVERY SINGLE FormID referenced anywhere in Papyrus scripts (`ProsperousAlchemistTests.psc`), C++ source files, Python scripts, or documentation MUST be verified with 100% precision against actual binary game plugin files (`Skyrim.esm`, `Dawnguard.esm`, `Dragonborn.esm`, `ccbgssse037-curios.esl`, `Complete Alchemy & Cooking Overhaul.esp`, `Requiem.esp`, `Apothecary.esp`) or authoritative CSV snapshots (`ingredients-*.csv`).
+	  - **Mandatory `Game.GetFormFromFile` Syntax:** In Papyrus scripts, NEVER use raw `Game.GetForm(0x...)` for loading forms because raw `GetForm` expects a hardcoded runtime load-order index which resolves to `None` at runtime. ALWAYS use `Game.GetFormFromFile(local_form_id, "MasterPlugin.esm")` specifying the exact local FormID (without load-order prefix) and the originating master plugin filename.
 - **Papyrus Scripting Syntax Rule for GameSettings vs Globals:**
   - Inside `ProsperousAlchemistTests.psc`: mutate engine GameSettings via `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`, and mutate mod globals via `Game.GetFormFromFile(...)` / `.SetValue(val)`. Never use non-existent Papyrus functions like `Utility.SetGameSettingFloat`.
 - **Non-Default Settings Reporting Rule:**
@@ -136,6 +108,35 @@ Before planning or requesting a potion-prediction capture, read **potion-predict
 - **Strict Plan Adherence Rule:**
   - Whenever an active plan or task roadmap exists or is implied, agents MUST not blatantly ignore aspects of the plan and especially don't assume something when it directly contradicts part of the plan.
 
+## Test Verification & Fixture Data Integrity Rules
+
+1. **Complete Fixture Telemetry at Source**:
+   - When recording test fixtures from runtime state (e.g., SKSE export tools, gameplay telemetry, or database snapshots), ensure all environmental prerequisites (game settings, perk factors, engine globals) are explicitly serialized into the fixture payload.
+   - Never omit environment-dependent variables from export tools under the assumption that default values will remain constant.
+
+2. **Strict Ban on Positional and Line-Number Branching**:
+   - Under no circumstances should test logic, prediction models, or evaluation scripts branch on line numbers, row indices, file line ranges, or fixture positions.
+   - Line numbers may only be used as display strings in error logging and exception messages.
+
+3. **No Fixture Hardcoding, Name-Matching, or Replay Workarounds**:
+   - Never write input-specific bypasses (e.g., checking specific recipe strings, item IDs, or expected return values) to force a test suite to pass. If an observed result diverges from a prediction, resolve the discrepancy by aligning the mathematical model with engine mechanics or correcting invalid capture data.
+   - Never write native-effect replay functions or fixture fallback logic (e.g., `replay_confirmed_vanilla_effects` or reading captured `crafted_effects` magnitudes/durations from fixture rows) in `potion_prediction_test.py` or test verification scripts to override or bypass `PotionPredictor` evaluation.
+
+4. **Dual-Direction Engine Integer Truncation/Rounding Boundary Checks**:
+   - Skyrim's native game engine truncates (floors) intermediate effect magnitudes to integers (`uint32_t`) when building runtime dynamic potions in the Alchemy Lab UI, whereas analytical floating-point prediction models evaluate unfloored or rounded magnitudes.
+   - When validating empirical confirmed rows via `python potion_prediction_test.py --check-confirmed-csv` or `--check-confirmed-row <N>`, if a prediction standard evaluation differs from the empirical in-game value (such as row 62 *Berit's Ashes + Bone Meal*: predicted 430 vs empirical 422), the test harness automatically performs a dual-direction integer boundary evaluation across magnitude truncation/rounding candidates.
+   - If an engine integer truncation boundary accounts for the discrepancy, the harness reports `PASS (Known Engine Rounding Boundary)` with Exit Code `0`. This is expected behavior and indicates that Skyrim's engine integer truncation boundary is verified without requiring code modifications.
+
+5. **Passing-Rows Baseline Recording & Regression Prevention (`potion_prediction_baseline.json`)**:
+   - The project maintains `potion_prediction_baseline.json` as an authoritative baseline of all currently passing confirmed craft rows.
+   - **Recording Baseline**: Run `python potion_prediction_test.py --check-confirmed-csv --record-baseline` whenever new confirmed craft rows are validated or prediction code is updated to record the passing baseline to `potion_prediction_baseline.json`.
+   - **Checking Baseline for Regressions**: Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline` during post-test AI verification and before completing tasks. If any row that previously passed in `potion_prediction_baseline.json` fails or changes value, the test harness reports a **REGRESSION** failure.
+   - **Mandatory Agent Audit Requirement**: AI agents MUST execute `python potion_prediction_test.py --check-confirmed-csv --check-baseline` to verify zero regressions against the recorded baseline before presenting task completion summaries to the user.
+
+## MANDATORY: Read and update `failed-commands.md`
+- Read `failed-commands.md` to see commands that didn't work either because they were structured incorrectly or they didn't work in the current environment.
+- At the end of each session and **ONLY** if there were failed commands during the session: update `failed-commands.md` to prevent future agents from making the same mistakes again. **DO NOT** report specific python script filenames. **DO NOT** report a script if it ran successfully.
+
 ## Debugging
 - When errors are found after running Skyrim, check logs in location listed in **user-paths.md**.
 - Inspect that exact SKSE directory directly; do not probe base drive paths or another broad parent path first.
@@ -149,9 +150,89 @@ Before planning or requesting a potion-prediction capture, read **potion-predict
 - Verify that the deployed DLL has the same timestamp and contents as the built DLL, and provide both timestamps in the response. If deployment is blocked by Skyrim, close or terminate SkyrimSE.exe before retrying.
 - If deployment is blocked because Skyrim is running, terminating SkyrimSE.exe is authorized so the built plugin DLL can be deployed and verified.
 - Only build when it is appropriate to do so. If you haven't modified any files that would require a build of alchemist.dll do not run **build.py**.
+- **Prompt for In-Game Re-Export After Plugin Rebuilds:** After modifying C++ source code in `alchemist/` and building/deploying `alchemist.dll`, if updated in-game exports are required to verify the fixes, the agent MUST STOP immediately and present explicit re-export instructions to the user instead of automatically proceeding to audit stale export files.
 
 ## Markdown formatting
 Do not use LaTeX, KaTeX, or math delimiters (`$` or `$$`) unless explicitly requested by the user or strictly required for complex, advanced mathematical equations that cannot be expressed clearly in plain text.
+
+## Potion Order Dependent Observations
+- See **potion-order-dependent-observations.md**.
+
+## Reference Files and Tools
+Always use reference files and tools appropriately. Read **user-paths.md**. You have access to all these files as references.
+
+### SKSE
+- Source code location listed in **user-paths.md**.
+
+### SkyUI
+- Source code location listed in **user-paths.md**.
+
+### SSEEdit
+- Executable location listed in **user-paths.md**.
+
+### Alchemy Plus
+- Source code location listed in **user-paths.md**.
+
+### Complete Alchemy and Cooking Overhaul (CACO)
+- Source code location listed in **user-paths.md**.
+- See also **caco.md**.
+- CACO potion handling is not supported for automated capture or validation. The native adapter detects the CACO handling, impurity, reweight, and rename globals and conditionally models those paths when the live records and options enable them, but CACO's scripted potion handling is buggy, slow, and makes reliable automated value capture difficult. For repository tests and all requested captures, `CACO_OptionDisableAllPotionHandling` MUST remain `1` and `CACO_OptionImpurePotions` MUST remain `0`; never generate test requests for `DisableAllPotionHandling = 0` or `ImpurePotionProcessing = 1`.
+
+### Apothecary - An Alchemy Overhaul
+- Mod files location listed in **user-paths.md**.
+- Mod description: `https://www.nexusmods.com/skyrimspecialedition/mods/52130`
+
+### Kryptopyr's Automated Patches
+- `cc-rarecurios_caco_patch.esp` (in `kryptopyr's Automated Patches`) standardizes Creation Club Rare Curios with CACO.
+- It replaces Rare Curios `Aloe Vera Leaves` (`0x0060D0` in `ccbgssse037-curios.esl`) with CACO's `Aloe Vera` (`0x00A100AD` in `Complete Alchemy & Cooking Overhaul.esp`).
+- Other Rare Curios ingredients (`Comberry`, `Bog Beacon`, `Ambrosia`, `Roobrush`) retain their local FormIDs in `cc-rarecurios_caco_patch.esp` and are added to CACO formlists via `cc-rarecurios_caco_flm.ini`.
+- In Papyrus test scripts (`ProsperousAlchemistTests.psc`), ingredient provisioning checks/provisions CACO's `Aloe Vera` (`0x00A100AD` from `Complete Alchemy & Cooking Overhaul.esp`) first, and if `GetItemCount` is 0, falls back to `0x0060D0` from `ccbgssse037-curios.esl`.
+- `alchemist.dll` and `potion_prediction_test.py` dynamically resolve loaded ingredient records and support both `Aloe Vera` and `Aloe Vera Leaves` seamlessly.
+
+### Quest Tracker NG
+- Source code location listed in **user-paths.md**.
+- To provide examples for implementing quest related code.
+
+### ConsoleUtil-Extended
+- Source code location listed in **user-paths.md**.
+- To provide examples for registering and implementing custom console commands and Papyrus function bindings.
+
+### Extended-Console
+- Source code location listed in **user-paths.md**.
+- To provide examples for CustomConsole YAML definitions, aliases, and Papyrus script bridges.
+
+### PapyrusExtenderSSE
+- Source code location listed in **user-paths.md**.
+- To provide examples for native Papyrus functions (e.g. PO3_SKSEFunctions) and SKSE perk/actor manipulation.
+
+### po3-Tweaks
+- Source code location listed in **user-paths.md**.
+- To provide examples for console hooks, game engine tweaks, and Papyrus native binding patterns.
+
+### Requiem
+- Source code location listed in **user-paths.md**.
+
+### Ingredients
+- See **ingredients-vanilla.csv** for the full ingredient list used in vanilla skyrim.
+- See **ingredients-caco.csv** for the single canonical ingredient list used in CACO.
+  - **No Multi-Variant File Duplication or `mod_settings` Column**: Do NOT create or re-add separate duration-variant CSV files (`ingredients-caco-5.csv`, `ingredients-caco-10.csv`) or append a `mod_settings` column to ingredient exports. Ingredient definition CSV files contain only static, setting-agnostic base ingredient and effect data (4 base effects per ingredient).
+  - **Dynamic CACO Duration Resolution**: Both the C++ engine (`caco::Adapter::ResolveIngredientEffect`) and the Python prediction harness (`potion_prediction_test.py`) dynamically resolve and calculate CACO duration variant indices (0 for instant/1s, 1 for 5s, 2 for 10s) based on the active CACO MCM settings (`restore_health_duration`, etc.) in memory/config. Re-exporting or splitting ingredient CSVs by duration variant is unnecessary and prohibited.
+- See **ingredients-requiem.csv** for the Requiem ingredient and effect snapshot used by the offline prediction harness and Requiem recipe validation.
+- See **ingredients-apothecary.csv** for the Apothecary ingredient and effect snapshot used by the offline prediction harness and Apothecary recipe validation.
+
+### Potions
+These need to be regenerated manually by the user if the skse plugin potion prediction algorithm is modified.
+Before planning or requesting a potion-prediction capture, read **potion-prediction-default-settings.md**.
+#### Confirmed potions
+- See **alchemist.potions-confirmed.csv** in the same directory as the deployed **alchemist.dll**.
+#### Predicted files
+- Might not currently exist but when they do, they are named like this **potions-predicted-*.csv.zst**.
+
+### Skyrim Console Commands & Scripts
+- See **skyrim-console.md** for instructions on how to compile and register robust custom console commands for testing (e.g. `pat vanilla`).
+- **NEVER use `ConsoleUtil.ExecuteCommand("set <Global_EditorID> ...")` to set mod global variables in Papyrus scripts.**
+- **ALWAYS resolve global variables via `Game.GetFormFromFile(FormID, "Plugin.esp") as GlobalVariable`** (checking both `.esp` and `.esm` variants if applicable) and call `.SetValue(val)` to avoid `Unknown variable` console errors and ensure safe no-ops if the mod is absent.
+- **Engine GameSettings (`GMST`):** Because Skyrim Papyrus has no native `SetGameSettingFloat` function, mutate engine GameSettings (`fAlchemyIngredientInitMult`, `fAlchemySkillFactor`) in Papyrus scripts via `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`. Do NOT use non-existent native functions like `Utility.SetGameSettingFloat` which cause Caprica compilation errors.
 
 ## User README
 The user readme **docs/USER_README.md** should not contain references to developer tools or developer workflow or detail about the code implementation. Only end user information should be presented there. It probably needs to updated to remove these things. Make sure it stays end user focused.
@@ -161,8 +242,6 @@ Should be kept up-to-date with their base file.
 **config.example.py** is the example file for **config.py**.
 **user-paths.example.md** is the example file for **user-paths.md**.
 
-## File locations that are user-edit only
+## Files and file locations that are user-edit only
 - `chats/`
-
-## README
-- All of these instructions should be reflected generically and appropriately in the project readme.
+- `code-part*.md`

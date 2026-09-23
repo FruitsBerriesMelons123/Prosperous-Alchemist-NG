@@ -1110,14 +1110,56 @@ namespace alchemist::ui {
 			const auto observedIdentity = profiles::GetObservedIdentity();
 			ImGui::Separator();
 			ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", Text("settings.profile", "Character profile").c_str());
-			if (!observedIdentity.IsKnown()) {
-				ImGui::TextWrapped("%s", Text("profiles.identityUnavailable", "The current Character ID and visible character identity are not available yet. The profile cannot be changed until they are ready.").c_str());
-			} else {
-				ImGui::TextWrapped("%s", Text("profiles.createFailed", "The automatic profile could not be created. Existing profiles were not changed.").c_str());
-			}
+			ImGui::TextWrapped("%s", Text("profiles.selectPrompt", "Select an existing profile to link to this character, or create a new one:").c_str());
+			ImGui::Spacing();
+
 			ImGui::Text("%s", FormatText("profiles.currentCharacter", "Current character: {identity}", {
 				{ "identity", IdentityLabel(observedIdentity) }
 			}).c_str());
+			ImGui::Spacing();
+
+			const auto profileList = profiles::GetProfiles();
+			if (!profileList.empty()) {
+				static int selectedProfileIndex = 0;
+				if (selectedProfileIndex == 0 || std::none_of(profileList.begin(), profileList.end(), [](const auto& p) { return p.index == selectedProfileIndex; })) {
+					selectedProfileIndex = profileList.front().index;
+				}
+
+				std::string selectedProfileLabel = Text("profiles.unknown", "Unknown");
+				for (const auto& p : profileList) {
+					if (p.index == selectedProfileIndex) {
+						selectedProfileLabel = ProfileLabel(p);
+						break;
+					}
+				}
+
+				ImGui::Text("%s", Text("settings.profileSelect", "Profile:").c_str());
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth((std::min)(440.0f, (std::max)(180.0f, ImGui::GetContentRegionAvail().x - 130.0f)));
+				if (ImGui::BeginCombo("##UnavailableProfileCombo", selectedProfileLabel.c_str())) {
+					for (const auto& profile : profileList) {
+						ImGui::PushID(profile.index);
+						const bool isSelected = (profile.index == selectedProfileIndex);
+						if (ImGui::Selectable(ProfileLabel(profile).c_str(), isSelected)) {
+							selectedProfileIndex = profile.index;
+						}
+						if (isSelected) {
+							ImGui::SetItemDefaultFocus();
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndCombo();
+				}
+				ImGui::SameLine();
+				if (ImGui::Button((Text("profiles.selectButton", "Select") + "##ConfirmSelectProfileUnavailable").c_str())) {
+					RequestProfileSelection(selectedProfileIndex);
+				}
+			}
+
+			ImGui::Spacing();
+			if (ImGui::Button((Text("profiles.createBlank", "Create blank profile") + "##UnavailableCreateBlank").c_str())) {
+				CreateProfileFromUI(0);
+			}
 		}
 
 		void DrawProfileDeletion()

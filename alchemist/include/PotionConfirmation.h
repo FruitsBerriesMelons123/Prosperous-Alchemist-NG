@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace alchemist
 {
@@ -17,5 +19,9 @@ namespace alchemist
 		void RecordCraftedPotions(const Player& a_player) noexcept;
 		bool ExportPotionObservations() noexcept;
 		void DrainPendingConfirmations(const Player& a_player) noexcept;
+
+		std::string GetActiveModeLabel() noexcept;
+		bool ReadConfirmedPotionRecords(std::vector<std::vector<std::string>>& a_records) noexcept;
 	}
 }
+

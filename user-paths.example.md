@@ -19,9 +19,9 @@
 ### Default Profile Saves
 - `E:\Projects\games\skyrim\1.6.1170\profiles\Default\saves`
 ### Backed Up Load Order Files
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\lockedorder.txt.2026_09_16_19_51_00`
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\loadorder.txt.2026_09_16_19_51_00`
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\plugins.txt.2026_09_16_19_51_00`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\lockedorder.txt.2026_09_23_15_48_17`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\loadorder.txt.2026_09_23_15_48_17`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\plugins.txt.2026_09_23_15_48_17`
 
 ## Alchemy Plus
 ### Source Code
@@ -66,3 +66,12 @@
 ## Creation Kit
 ### Extracted Vanilla Scripts and Tools
 - `C:\path\to\CreationKit`
+
+## Requiem
+### Source Code
+- `E:\Projects\games\skyrim\git\ProbablyManuel-requiem`
+
+## Apothecary
+### Mod Directory
+- `E:\Projects\games\skyrim\1.6.1170\mods\Apothecary - An Alchemy Overhaul`
+

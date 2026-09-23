@@ -110,6 +110,11 @@ namespace alchemist::devhub {
 		bool selectionUnavailable = false;
 		ActiveState activeState;
 		std::map<std::string, int> pendingPerkRanks;
+		bool isExporting = false;
+		float exportProgressFraction = 0.0f;
+		std::size_t exportTotalRecipes = 0;
+		std::size_t exportCurrentRecipe = 0;
+		std::string exportTaskName;
 	};
 
 	void Open();
@@ -158,4 +163,7 @@ namespace alchemist::devhub {
 	void AddRecord();
 	void RemoveRecord(std::size_t index);
 	void RunAlgorithmMatrix();
+	void ExportPotionPredictionsCSVAsync();
+	void ExportNativePotionEvaluationsCSVAsync();
+	void ExportConfirmedPotionPredictionsCSVAsync();
 }

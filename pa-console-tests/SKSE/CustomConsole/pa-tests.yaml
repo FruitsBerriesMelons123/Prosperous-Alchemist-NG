@@ -10,8 +10,8 @@ subs:
       - name: mode
         type: string
         required: true
-        help: The mode to apply default settings for (vanilla/caco/ap/caco-ap).
-    help: Sets the canonical default state (alchemy 100, no perks) for the given mode (vanilla/caco/ap/caco-ap).
+        help: The mode to apply default settings for (vanilla/caco/ap/caco-ap/requiem/apothecary).
+    help: Sets the canonical default state (alchemy 100, no perks) for the given mode (vanilla/caco/ap/caco-ap/requiem/apothecary).
   - name: vanilla
     alias: v
     func: SetupVanilla
@@ -19,7 +19,7 @@ subs:
       - name: variant
         type: string
         required: false
-        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, changed).
     help: Sets the game state for Vanilla mode.
   - name: caco
     alias: c
@@ -28,7 +28,7 @@ subs:
       - name: variant
         type: string
         required: false
-        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, changed).
     help: Sets the game state for CACO mode.
   - name: ap
     alias: a
@@ -37,7 +37,7 @@ subs:
       - name: variant
         type: string
         required: false
-        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, changed).
     help: Sets the game state for AP mode.
   - name: caco-ap
     alias: ca
@@ -46,21 +46,27 @@ subs:
       - name: variant
         type: string
         required: false
-        help: Optional variant index (e.g. 2 for Alchemist rank 5).
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, changed).
     help: Sets the game state for CACO + AP mode.
-  - name: vanilla-purity
-    func: SetupVanillaPurity
-    help: Sets the non-default test state for Vanilla Purity tests.
-  - name: vanilla-changed
-    func: SetupVanillaChanged
-    help: Sets changed/non-default test state for Vanilla mode.
-  - name: ap-changed
-    func: SetupAPChanged
-    help: Sets changed/non-default test state for AP mode.
-  - name: caco-ap-changed
-    func: SetupCACOAPChanged
-    help: Sets changed/non-default test state for CACO+AP mode.
-  - name: caco-changed
-    func: SetupCACOChanged
-    help: Sets changed/non-default test state for CACO mode.
-
+  - name: requiem
+    alias: r
+    func: SetupRequiem
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, changed).
+    help: Sets the game state for Requiem mode.
+  - name: apothecary
+    alias: apot
+    func: SetupApothecary
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index (e.g. 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, changed).
+    help: Sets the game state for Apothecary mode.
+  - name: clear
+    alias: clean
+    func: ClearIngredients
+    help: Removes all alchemy ingredients from player inventory.

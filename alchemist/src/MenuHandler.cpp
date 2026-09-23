@@ -54,6 +54,7 @@ namespace alchemist::menu {
 					return;
 				}
 				confirmationQueued.store(false, std::memory_order_release);
+				initAlchemist();
 				confirmations::DrainPendingConfirmations(player);
 			});
 		}
@@ -379,7 +380,7 @@ namespace alchemist::menu {
 						if (kDeveloper.GetValue() == 1) {
 							confirmations::DrainPendingConfirmations(player);
 						}
-						RefreshAlchemyMenu(player.hasPerkPurity);
+						RefreshAlchemyMenu();
 					});
 				}, force);
 			});
@@ -423,7 +424,7 @@ namespace alchemist::menu {
 		QueueRecalculation(a_force);
 	}
 
-	void RefreshAlchemyMenu(bool a_hasPurityPerk)
+	void RefreshAlchemyMenu(bool a_force)
 	{
 		if (!nativeAlchemyOpen.load(std::memory_order_acquire)) {
 			return;
@@ -441,9 +442,14 @@ namespace alchemist::menu {
 			return;
 		}
 		auto* alchemyMenu = static_cast<RE::CraftingSubMenus::CraftingSubMenus::AlchemyMenu*>(submenu);
-		alchemyMenu->playerHasPurityPerk = a_hasPurityPerk;
+
+		const bool hasPurity = player.hasPerkPurity;
+		if (!a_force && alchemyMenu->playerHasPurityPerk == hasPurity) {
+			return;
+		}
+		alchemyMenu->playerHasPurityPerk = hasPurity;
 		alchemyMenu->UpdateCraftingInfo(RE::ActorValue::kAlchemy);
-		alchemyMenu->playerHasPurityPerk = a_hasPurityPerk;
+		alchemyMenu->playerHasPurityPerk = hasPurity;
 	}
 
 	bool GetCursorSnapshot(CursorSnapshot& a_snapshot)

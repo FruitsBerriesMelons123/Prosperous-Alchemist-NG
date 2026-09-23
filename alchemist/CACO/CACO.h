@@ -1,10 +1,14 @@
 #pragma once
 
+#include <nlohmann/json_fwd.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +41,14 @@ namespace alchemist::caco
 		bool impureProcessingEnabled = false;
 	};
 
+	struct SavedStateSnapshot
+	{
+		std::array<float, 6> durationGlobalValues{};
+		float disablePotionHandlingValue = 0.0f;
+		float impurePotionsValue = 0.0f;
+		bool valid = false;
+	};
+
 	// The adapter reads loaded CACO records and settings without invoking Papyrus or mutating the active menu.
 	struct SeekerEvaluationState
 	{
@@ -62,7 +74,6 @@ namespace alchemist::caco
 		bool hasPoisoner = false;
 		bool hasSeekerOfShadows = false;
 		bool hasPurity = false;
-		bool hasConcentratedPoison = false;
 		bool captured = false;
 	};
 
@@ -404,6 +415,7 @@ namespace alchemist::caco
 		[[nodiscard]] static bool IsActive() noexcept;
 		[[nodiscard]] static float GetAlchemyIngredientInitMultiplier() noexcept;
 		[[nodiscard]] static float GetAlchemySkillFactor() noexcept;
+		static void SetGameSettings(float a_initMult, float a_skillFactor) noexcept;
 		[[nodiscard]] static bool TryGetSettings(Settings& a_settings) noexcept;
 		[[nodiscard]] static std::uint64_t GetCalculationRevision() noexcept;
 		[[nodiscard]] static bool IsPotionHandlingEnabled() noexcept;
@@ -488,7 +500,10 @@ namespace alchemist::caco
 			bool a_hasBeneficial,
 			bool a_hasHarmful,
 			bool a_hasPurity,
-			bool a_hasConcentratedPoison,
 			float& a_weight) noexcept;
+
+		[[nodiscard]] static SavedStateSnapshot SaveStateSnapshot() noexcept;
+		static void RestoreStateSnapshot(const SavedStateSnapshot& a_snapshot) noexcept;
+		static bool ApplySettingsJson(const nlohmann::json& a_cacoJson) noexcept;
 	};
 }

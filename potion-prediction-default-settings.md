@@ -4,9 +4,9 @@
 
 This file is the canonical reference for potion-prediction settings, mod-enable combinations, and confirmed capture baselines. It contains three deliberately separate meanings of “default”:
 
-1. **Default enabled-mod combination:** Vanilla Skyrim, with CACO disabled and Alchemy Plus disabled. This is the default when discussing which compatibility path is selected.
+1. **Default enabled-mod combination:** Vanilla Skyrim, with CACO, Alchemy Plus, and Requiem disabled. This is the default when discussing which compatibility path is selected.
 2. **Confirmed capture baseline:** the 14-row CACO-only baseline in `alchemist.potions-confirmed.csv`, plus the ten factor-one and ten ingredient-init recaptures. This is the strongest current observed-craft evidence, but it is not the default enabled-mod combination and is not a claim about every user's CACO configuration.
-3. **Cross-mode default probes:** the additional CACO+AP, AP, and Vanilla rows in `alchemist.potions-confirmed.csv`, plus the ten CACO-enabled factor-one and ten ingredient-init recaptures. These establish representative default-mode controls; the CACO+AP Large Antlers order matrix and every completed CACO duration-family probe, including both `RestoreStaminaDuration` probes, are now complete.
+3. **Cross-mode default probes:** the additional CACO+AP, AP, and Vanilla rows in `alchemist.potions-confirmed.csv`, plus the ten CACO-enabled factor-one and ten ingredient-init recaptures. These establish representative default-mode controls; the CACO+AP Large Antlers order matrix and every completed CACO duration-family probe, including both `RestoreStaminaDuration` probes, are now complete. Requiem has a separate four-block capture plan and is not represented by a predicted-CSV fixture yet.
 
 The Alchemy Plus values in this document are copied from `SKSE\Plugins\AlchemyPlus.json`, which is currently using its upstream default values. The CACO and player values are the captured test baseline unless explicitly marked as a derived state or a mod-wide default.
 
@@ -30,10 +30,11 @@ Use these labels consistently in requests, exports, and analysis:
 | `CACO` | enabled | disabled | CACO captured test baseline below; Alchemy Plus settings are not applicable | 14 confirmed baseline rows plus ten truthful factor-one and ten ingredient-init recaptures; the 12-row permutation matrix and all completed damage and restore duration probes pass |
 | `AP` | disabled | enabled | Alchemy Plus JSON defaults below; CACO settings are not applicable | Four confirmed default probes |
 | `CACO+AP` | enabled | enabled | CACO captured test baseline plus Alchemy Plus JSON defaults | Nine confirmed default-control rows plus ten truthful factor-one and ten ingredient-init recaptures; the default controls, all completed damage and restore duration probes, and all six Large Antlers orders pass |
+| `Requiem` | disabled | disabled | Requiem ingredient records; `AlchemyIngredientInitMultiplier=4.0`; `AlchemySkillFactor=1.1`; Requiem snapshot and perk state | No documented confirmed-craft baseline yet; use the four-block Requiem capture plan |
 
-“Enabled” means the adapter is active for prediction, not merely that a DLL or JSON file exists. With the current Alchemy Plus defaults, `roundedPotency` and `impureCostFix` are enabled and make the AP adapter prediction-relevant. `knownFailureFix`, `mixtureNames`, and `copyExemplars` do not by themselves change the potion-value algorithm.
+“Enabled” means the adapter is active for prediction, not merely that a DLL or JSON file exists. With the current Alchemy Plus defaults, `roundedPotency` and `impureCostFix` are enabled and make the AP adapter prediction-relevant. Requiem is a separate path and takes precedence over CACO and Alchemy Plus in the Python mode selection. `knownFailureFix`, `mixtureNames`, and `copyExemplars` do not by themselves change the potion-value algorithm.
 
-Do not call a test `CACO+AP`, `AP`, or `Vanilla` without stating both enabled/disabled states. In particular, do not call the CACO-only confirmed baseline the default plugin combination.
+Do not call a test `CACO+AP`, `AP`, `Requiem`, or `Vanilla` without stating both enabled/disabled states. In particular, do not call the CACO-only confirmed baseline the default plugin combination, and do not combine Requiem with CACO or Alchemy Plus in a supported test block.
 
 ### Kryptopyr's Automated Patches & Ingredient Naming
 
@@ -56,25 +57,39 @@ These correspond to the confirmed CSV fields:
 - **Poisoner:** disabled (`0`)
 - **Purity:** disabled (`0`)
 - **Seeker of Shadows:** disabled (`0`)
-- **Concentrated Poison:** disabled (`0`)
 
-These are runtime player-state inputs and are user-facing through the character's skill, equipment, and perks rather than through the CACO or Alchemy Plus JSON files. Alchemy level and Fortify Alchemy change potency; the Alchemist multiplier/rank and Physician, Benefactor, Poisoner, Purity, and Seeker of Shadows can change applicable effect potency or which effects remain. `AlchemistPerkMultiplier` takes precedence over the rank fallback in the current profile. `ConcentratedPoison` is captured for compatibility and weight behavior but is not currently believed to change potion gold prediction.
+These are runtime player-state inputs and are user-facing through the character's skill, equipment, and perks rather than through the CACO or Alchemy Plus JSON files. Alchemy level and Fortify Alchemy change potency; the Alchemist multiplier/rank and Physician, Benefactor, Poisoner, Purity, and Seeker of Shadows can change applicable effect potency or which effects remain. `AlchemistPerkMultiplier` takes precedence over the rank fallback in the current profile.
 
 ### Note about testing defaults
 - Switching modes (e.g. from CACO to CACO+AP) requires exiting and restarting Skyrim. Every time the user starts Skyrim they create a new character. In most cases the user does not need to be told to manually reset any settings. This should help you be more appropriate in helping the user.
+
+### Requiem capture inputs
+
+Requiem is an independent mode rather than another CACO or Alchemy Plus combination. Keep CACO and Alchemy Plus disabled, use the Requiem ingredient records, and use the live Requiem defaults `AlchemyIngredientInitMultiplier=4.0` and `AlchemySkillFactor=1.1` unless a capture block explicitly changes them. The no-perk/default Requiem capture block must grant Alchemical Lore 1 so potions appear in the potion list; the higher-tier blocks retain their Alchemical Lore 2 setting. Requiem perk inputs are represented by Alchemical Lore, Improved Elixirs, Improved Poisons, and Purification Process; Fortify Skill effects receive Requiem's penalty and the racial unperked-crafting rule remains part of the player state.
+
+The current four-block Requiem capture plan is:
+
+| Block | Command | Player state | Requiem settings |
+|---|---|---|---|
+| `Requiem-1` | `pat requiem` | Alchemy 100, Fortify Alchemy 0, Alchemical Lore 1 | Init multiplier 4.0, skill factor 1.1 |
+| `Requiem-2` | `pat requiem 2` | Alchemy 50, Fortify Alchemy 25, Alchemical Lore 2 | Init multiplier 4.0, skill factor 1.1 |
+| `Requiem-3` | `pat requiem 3` | Alchemy 75, Fortify Alchemy 0, Alchemical Lore 2, Improved Elixirs, Improved Poisons | Init multiplier 4.0, skill factor 1.1 |
+| `Requiem-4` | `pat requiem 4` | Alchemy 100, Fortify Alchemy 0, Alchemical Lore 2, Purification Process | Init multiplier 4.0, skill factor 1.1 |
+
+These blocks have no confirmed-craft baseline until they are captured in-game; after capture, run `python potion_prediction_test.py --check-confirmed-csv` and audit each new row against this table.
 
 ### Note about non-default settings and user instructions
 - When presenting test plans, requests, or instructions (or directly to the user), agents MUST explicitly inform the user that they **only need to modify settings or files that are NON-DEFAULT**.
 - Do NOT flood test instructions with full lists of default settings that do not require user action. Clearly separate and highlight only the non-default settings or deviations.
 - **Simple Chat Presentation:** Test instructions in user responses MUST specify non-default settings in a clean, simple way without referencing script output blocks, execution logs, or internal script mechanisms.
 - **Python Script Change-Only Output:** Python mode scripts MUST only print output when a variable was actually changed on disk, formatted as: `<variable>: default = <default_val>, previous = <prev_val>, changed to = <new_val>`.
-- **Agent Requirement for On-Disk Settings & MO2 Profile:** Whenever planning or executing a test batch that requires non-default on-disk settings, MO2 enabled mod changes (`modlist.txt`), or load order file restoration (`plugins.txt`, `loadorder.txt`, `lockedorder.txt` from backups), agents MUST update or create the root Python mode scripts (`pat-vanilla.py`, `pat-caco.py`, `pat-ap.py`, `pat-caco-ap.py`, `pat_config_helper.py`, or indexed variants like `pat-caco-2.py`, `pat-caco-ap-2.py`) directly with the target parameters so the user can simply run the script to stage all necessary disk and MO2 profile modifications without hand-editing files.
-- **In-Game State Applied by `pat` Commands:** Player skill level (e.g. Alchemy 100 or 50), Fortify Alchemy, perks, GameSettings, and globals are applied automatically in-game by the custom `pat` console commands (and indexed variants like `pat caco 2`, `pat caco 3`). Do NOT instruct the user to set alchemy level using the Developer Test Hub.
+- **Agent Requirement for On-Disk Settings & MO2 Profile:** Whenever planning or executing a test batch that requires non-default on-disk settings, MO2 enabled mod changes (`modlist.txt`), or load order file restoration (`plugins.txt`, `loadorder.txt`, `lockedorder.txt` from backups), agents MUST update or create the root Python mode scripts (`pat-vanilla.py`, `pat-caco.py`, `pat-ap.py`, `pat-caco-ap.py`, `pat-requiem.py`, `pat-requiem-2.py`, `pat_config_helper.py`, or indexed variants like `pat-caco-2.py`, `pat-caco-ap-2.py`) directly with the target parameters so the user can simply run the script to stage all necessary disk and MO2 profile modifications without hand-editing files.
+- **In-Game State Applied by `pat` Commands:** Player skill level (e.g. Alchemy 100 or 50), Fortify Alchemy, perks, GameSettings, and globals are applied automatically in-game by the custom `pat` console commands (and indexed variants like `pat caco 2`, `pat caco 3`, and `pat requiem 2`). Do NOT instruct the user to set alchemy level using the Developer Test Hub.
 
 ### Note about multi-block testing and full-session batching
-- **Multi-Block Console Commands:** For a single Skyrim game session under a specific mode, multiple runtime setting blocks can be executed sequentially in-game via indexed `pat` subcommands (e.g., `pat caco`, `pat caco 2`, `pat caco 3`, `pat caco-ap`, `pat caco-ap 2`, `pat vanilla`). This avoids restarting Skyrim for runtime-only parameter changes.
+- **Multi-Block Console Commands:** For a single Skyrim game session under a specific mode, multiple runtime setting blocks can be executed sequentially in-game via indexed `pat` subcommands (e.g., `pat caco`, `pat caco 2`, `pat caco 3`, `pat caco-ap`, `pat caco-ap 2`, `pat vanilla`, `pat requiem`, `pat requiem 2`). This avoids restarting Skyrim for runtime-only parameter changes.
 - **Pre-Launch Python Scripts:** On-disk configurations (`AlchemyPlus.json`, MO2 `modlist.txt`) are applied before launching Skyrim via root Python scripts (`pat-<mode>-<num>.py` or `pat-<mode>.py`).
-- **Full-Session Batching:** When providing test instructions to the user, agents MUST compile all necessary test blocks, create test CSVs (e.g., `specific-test-1.csv`), update Papyrus test handlers (`ProsperousAlchemistTests.psc` / `pa-tests.yaml`) and pre-launch Python scripts, compile via `compile.ps1`, and deploy `alchemist.dll` upfront. Provide the user with complete instructions for the full testing session before awaiting test execution results.
+- **Full-Session Batching:** When providing test instructions to the user, agents MUST compile all necessary test blocks, create test CSVs (e.g., `specific-test-1.csv`), update Papyrus test handlers (`ProsperousAlchemistTests.psc` / `pa-tests.yaml`) and pre-launch Python scripts, compile via `compile.ps1`, and deploy `alchemist.dll` upfront. Provide the user with complete instructions for the full testing session before awaiting test execution results, including both Requiem disk scripts when Requiem blocks are requested.
 
 ### Note about alchemist.ini
 - The variables `Player`, `CACO`, and `AlchemyPlus` are only reports and do not actually change any settings in-game. It is probably not appropriate for you to modify them yourself.
@@ -192,9 +207,9 @@ The Python harness now loads an explicit JSON path and the active profile snapsh
 
 *(Note: `autoprovision` in `alchemist.ini` is an obsolete setting and the new preferred method is `pat <mode>` scripts.)*
 
-The prior 48-name union remains represented by the confirmed captures and is not discarded. The current list is the alphabetized union for the next 24 user crafts: each of the six recipes below in all four modes.
+The prior 48-name union remains represented by the confirmed captures and is not discarded. The current list is the alphabetized union for the next 24 user crafts: each of the six recipes below in the four established fixture modes.
 
-The next batch uses the default settings in all four enabled-mod combinations. There are no intentional non-default settings. Use alchemy level `100`, canonical player state, CACO `AlchemyIngredientInitMultiplier=3`, `AlchemySkillFactor=3`, all six CACO duration selectors at `0`, `DisableAllPotionHandling=1`, `ImpurePotionProcessing=0`, and Alchemy Plus defaults (`roundedPotency.enabled=true`, `impureCostFix.enabled=true`, magnitude threshold/multiple `25`/`5`, and duration threshold/multiple `15`/`5`). Craft every alphabetized recipe below in each mode, selecting the ingredients in the listed order. Generate or preserve the resulting confirmation rows through the plugin; do not hand-edit the CSV.
+The next batch uses the default settings in the four established fixture modes; Requiem remains a separate capture plan below. There are no intentional non-default settings. Use alchemy level `100`, canonical player state, CACO `AlchemyIngredientInitMultiplier=3`, `AlchemySkillFactor=3`, all six CACO duration selectors at `0`, `DisableAllPotionHandling=1`, `ImpurePotionProcessing=0`, and Alchemy Plus defaults (`roundedPotency.enabled=true`, `impureCostFix.enabled=true`, magnitude threshold/multiple `25`/`5`, and duration threshold/multiple `15`/`5`). Craft every alphabetized recipe below in each mode, selecting the ingredients in the listed order. Generate or preserve the resulting confirmation rows through the plugin; do not hand-edit the CSV.
 
 | Recipe | Vanilla | CACO | AP | CACO+AP |
 |---|---:|---:|---:|---:|
@@ -311,7 +326,7 @@ The two Alchemy Plus rounding-disabled rows for `Ash Creep Cluster, Crimson Nirn
 
 ## Next canonical default coverage batch
 
-The next request changes no prediction-affecting setting and operates fully under default configuration across all four modes. Keep CACO enabled or disabled according to the mode, retain canonical CACO settings when CACO is enabled, and use the 6 recipes in the `Default ingredient coverage and recipe` section above. Restart Skyrim when changing modes.
+The next request changes no prediction-affecting setting and operates fully under default configuration across the four established fixture modes. Keep CACO enabled or disabled according to the mode, retain canonical CACO settings when CACO is enabled, and use the 6 recipes in the `Default ingredient coverage and recipe` section above. Requiem remains governed by its separate four-block capture plan. Restart Skyrim when changing modes.
 
 **Only non-default settings:** none.
 
@@ -319,7 +334,7 @@ The next request changes no prediction-affecting setting and operates fully unde
 
 1. Treat the 182 confirmed rows as controls and capture the 6 new recipes once in each of `Vanilla`, `CACO`, `AP`, and `CACO+AP` under canonical defaults (24 crafts total). Use the expected values in the table above and record the exact alphabetized selection order.
 2. Run `python potion_prediction_test.py --check-confirmed-csv`. If a row fails, correct the Python model from the captured effects/settings and source evidence before requesting another setting change. If the rows pass, select the next bounded default-coverage batch rather than changing Alchemy Plus immediately.
-3. Continue canonical default coverage until the supported ingredient/effect families are represented across the four modes. Only then test `magnitudeThreshold`, `magnitudeMult`, `durationThreshold`, and `durationMult` one at a time, restoring the default after each stage; test matching `roundedPotency.overrides` one effect at a time after the global rules.
+3. Continue canonical default coverage until the supported ingredient/effect families are represented across the four established fixture modes. Only then test `magnitudeThreshold`, `magnitudeMult`, `durationThreshold`, and `durationMult` one at a time, restoring the default after each stage; test matching `roundedPotency.overrides` one effect at a time after the global rules.
 4. Test `impureCostFix.enabled=false` separately with a mixed potion in AP and CACO+AP modes. Do NOT test CACO post-craft handling (`DisableAllPotionHandling=0` / `ImpurePotionProcessing=1`); CACO's scripted potion handling is unsupported, buggy, slow, and cannot be automatically verified. Do not combine unrelated UI, naming, model, XP, or derived metadata settings with value-algorithm tests.
 
 ## Future request rule

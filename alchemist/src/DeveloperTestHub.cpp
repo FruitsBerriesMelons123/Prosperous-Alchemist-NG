@@ -10,6 +10,8 @@
 #include "MenuHandler.h"
 
 #include <RE/A/ActorEquipManager.h>
+#include <RE/A/AlchemyMenu.h>
+#include <RE/C/CraftingMenu.h>
 #include <Windows.h>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
@@ -25,7 +27,9 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <future>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <numeric>
@@ -62,8 +66,212 @@ namespace alchemist::devhub {
 			std::map<RE::TESBoundObject*, int> provisioned;
 			std::map<std::string, int> pendingPerkRanks;
 			std::set<RE::TESObjectARMO*> managedWornGear;
+			std::atomic<bool> isExporting{ false };
+			std::atomic<float> exportProgressFraction{ 0.0f };
+			std::size_t exportTotalRecipes = 0;
+			std::size_t exportCurrentRecipe = 0;
+			std::string exportTaskName;
 			std::recursive_mutex mutex;
 		};
+
+		inline bool IsSystemMemorySafe()
+		{
+			MEMORYSTATUSEX status{};
+			status.dwLength = sizeof(status);
+			if (GlobalMemoryStatusEx(&status)) {
+				if (status.ullAvailPhys < (256ULL * 1024 * 1024) ||
+					status.ullAvailPageFile < (512ULL * 1024 * 1024)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		inline std::string FormatExportNum(float a_value)
+		{
+			if (a_value == static_cast<float>(static_cast<int>(a_value))) {
+				return std::to_string(static_cast<int>(a_value));
+			}
+			std::ostringstream ss;
+			ss << std::setprecision(std::numeric_limits<float>::max_digits10) << a_value;
+			return ss.str();
+		}
+
+		inline std::string FormatExportSelectionOrder(const std::vector<std::uint32_t>& a_formIDs)
+		{
+			if (a_formIDs.empty()) {
+				return "unavailable";
+			}
+			std::ostringstream details;
+			for (std::size_t index = 0; index < a_formIDs.size(); ++index) {
+				const auto* form = RE::TESForm::LookupByID(a_formIDs[index]);
+				if (!form || !form->Is(RE::FormType::Ingredient)) {
+					return "unavailable";
+				}
+				const auto* ingredient = static_cast<const RE::IngredientItem*>(form);
+				const auto* fullName = ingredient->GetFullName();
+				if (!fullName || !*fullName) {
+					return "unavailable";
+				}
+				if (index > 0) {
+					details << ';';
+				}
+				details << "selection=" << (index + 1)
+						<< "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+						<< a_formIDs[index] << std::dec << std::setfill(' ')
+						<< "|name=" << *fullName;
+			}
+			return details.str();
+		}
+
+		inline std::string FormatExportCraftedEffects(const NativePotionResult& a_result)
+		{
+			std::ostringstream ss;
+			for (std::size_t i = 0; i < a_result.effects.size(); ++i) {
+				const auto& eff = a_result.effects[i];
+				if (!eff.baseEffect) continue;
+				if (i > 0) ss << ';';
+				const float flooredMag = std::floor(eff.calcMagnitude);
+				const float flooredDur = eff.calcDuration > 0.0f ? std::floor(eff.calcDuration) : 0.0f;
+				ss << "index=" << i
+				   << "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << eff.baseEffect->GetFormID() << std::dec << std::setfill(' ')
+				   << "|magnitude=" << FormatExportNum(flooredMag)
+				   << "|duration=" << FormatExportNum(flooredDur)
+				   << "|area=" << (eff.sourceEffect ? eff.sourceEffect->effectItem.area : 0)
+				   << "|base_cost=" << FormatExportNum(eff.baseEffect->data.baseCost)
+				   << "|flags=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << static_cast<std::uint32_t>(eff.baseEffect->data.flags.get()) << std::dec << std::setfill(' ');
+			}
+			return ss.str();
+		}
+
+		// Column order must match `kHeader` in PotionConfirmation.cpp.
+		enum ConfirmedColumn : std::size_t {
+			kConfirmedColMode = 0,
+			kConfirmedColIngredients = 1,
+			kConfirmedColActualValue = 2,
+			kConfirmedColAlchemyLevel = 3,
+			kConfirmedColFortifyAlchemyLevel = 4,
+			kConfirmedColAlchemistRank = 5,
+			kConfirmedColPhysician = 6,
+			kConfirmedColBenefactor = 7,
+			kConfirmedColPoisoner = 8,
+			kConfirmedColPurity = 9,
+			kConfirmedColSeekerOfShadows = 10,
+			kConfirmedColModSettings = 11,
+			kConfirmedColAlchemistPerkMultiplier = 12,
+			kConfirmedColIngredientDetails = 13,
+			kConfirmedColPotionFormID = 14,
+			kConfirmedColPotionCostOverride = 15,
+			kConfirmedColCraftedEffects = 16,
+			kConfirmedColIngredientSelectionOrder = 17,
+			kConfirmedColumnCount = 18
+		};
+
+		std::string ModeToFileSuffix(const std::string& a_mode)
+		{
+			if (a_mode == "CACO+AP") return "caco+ap";
+			if (a_mode == "CACO") return "caco";
+			if (a_mode == "AP") return "ap";
+			if (a_mode == "Requiem") return "requiem";
+			if (a_mode == "Apothecary") return "apothecary";
+			return "vanilla";
+		}
+
+		double ParseCsvDouble(const std::string& a_value)
+		{
+			try {
+				return a_value.empty() ? 0.0 : std::stod(a_value);
+			} catch (...) {
+				return 0.0;
+			}
+		}
+
+		int ParseCsvInt(const std::string& a_value)
+		{
+			try {
+				return a_value.empty() ? 0 : std::stoi(a_value);
+			} catch (...) {
+				return 0;
+			}
+		}
+
+		// Extracts every "form=0xXXXXXXXX" occurrence from an ingredient_details field.
+		bool ParseFormIDsFromIngredientDetails(const std::string& a_details, std::vector<std::uint32_t>& a_formIDs)
+		{
+			a_formIDs.clear();
+			std::size_t position = 0;
+			while ((position = a_details.find("form=0x", position)) != std::string::npos) {
+				position += 7;
+				const auto first = position;
+				while (position < a_details.size() && std::isxdigit(static_cast<unsigned char>(a_details[position]))) {
+					++position;
+				}
+				if (first == position) {
+					return false;
+				}
+				try {
+					const auto value = std::stoull(a_details.substr(first, position - first), nullptr, 16);
+					if (value > (std::numeric_limits<std::uint32_t>::max)()) {
+						return false;
+					}
+					a_formIDs.push_back(static_cast<std::uint32_t>(value));
+				} catch (...) {
+					return false;
+				}
+			}
+			return a_formIDs.size() == 2 || a_formIDs.size() == 3;
+		}
+
+		bool ParseIngredientSelectionOrderFormIDs(const std::string& a_selectionOrder, std::vector<std::uint32_t>& a_formIDs)
+		{
+			a_formIDs.clear();
+			if (a_selectionOrder.empty() || a_selectionOrder == "unavailable") {
+				return false;
+			}
+			std::size_t position = 0;
+			std::size_t expected = 1;
+			while (position <= a_selectionOrder.size()) {
+				const auto end = a_selectionOrder.find(';', position);
+				const auto entry = a_selectionOrder.substr(position, end == std::string::npos ? std::string::npos : end - position);
+				if (!entry.empty()) {
+					const auto selPos = entry.find("selection=");
+					const auto formPos = entry.find("form_id=0x");
+					if (selPos == std::string::npos || formPos == std::string::npos) {
+						return false;
+					}
+					if (std::strtoul(entry.c_str() + selPos + 10, nullptr, 10) != expected) {
+						return false; // positions must be contiguous 1..N
+					}
+					auto digitsStart = formPos + 10;
+					auto digitsEnd = digitsStart;
+					while (digitsEnd < entry.size() && std::isxdigit(static_cast<unsigned char>(entry[digitsEnd]))) {
+						++digitsEnd;
+					}
+					if (digitsEnd == digitsStart) {
+						return false;
+					}
+					try {
+						const auto value = std::stoull(entry.substr(digitsStart, digitsEnd - digitsStart), nullptr, 16);
+						if (value > (std::numeric_limits<std::uint32_t>::max)()) {
+							return false;
+						}
+						a_formIDs.push_back(static_cast<std::uint32_t>(value));
+					} catch (...) {
+						return false;
+					}
+					++expected;
+				}
+				if (end == std::string::npos) break;
+				position = end + 1;
+			}
+			return a_formIDs.size() == 2 || a_formIDs.size() == 3;
+		}
+
+		RE::BGSPerk* LookupPerkByFormID(RE::FormID a_formID)
+		{
+			auto* form = RE::TESForm::LookupByID(a_formID);
+			return form ? form->As<RE::BGSPerk>() : nullptr;
+		}
 
 		State state;
 		std::array<int, 18> fixtureQuantities = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
@@ -826,6 +1034,8 @@ namespace alchemist::devhub {
 			case EvaluationAlgorithm::Vanilla: return "vanilla";
 			case EvaluationAlgorithm::AlchemyPlus: return "alchemy_plus";
 			case EvaluationAlgorithm::CACO: return "caco";
+			case EvaluationAlgorithm::Requiem: return "requiem";
+			case EvaluationAlgorithm::Apothecary: return "apothecary";
 			default: return "automatic";
 			}
 		}
@@ -924,7 +1134,6 @@ namespace alchemist::devhub {
 				SetMessage("Could not resolve the plugin path; ingredient CSV not written.");
 				return;
 			}
-			const auto exportSettings = modsettings::GetConfirmationSettings();
 
 			struct IngRow {
 				std::string ingName;
@@ -955,26 +1164,7 @@ namespace alchemist::devhub {
 					const auto* source = eff->baseEffect;
 					const auto* effectName = source->GetFullName();
 					std::vector<ResolvedEffect> resolvedEffects;
-					resolvedEffects.reserve(3);
-					if (caco::Adapter::IsActive()) {
-						for (std::size_t durationIndex = 0; durationIndex < 3; ++durationIndex) {
-							const auto* resolved = caco::Adapter::ResolveIngredientEffect(
-								ingredient, const_cast<RE::EffectSetting*>(source), durationIndex);
-							const auto* active = resolved ? resolved : source;
-							const auto found = std::find_if(resolvedEffects.begin(), resolvedEffects.end(),
-								[active](const ResolvedEffect& a_effect) { return a_effect.effect == active; });
-							if (found != resolvedEffects.end()) {
-								if (!found->cacoDurationIndex && (active != source || resolved != nullptr)) {
-									found->cacoDurationIndex = durationIndex;
-								}
-								continue;
-							}
-							resolvedEffects.push_back({ active,
-								(active != source || resolved != nullptr) ? std::optional<std::size_t>(durationIndex) : std::nullopt });
-						}
-					} else {
-						resolvedEffects.push_back({ source, std::nullopt });
-					}
+					resolvedEffects.push_back({ source, std::nullopt });
 
 					for (const auto& resolved : resolvedEffects) {
 						const auto* active = resolved.effect ? resolved.effect : source;
@@ -990,6 +1180,7 @@ namespace alchemist::devhub {
 						const bool hostile = active->IsHostile();
 
 						std::ostringstream line;
+						line << std::setprecision(std::numeric_limits<float>::max_digits10);
 						line << CsvEscape(ingName) << ","
 							<< ingFormId << ","
 							<< CsvEscape(effectName ? effectName : "") << ","
@@ -1024,9 +1215,7 @@ namespace alchemist::devhub {
 							<< active->data.baseCost << ","
 							<< EffectFlags(active) << ","
 							<< EffectArchetype(active) << ","
-							<< CsvEscape(EffectKeywords(active, true)) << ","
-							<< CsvEscape(exportSettings.caco) << ","
-							<< CsvEscape(exportSettings.alchemyPlus);
+							<< CsvEscape(EffectKeywords(active, true));
 						rows.push_back({ ingName, line.str() });
 					}
 				}
@@ -1044,7 +1233,7 @@ namespace alchemist::devhub {
 				   "effect_index,effect_cost,source_effect_editor_id,source_base_cost,source_flags,"
 				   "source_archetype,source_keyword_form_ids,resolved_effect_name,"
 				   "resolved_effect_editor_id,resolved_base_cost,resolved_flags,resolved_archetype,"
-				   "resolved_keyword_form_ids,caco_settings,alchemy_plus_settings\n";
+				   "resolved_keyword_form_ids\n";
 			for (const auto& row : rows) {
 				buf << row.line << "\n";
 			}
@@ -1052,270 +1241,7 @@ namespace alchemist::devhub {
 			WriteCsvFile(*csvPath, buf.str(), "Exported " + std::to_string(rows.size()) + " effect row(s) to " + csvPath->filename().string() + ".");
 		}
 
-		// Runs prediction calculation and Zstd writing completely off the game thread
-		void ExportPotionPredictionsCSVAsync()
-		{
-			SetMessage("Preparing prediction snapshot...", true);
 
-			// 1. Gather inputs safely on the game thread (< 1ms)
-			std::vector<Ingredient> inputIngredients;
-			if (!GetAutoprovisionSelectors().empty()) {
-				const auto resolvedSelectors = ResolveAutoprovisionSelectors();
-				std::set<Ingredient> autoSet;
-				for (const auto& entry : resolvedSelectors) {
-					for (auto* ingredient : entry.ingredients) {
-						if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
-							autoSet.insert(Ingredient(ingredient));
-						}
-					}
-				}
-				inputIngredients.assign(autoSet.begin(), autoSet.end());
-			} else {
-				auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
-				if (playerCharacter) {
-					auto inventory = playerCharacter->GetInventory();
-					std::set<Ingredient> inventorySet;
-					for (const auto& [form, entry] : inventory) {
-						auto* ingredient = form && form->Is(RE::FormType::Ingredient) ? static_cast<RE::IngredientItem*>(form) : nullptr;
-						if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
-							inventorySet.insert(Ingredient(ingredient));
-						}
-					}
-					inputIngredients.assign(inventorySet.begin(), inventorySet.end());
-				}
-
-				if (inputIngredients.size() < 2) {
-					auto* dataHandler = RE::TESDataHandler::GetSingleton();
-					if (dataHandler) {
-						std::set<Ingredient> dataSet;
-						for (auto* ingredient : dataHandler->GetFormArray<RE::IngredientItem>()) {
-							if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
-								const auto* rawName = ingredient->GetName();
-								if (rawName && rawName[0] != '\0') {
-									dataSet.insert(Ingredient(ingredient));
-								}
-							}
-						}
-						inputIngredients.assign(dataSet.begin(), dataSet.end());
-					}
-				}
-			}
-
-			const auto csvPath = CsvPathForModule(reinterpret_cast<const void*>(&ExportPotionPredictionsCSVAsync), ".potion-predictions.csv.zst");
-			if (!csvPath) {
-				SetMessage("Could not resolve the plugin path; potion prediction CSV not written.");
-				return;
-			}
-
-			const auto exportSettings = modsettings::GetConfirmationSettings();
-			const Player evaluatedPlayer = player;
-
-			// 2. Dispatch the heavy calculations and disk I/O to a background thread
-			std::thread backgroundWorker([inputIngredients = std::move(inputIngredients),
-			                              evaluatedPlayer,
-			                              exportSettings,
-			                              targetPath = *csvPath]() {
-				SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
-
-				const bool multithreaded = kSinglethreaded.GetValue() == 0;
-				const auto calcOutput = CalculateRecipesFromSnapshot(inputIngredients, evaluatedPlayer, multithreaded);
-
-				std::vector<engine::RecipeResult> recipes;
-				recipes.reserve(calcOutput.potions.size());
-				for (const auto& potion : calcOutput.potions) {
-					std::vector<std::uint32_t> formIDs;
-					if (potion.ingredient1.nativeIngredient) {
-						formIDs.push_back(potion.ingredient1.nativeIngredient->GetFormID());
-					}
-					if (potion.ingredient2.nativeIngredient) {
-						formIDs.push_back(potion.ingredient2.nativeIngredient->GetFormID());
-					}
-					if (potion.size == 3 && potion.ingredient3.nativeIngredient) {
-						formIDs.push_back(potion.ingredient3.nativeIngredient->GetFormID());
-					}
-
-					std::string ingNameStr;
-					if (potion.size == 2) {
-						ingNameStr = potion.ingredient1.name + ", " + potion.ingredient2.name;
-					} else if (potion.size == 3) {
-						ingNameStr = potion.ingredient1.name + ", " + potion.ingredient2.name + ", " + potion.ingredient3.name;
-					}
-
-					engine::RecipeResult recipe;
-					recipe.name = potion.name;
-					recipe.ingredients = std::move(ingNameStr);
-					recipe.ingredientFormIDs = std::move(formIDs);
-					recipes.push_back(std::move(recipe));
-				}
-
-				std::sort(recipes.begin(), recipes.end(), [](const engine::RecipeResult& a, const engine::RecipeResult& b) {
-					return a.ingredients < b.ingredients;
-				});
-
-				const bool cacoActive = caco::Adapter::IsActive();
-				const bool apActive = alchemyplus::Adapter::IsActive();
-				std::string modeStr = "Vanilla";
-				if (cacoActive && apActive) {
-					modeStr = "CACO+AP";
-				} else if (cacoActive) {
-					modeStr = "CACO";
-				} else if (apActive) {
-					modeStr = "AP";
-				}
-
-				auto formatNum = [](float a_value) {
-					if (a_value == static_cast<float>(static_cast<int>(a_value))) {
-						return std::to_string(static_cast<int>(a_value));
-					}
-					std::ostringstream ss;
-					ss << std::setprecision(std::numeric_limits<float>::max_digits10) << a_value;
-					return ss.str();
-				};
-
-				auto formatSelectionOrder = [](const std::vector<std::uint32_t>& a_formIDs) -> std::string {
-					if (a_formIDs.empty()) {
-						return "unavailable";
-					}
-					std::ostringstream details;
-					for (std::size_t index = 0; index < a_formIDs.size(); ++index) {
-						const auto* form = RE::TESForm::LookupByID(a_formIDs[index]);
-						if (!form || !form->Is(RE::FormType::Ingredient)) {
-							return "unavailable";
-						}
-						const auto* ingredient = static_cast<const RE::IngredientItem*>(form);
-						const auto* fullName = ingredient->GetFullName();
-						if (!fullName || !*fullName) {
-							return "unavailable";
-						}
-						if (index > 0) {
-							details << ';';
-						}
-						details << "selection=" << (index + 1)
-								<< "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
-								<< a_formIDs[index] << std::dec << std::setfill(' ')
-								<< "|name=" << *fullName;
-					}
-					return details.str();
-				};
-
-				auto formatCraftedEffects = [&](const NativePotionResult& a_result) {
-					std::ostringstream ss;
-					for (std::size_t i = 0; i < a_result.effects.size(); ++i) {
-						const auto& eff = a_result.effects[i];
-						if (!eff.baseEffect) continue;
-						if (i > 0) ss << ';';
-						ss << "index=" << i
-						   << "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << eff.baseEffect->GetFormID() << std::dec << std::setfill(' ')
-						   << "|magnitude=" << formatNum(eff.calcMagnitude)
-						   << "|duration=" << formatNum(eff.calcDuration)
-						   << "|area=" << (eff.sourceEffect ? eff.sourceEffect->effectItem.area : 0)
-						   << "|base_cost=" << formatNum(eff.baseEffect->data.baseCost)
-						   << "|flags=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << static_cast<std::uint32_t>(eff.baseEffect->data.flags.get()) << std::dec << std::setfill(' ');
-					}
-					return ss.str();
-				};
-
-				std::unique_ptr<ZstdWriter> writer;
-				try {
-					writer = std::make_unique<ZstdWriter>(targetPath, 3);
-				} catch (const std::exception& ex) {
-					SetMessage(std::string("Failed to create ZstdWriter: ") + ex.what());
-					return;
-				}
-
-				nlohmann::json config0 = {
-					{ "mode", modeStr },
-					{ "alchemy_level", evaluatedPlayer.alchemyLevel },
-					{ "fortify_alchemy_level", evaluatedPlayer.fortifyAlchemyLevel },
-					{ "alchemist_rank", static_cast<int>(evaluatedPlayer.alchemistPerkLevel) },
-					{ "physician", evaluatedPlayer.hasPerkPhysician ? 1 : 0 },
-					{ "benefactor", evaluatedPlayer.hasPerkBenefactor ? 1 : 0 },
-					{ "poisoner", evaluatedPlayer.hasPerkPoisoner ? 1 : 0 },
-					{ "purity", evaluatedPlayer.hasPerkPurity ? 1 : 0 },
-					{ "seeker_of_shadows", evaluatedPlayer.hasSeekerOfShadows ? 1 : 0 },
-					{ "concentrated_poison", evaluatedPlayer.hasPerkConcentratedPoison ? 1 : 0 },
-					{ "caco_settings", exportSettings.caco },
-					{ "alchemy_plus_settings", exportSettings.alchemyPlus },
-					{ "alchemist_perk_multiplier", evaluatedPlayer.alchemistPerkMultiplier }
-				};
-				nlohmann::json metadataHeader = {
-					{ "configs", { { "0", config0 } } }
-				};
-				writer->writeLine(metadataHeader.dump());
-				writer->writeLine("mode,ingredients,predicted_value,config_id,ingredient_details,potion_form_id,potion_cost_override,crafted_effects,ingredient_selection_order");
-
-				std::size_t exportedRows = 0;
-				for (const auto& recipe : recipes) {
-					std::vector<Ingredient> recipeIngs;
-					recipeIngs.reserve(recipe.ingredientFormIDs.size());
-					for (const auto fid : recipe.ingredientFormIDs) {
-						auto* form = RE::TESForm::LookupByID(fid);
-						auto* ingItem = form ? form->As<RE::IngredientItem>() : nullptr;
-						if (ingItem) {
-							recipeIngs.emplace_back(ingItem);
-						}
-					}
-					if (recipeIngs.size() != recipe.ingredientFormIDs.size() || recipeIngs.empty()) {
-						continue;
-					}
-
-					std::vector<std::size_t> indices(recipeIngs.size());
-					std::iota(indices.begin(), indices.end(), 0);
-
-					do {
-						std::vector<const Ingredient*> permPointers;
-						permPointers.reserve(indices.size());
-						std::vector<std::uint32_t> permFormIDs;
-						permFormIDs.reserve(indices.size());
-
-						std::ostringstream permIngNames;
-						std::ostringstream permIngDetails;
-
-						for (std::size_t i = 0; i < indices.size(); ++i) {
-							const auto idx = indices[i];
-							permPointers.push_back(&recipeIngs[idx]);
-							permFormIDs.push_back(recipeIngs[idx].nativeIngredient->GetFormID());
-
-							if (i > 0) {
-								permIngNames << ", ";
-								permIngDetails << "; ";
-							}
-							permIngNames << recipeIngs[idx].name;
-							permIngDetails << recipeIngs[idx].name << " [form=0x"
-										   << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
-										   << recipeIngs[idx].nativeIngredient->GetFormID() << std::dec << std::setfill(' ')
-										   << ", count=1]";
-						}
-
-						const auto nativeResult = effect::evaluatePotion(permPointers, evaluatedPlayer);
-						if (!nativeResult.valid) {
-							continue;
-						}
-
-						const int displayedVal = static_cast<int>(std::floor(nativeResult.cost));
-
-						std::ostringstream rowBuf;
-						rowBuf << CsvEscapeSingleLine(modeStr) << ","
-							   << CsvEscapeSingleLine(permIngNames.str()) << ","
-							   << displayedVal << ","
-							   << "0,"
-							   << CsvEscapeSingleLine(permIngDetails.str()) << ","
-							   << "0x00000000,0,"
-							   << CsvEscapeSingleLine(formatCraftedEffects(nativeResult)) << ","
-							   << CsvEscapeSingleLine(formatSelectionOrder(permFormIDs));
-
-						writer->writeLine(rowBuf.str());
-						++exportedRows;
-
-					} while (std::next_permutation(indices.begin(), indices.end()));
-				}
-
-				writer->close();
-				SetMessage("Exported " + std::to_string(exportedRows) + " prediction permutation(s) to " + targetPath.filename().string() + ".");
-			});
-
-			backgroundWorker.detach();
-		}
 
 		bool QueueTask(std::function<void()> a_task, const std::string& a_description)
 		{
@@ -1732,7 +1658,7 @@ namespace alchemist::devhub {
 					taskInterface->AddTask([a_onComplete]() {
 						RefreshSelectedPredictionAfterRecalculate();
 						RefreshInventoryOnGameThread(false);
-						menu::RefreshAlchemyMenu(player.hasPerkPurity);
+						menu::RefreshAlchemyMenu();
 						if (a_onComplete) {
 							a_onComplete();
 						}
@@ -1819,7 +1745,6 @@ namespace alchemist::devhub {
 				evaluated.hasPerkBenefactor = evaluated.alchemyEvaluationContext.hasBenefactor;
 				evaluated.hasPerkPoisoner = evaluated.alchemyEvaluationContext.hasPoisoner;
 				evaluated.hasPerkPurity = evaluated.alchemyEvaluationContext.hasPurity;
-				evaluated.hasPerkConcentratedPoison = evaluated.alchemyEvaluationContext.hasConcentratedPoison;
 				evaluated.hasSeekerOfShadows = evaluated.alchemyEvaluationContext.hasSeekerOfShadows;
 			}
 			if (a_record.creationAlchemySkill >= 0) {
@@ -1844,6 +1769,646 @@ namespace alchemist::devhub {
 			state.message = "Hub ready. Test ingredients remain available until explicitly removed.";
 		}
 	}
+
+	// Runs prediction calculation and Zstd writing completely off the game thread using the plugin's predictor engine
+	void ExportPotionPredictionsCSVAsync()
+	{
+		{
+			std::scoped_lock lock(state.mutex);
+			state.isExporting = true;
+			state.exportProgressFraction = 0.0f;
+			state.exportTotalRecipes = 0;
+			state.exportCurrentRecipe = 0;
+			state.exportTaskName = "Exporting predictions";
+		}
+		SetMessage("Preparing prediction snapshot...", true);
+
+		std::vector<Ingredient> inputIngredients;
+		if (!GetAutoprovisionSelectors().empty()) {
+			const auto resolvedSelectors = ResolveAutoprovisionSelectors();
+			std::set<Ingredient> autoSet;
+			for (const auto& entry : resolvedSelectors) {
+				for (auto* ingredient : entry.ingredients) {
+					if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
+						autoSet.insert(Ingredient(ingredient));
+					}
+				}
+			}
+			inputIngredients.assign(autoSet.begin(), autoSet.end());
+		} else {
+			auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
+			if (playerCharacter) {
+				auto inventory = playerCharacter->GetInventory();
+				std::set<Ingredient> inventorySet;
+				for (const auto& [form, entry] : inventory) {
+					auto* ingredient = form && form->Is(RE::FormType::Ingredient) ? static_cast<RE::IngredientItem*>(form) : nullptr;
+					if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
+						inventorySet.insert(Ingredient(ingredient));
+					}
+				}
+				inputIngredients.assign(inventorySet.begin(), inventorySet.end());
+			}
+
+			if (inputIngredients.size() < 2) {
+				auto* dataHandler = RE::TESDataHandler::GetSingleton();
+				if (dataHandler) {
+					std::set<Ingredient> dataSet;
+					for (auto* ingredient : dataHandler->GetFormArray<RE::IngredientItem>()) {
+						if (ingredient && !ingredient->IsDeleted() && ingredient->GetPlayable() && !ingredient->effects.empty()) {
+							const auto* rawName = ingredient->GetName();
+							if (rawName && rawName[0] != '\0') {
+								dataSet.insert(Ingredient(ingredient));
+							}
+						}
+					}
+					inputIngredients.assign(dataSet.begin(), dataSet.end());
+				}
+			}
+		}
+
+		const auto csvPath = CsvPathForModule(reinterpret_cast<const void*>(&ExportPotionPredictionsCSVAsync), ".potion-predictions.csv.zst");
+		if (!csvPath) {
+			std::scoped_lock lock(state.mutex);
+			state.isExporting = false;
+			state.exportProgressFraction = 0.0f;
+			state.message = "Could not resolve the plugin path; potion prediction CSV not written.";
+			state.busy = false;
+			return;
+		}
+
+		initAlchemist();
+		modsettings::RefreshAndSynchronize(player);
+		const auto exportSettings = modsettings::GetConfirmationSettings();
+		const Player evaluatedPlayer = player;
+
+		std::thread backgroundWorker([inputIngredients = std::move(inputIngredients),
+		                              evaluatedPlayer,
+		                              exportSettings,
+		                              targetPath = *csvPath]() {
+			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+
+			if (!IsSystemMemorySafe()) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = "Export aborted: low system memory.";
+				state.busy = false;
+				return;
+			}
+
+			const bool multithreaded = kSinglethreaded.GetValue() == 0;
+			const auto calcOutput = CalculateRecipesFromSnapshot(inputIngredients, evaluatedPlayer, multithreaded);
+
+			std::vector<Potion> potionsList(calcOutput.potions.begin(), calcOutput.potions.end());
+			const std::size_t totalRecipes = potionsList.size();
+			{
+				std::scoped_lock lock(state.mutex);
+				state.exportTotalRecipes = totalRecipes;
+				state.exportCurrentRecipe = 0;
+				state.exportProgressFraction = 0.0f;
+			}
+
+			const bool reqActive = requiem::Adapter::IsActive();
+			const bool apotActive = apothecary::Adapter::IsActive();
+			const bool cacoActive = caco::Adapter::IsActive();
+			const bool apActive = alchemyplus::Adapter::IsActive();
+			std::string modeStr = "Vanilla";
+			if (reqActive) {
+				modeStr = "Requiem";
+			} else if (apotActive) {
+				modeStr = "Apothecary";
+			} else if (cacoActive && apActive) {
+				modeStr = "CACO+AP";
+			} else if (cacoActive) {
+				modeStr = "CACO";
+			} else if (apActive) {
+				modeStr = "AP";
+			}
+
+			auto formatNum = [](float a_value) {
+				if (a_value == static_cast<float>(static_cast<int>(a_value))) {
+					return std::to_string(static_cast<int>(a_value));
+				}
+				std::ostringstream ss;
+				ss << std::setprecision(std::numeric_limits<float>::max_digits10) << a_value;
+				return ss.str();
+			};
+
+			auto formatSelectionOrder = [](const std::vector<std::uint32_t>& a_formIDs) -> std::string {
+				if (a_formIDs.empty()) {
+					return "unavailable";
+				}
+				std::ostringstream details;
+				for (std::size_t index = 0; index < a_formIDs.size(); ++index) {
+					const auto* form = RE::TESForm::LookupByID(a_formIDs[index]);
+					if (!form || !form->Is(RE::FormType::Ingredient)) {
+						return "unavailable";
+					}
+					const auto* ingredient = static_cast<const RE::IngredientItem*>(form);
+					const auto* fullName = ingredient->GetFullName();
+					if (!fullName || !*fullName) {
+						return "unavailable";
+					}
+					if (index > 0) {
+						details << ';';
+					}
+					details << "selection=" << (index + 1)
+							<< "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+							<< a_formIDs[index] << std::dec << std::setfill(' ')
+							<< "|name=" << *fullName;
+				}
+				return details.str();
+			};
+
+			auto formatPredictedEffects = [&](const EffectList& a_effects) {
+				std::ostringstream ss;
+				for (std::size_t i = 0; i < a_effects.size(); ++i) {
+					const auto& eff = a_effects[i];
+					if (!eff.baseEffect) continue;
+					if (i > 0) ss << ';';
+					ss << "index=" << i
+					   << "|form_id=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << eff.baseEffect->GetFormID() << std::dec << std::setfill(' ')
+					   << "|magnitude=" << formatNum(eff.calcMagnitude)
+					   << "|duration=" << formatNum(eff.calcDuration)
+					   << "|area=0"
+					   << "|base_cost=" << formatNum(eff.baseEffect->data.baseCost)
+					   << "|flags=0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << static_cast<std::uint32_t>(eff.baseEffect->data.flags.get()) << std::dec << std::setfill(' ');
+				}
+				return ss.str();
+			};
+
+			std::unique_ptr<ZstdWriter> writer;
+			try {
+				writer = std::make_unique<ZstdWriter>(targetPath, 3);
+			} catch (const std::exception& ex) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = std::string("Failed to create ZstdWriter: ") + ex.what();
+				state.busy = false;
+				return;
+			}
+
+			const std::string alchemyLevelStr = formatNum(evaluatedPlayer.alchemyLevel);
+			const std::string fortifyAlchemyLevelStr = formatNum(evaluatedPlayer.fortifyAlchemyLevel);
+			const std::string alchemistRankStr = std::to_string(static_cast<int>(evaluatedPlayer.alchemistPerkLevel));
+			const std::string physicianStr = evaluatedPlayer.hasPerkPhysician ? "1" : "0";
+			const std::string benefactorStr = evaluatedPlayer.hasPerkBenefactor ? "1" : "0";
+			const std::string poisonerStr = evaluatedPlayer.hasPerkPoisoner ? "1" : "0";
+			const std::string purityStr = evaluatedPlayer.hasPerkPurity ? "1" : "0";
+			const std::string seekerStr = evaluatedPlayer.hasSeekerOfShadows ? "1" : "0";
+			const std::string modSettingsStr = CsvEscapeSingleLine(exportSettings.modSettings);
+			const std::string perkMultStr = formatNum(evaluatedPlayer.alchemistPerkMultiplier);
+
+			writer->writeLine(
+				"mode,ingredients,actual_value,alchemy_level,fortify_alchemy_level,alchemist_rank,"
+				"physician,benefactor,poisoner,purity,seeker_of_shadows,"
+				"mod_settings,alchemist_perk_multiplier,"
+				"ingredient_details,potion_form_id,potion_cost_override,crafted_effects,ingredient_selection_order");
+
+			std::size_t exportedRows = 0;
+			for (std::size_t recipeIdx = 0; recipeIdx < potionsList.size(); ++recipeIdx) {
+				const auto& potion = potionsList[recipeIdx];
+
+				if ((recipeIdx & 0x1FF) == 0) {
+					if (!IsSystemMemorySafe()) {
+						writer->close();
+						std::scoped_lock lock(state.mutex);
+						state.isExporting = false;
+						state.exportProgressFraction = 0.0f;
+						state.message = "Export aborted during processing: low system memory.";
+						state.busy = false;
+						return;
+					}
+				}
+
+				const float frac = totalRecipes > 0 ? static_cast<float>(recipeIdx + 1) / static_cast<float>(totalRecipes) : 1.0f;
+				state.exportProgressFraction.store(frac, std::memory_order_relaxed);
+				{
+					std::scoped_lock lock(state.mutex);
+					state.exportCurrentRecipe = recipeIdx + 1;
+					state.message = "Exporting predictions: " + std::to_string(recipeIdx + 1) + " / " + std::to_string(totalRecipes) + " recipes...";
+				}
+
+				std::vector<std::uint32_t> baseFormIDs;
+				if (potion.ingredient1.nativeIngredient) {
+					baseFormIDs.push_back(potion.ingredient1.nativeIngredient->GetFormID());
+				}
+				if (potion.ingredient2.nativeIngredient) {
+					baseFormIDs.push_back(potion.ingredient2.nativeIngredient->GetFormID());
+				}
+				if (potion.size == 3 && potion.ingredient3.nativeIngredient) {
+					baseFormIDs.push_back(potion.ingredient3.nativeIngredient->GetFormID());
+				}
+				if (baseFormIDs.empty()) {
+					continue;
+				}
+
+				std::vector<std::size_t> indices(baseFormIDs.size());
+				std::iota(indices.begin(), indices.end(), 0);
+
+				const int displayedVal = static_cast<int>(std::floor(potion.cost));
+				const std::string ingNames = (potion.size == 3) ?
+					potion.ingredient1.name + ", " + potion.ingredient2.name + ", " + potion.ingredient3.name :
+					potion.ingredient1.name + ", " + potion.ingredient2.name;
+
+				std::ostringstream ingDetails;
+				if (potion.ingredient1.nativeIngredient) {
+					ingDetails << potion.ingredient1.name << " [form=0x"
+							   << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+							   << potion.ingredient1.nativeIngredient->GetFormID() << std::dec << std::setfill(' ')
+							   << ", count=1]";
+				}
+				if (potion.ingredient2.nativeIngredient) {
+					if (ingDetails.tellp() > 0) ingDetails << "; ";
+					ingDetails << potion.ingredient2.name << " [form=0x"
+							   << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+							   << potion.ingredient2.nativeIngredient->GetFormID() << std::dec << std::setfill(' ')
+							   << ", count=1]";
+				}
+				if (potion.size == 3 && potion.ingredient3.nativeIngredient) {
+					if (ingDetails.tellp() > 0) ingDetails << "; ";
+					ingDetails << potion.ingredient3.name << " [form=0x"
+							   << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+							   << potion.ingredient3.nativeIngredient->GetFormID() << std::dec << std::setfill(' ')
+							   << ", count=1]";
+				}
+
+				do {
+					std::vector<std::uint32_t> permFormIDs;
+					permFormIDs.reserve(indices.size());
+					std::vector<const Ingredient*> permIngredients;
+					permIngredients.reserve(indices.size());
+					for (std::size_t i = 0; i < indices.size(); ++i) {
+						permFormIDs.push_back(baseFormIDs[indices[i]]);
+						const std::size_t idx = indices[i];
+						if (idx == 0) permIngredients.push_back(&potion.ingredient1);
+						else if (idx == 1) permIngredients.push_back(&potion.ingredient2);
+						else if (idx == 2) permIngredients.push_back(&potion.ingredient3);
+					}
+
+					const auto permResult = effect::evaluatePotion(permIngredients, evaluatedPlayer, false, EvaluationAlgorithm::Automatic);
+					const int currentVal = permResult.valid ? static_cast<int>(std::floor(permResult.cost)) : displayedVal;
+					const auto& currentEffects = permResult.valid ? permResult.effects : potion.effects;
+
+					std::ostringstream rowBuf;
+					rowBuf << CsvEscapeSingleLine(modeStr) << ","
+						   << CsvEscapeSingleLine(ingNames) << ","
+						   << currentVal << ","
+						   << alchemyLevelStr << ","
+						   << fortifyAlchemyLevelStr << ","
+						   << alchemistRankStr << ","
+						   << physicianStr << ","
+						   << benefactorStr << ","
+						   << poisonerStr << ","
+						   << purityStr << ","
+						   << seekerStr << ","
+						   << modSettingsStr << ","
+						   << perkMultStr << ","
+						   << CsvEscapeSingleLine(ingDetails.str()) << ","
+						   << "0x00000000,0,"
+						   << CsvEscapeSingleLine(formatPredictedEffects(currentEffects)) << ","
+						   << CsvEscapeSingleLine(formatSelectionOrder(permFormIDs));
+
+					writer->writeLine(rowBuf.str());
+					++exportedRows;
+				} while (std::next_permutation(indices.begin(), indices.end()));
+			}
+
+			writer->close();
+			{
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 1.0f;
+				state.message = "Exported " + std::to_string(exportedRows) + " prediction permutation(s) to " + targetPath.filename().string() + ".";
+				state.busy = false;
+			}
+		});
+
+		backgroundWorker.detach();
+	}
+
+	void ExportConfirmedPotionPredictionsCSVAsync()
+	{
+		{
+			std::scoped_lock lock(state.mutex);
+			state.isExporting = true;
+			state.exportProgressFraction = 0.0f;
+			state.exportTotalRecipes = 0;
+			state.exportCurrentRecipe = 0;
+			state.exportTaskName = "Verifying confirmed potions";
+		}
+		SetMessage("Reading alchemist.potions-confirmed.csv...", true);
+
+		// Cheap, synchronous refresh so "current mode" and the calculation paths that
+		// evaluatePotion() takes reflect what's actually loaded right now.
+		caco::Adapter::Refresh();
+		alchemyplus::Adapter::Refresh();
+		requiem::Adapter::Refresh();
+		apothecary::Adapter::Refresh();
+		const std::string activeMode = confirmations::GetActiveModeLabel();
+
+		std::thread backgroundWorker([activeMode]() {
+			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+
+			std::vector<std::vector<std::string>> records;
+			if (!confirmations::ReadConfirmedPotionRecords(records) || records.size() <= 1) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = "No rows were found in alchemist.potions-confirmed.csv.";
+				state.busy = false;
+				return;
+			}
+
+			std::vector<std::size_t> matchingRows;
+			for (std::size_t i = 1; i < records.size(); ++i) {
+				if (records[i].size() >= kConfirmedColumnCount && records[i][kConfirmedColMode] == activeMode) {
+					matchingRows.push_back(i);
+				}
+			}
+
+			const auto suffix = ModeToFileSuffix(activeMode);
+			const std::string extension = ".potions-predicted." + suffix + ".csv";
+			const auto csvPath = CsvPathForModule(reinterpret_cast<const void*>(&ExportConfirmedPotionPredictionsCSVAsync), extension.c_str());
+			if (!csvPath) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = "Could not resolve the plugin path; nothing was written.";
+				state.busy = false;
+				return;
+			}
+			if (matchingRows.empty()) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = "No confirmed rows are recorded under the current mode (" + activeMode + ").";
+				state.busy = false;
+				return;
+			}
+
+			std::ofstream csv(*csvPath, std::ios::binary | std::ios::trunc);
+			if (!csv) {
+				std::scoped_lock lock(state.mutex);
+				state.isExporting = false;
+				state.exportProgressFraction = 0.0f;
+				state.message = "Could not open " + csvPath->string() + " for writing.";
+				state.busy = false;
+				return;
+			}
+
+			csv << "mode,ingredients,actual_value,predicted_value,difference,match,"
+				   "alchemy_level,fortify_alchemy_level,alchemist_rank,physician,benefactor,poisoner,"
+				   "purity,seeker_of_shadows,alchemist_perk_multiplier,"
+				   "ingredient_details,potion_form_id,potion_cost_override,crafted_effects,"
+				   "predicted_effects,ingredient_selection_order,resolution_status\n";
+
+			struct ExportCleanupGuard {
+				caco::SavedStateSnapshot cacoSnapshot;
+				~ExportCleanupGuard() {
+					caco::Adapter::RestoreStateSnapshot(cacoSnapshot);
+					alchemyplus::Adapter::RestoreConfiguration();
+				}
+			};
+			ExportCleanupGuard cleanupGuard{ caco::Adapter::SaveStateSnapshot() };
+
+			const auto total = matchingRows.size();
+			std::size_t mismatchCount = 0;
+			std::size_t unresolvedCount = 0;
+
+			for (std::size_t processed = 0; processed < total; ++processed) {
+				const auto& row = records[matchingRows[processed]];
+
+				if ((processed & 0x1FF) == 0 && !IsSystemMemorySafe()) {
+					csv.close();
+					std::scoped_lock lock(state.mutex);
+					state.isExporting = false;
+					state.exportProgressFraction = 0.0f;
+					state.message = "Export aborted: low system memory.";
+					state.busy = false;
+					return;
+				}
+				{
+					std::scoped_lock lock(state.mutex);
+					state.exportTotalRecipes = total;
+					state.exportCurrentRecipe = processed + 1;
+					state.exportProgressFraction.store(static_cast<float>(processed + 1) / static_cast<float>(total), std::memory_order_relaxed);
+					state.message = "Verifying confirmed potions: " + std::to_string(processed + 1) + " / " + std::to_string(total);
+				}
+
+				// --- Rebuild the exact Player this row was crafted with ---
+				Player evaluatedPlayer;
+				evaluatedPlayer.alchemyLevel = static_cast<float>(ParseCsvDouble(row[kConfirmedColAlchemyLevel]));
+				evaluatedPlayer.fortifyAlchemyLevel = static_cast<float>(ParseCsvDouble(row[kConfirmedColFortifyAlchemyLevel]));
+				evaluatedPlayer.alchemistPerkLevel = static_cast<float>(ParseCsvInt(row[kConfirmedColAlchemistRank]));
+				evaluatedPlayer.alchemistPerkMultiplier = static_cast<float>(ParseCsvDouble(row[kConfirmedColAlchemistPerkMultiplier]));
+				evaluatedPlayer.hasPerkPhysician = row[kConfirmedColPhysician] == "1";
+				evaluatedPlayer.hasPerkBenefactor = row[kConfirmedColBenefactor] == "1";
+				evaluatedPlayer.hasPerkPoisoner = row[kConfirmedColPoisoner] == "1";
+				evaluatedPlayer.hasPerkPurity = row[kConfirmedColPurity] == "1";
+				evaluatedPlayer.hasSeekerOfShadows = row[kConfirmedColSeekerOfShadows] == "1";
+
+				auto& context = evaluatedPlayer.alchemyEvaluationContext;
+				context = {};
+				context.alchemistPerkRank = static_cast<int>(evaluatedPlayer.alchemistPerkLevel);
+				context.fortifyAlchemyLevel = evaluatedPlayer.fortifyAlchemyLevel;
+				context.hasPhysician = evaluatedPlayer.hasPerkPhysician;
+				context.hasBenefactor = evaluatedPlayer.hasPerkBenefactor;
+				context.hasPoisoner = evaluatedPlayer.hasPerkPoisoner;
+				context.hasPurity = evaluatedPlayer.hasPerkPurity;
+				context.hasSeekerOfShadows = evaluatedPlayer.hasSeekerOfShadows;
+				// So CACO's real entry-point path (not just the fallback multiplier) sees these.
+				if (context.alchemistPerkRank >= 1) {
+					static constexpr std::array<std::uint32_t, 5> alchemistPerkFormIDs = {
+						0x000BE127, 0x000C07CA, 0x000C07CB, 0x000C07CC, 0x000C07CD
+					};
+					const int rankIndex = (std::min)((std::max)(1, context.alchemistPerkRank), 5) - 1;
+					if (auto* p = LookupPerkByFormID(alchemistPerkFormIDs[rankIndex])) {
+						context.activePerks.push_back(p);
+					}
+				}
+				if (context.hasPhysician) { if (auto* p = LookupPerkByFormID(0x00058215)) context.activePerks.push_back(p); }
+				if (context.hasBenefactor) { if (auto* p = LookupPerkByFormID(0x00058216)) context.activePerks.push_back(p); }
+				if (context.hasPoisoner) { if (auto* p = LookupPerkByFormID(0x00058217)) context.activePerks.push_back(p); }
+				if (context.hasPurity) { if (auto* p = LookupPerkByFormID(0x0005821D)) context.activePerks.push_back(p); }
+				context.seeker.perk = seeker::GetPerk();
+				context.seeker.nativeContract = context.hasSeekerOfShadows;
+				context.captured = true;
+
+				nlohmann::json parsedModSettings = nlohmann::json::object();
+				try {
+					if (row.size() > kConfirmedColModSettings && !row[kConfirmedColModSettings].empty()) {
+						parsedModSettings = nlohmann::json::parse(row[kConfirmedColModSettings]);
+					}
+				} catch (...) {}
+
+				auto parseJsonFloat = [](const nlohmann::json& obj, const char* key, float defaultVal) -> float {
+					if (obj.is_object()) {
+						const auto it = obj.find(key);
+						if (it != obj.end()) {
+							if (it->is_number()) return it->get<float>();
+							if (it->is_string()) {
+								try { return std::stof(it->get<std::string>()); } catch (...) {}
+							}
+						}
+					}
+					return defaultVal;
+				};
+
+				float initMult = parseJsonFloat(parsedModSettings, "AlchemyIngredientInitMultiplier", 4.0f);
+				float skillFactor = parseJsonFloat(parsedModSettings, "AlchemySkillFactor", 1.5f);
+
+				caco::Adapter::SetGameSettings(initMult, skillFactor);
+				requiem::Adapter::SetGameSettings(initMult, skillFactor);
+				apothecary::Adapter::SetGameSettings(initMult, skillFactor);
+
+				evaluatedPlayer.requiemContext = {};
+				if (activeMode == "Requiem") {
+					try {
+						const auto& reqObj = (parsedModSettings.contains("requiem") && parsedModSettings["requiem"].is_object()) ? parsedModSettings["requiem"] :
+											 ((parsedModSettings.contains("Requiem") && parsedModSettings["Requiem"].is_object()) ? parsedModSettings["Requiem"] : parsedModSettings);
+						auto& req = evaluatedPlayer.requiemContext;
+
+						auto parseJsonInt = [](const nlohmann::json& obj, const char* key, int defaultVal) -> int {
+							if (obj.is_object()) {
+								const auto it = obj.find(key);
+								if (it != obj.end()) {
+									if (it->is_number_integer()) return it->get<int>();
+									if (it->is_number()) return static_cast<int>(it->get<double>());
+									if (it->is_string()) {
+										try { return std::stoi(it->get<std::string>()); } catch (...) {}
+									}
+								}
+							}
+							return defaultVal;
+						};
+
+						auto parseJsonBool = [](const nlohmann::json& obj, const char* key, bool defaultVal) -> bool {
+							if (obj.is_object()) {
+								const auto it = obj.find(key);
+								if (it != obj.end()) {
+									if (it->is_boolean()) return it->get<bool>();
+									if (it->is_number()) return it->get<int>() != 0;
+									if (it->is_string()) {
+										const std::string s = it->get<std::string>();
+										return s == "1" || s == "true" || s == "True";
+									}
+								}
+							}
+							return defaultVal;
+						};
+
+						req.alchemicalLoreRank = parseJsonInt(reqObj, "AlchemicalLoreRank", 0);
+						req.hasAlchemicalLore1 = req.alchemicalLoreRank >= 1;
+						req.hasAlchemicalLore2 = req.alchemicalLoreRank >= 2;
+						req.hasImprovedElixirs = parseJsonBool(reqObj, "HasImprovedElixirs", false);
+						req.hasImprovedPoisons = parseJsonBool(reqObj, "HasImprovedPoisons", false);
+						req.hasPurificationProcess = parseJsonBool(reqObj, "HasPurificationProcess", false);
+						req.hasUnperkedKeyword = parseJsonBool(reqObj, "HasUnperkedCraftingKeyword", false);
+						req.fortifyAlchemyLevel = evaluatedPlayer.fortifyAlchemyLevel;
+						req.captured = true;
+					} catch (...) {}
+				}
+
+				if (activeMode == "CACO" || activeMode == "CACO+AP") {
+					caco::Adapter::ApplySettingsJson(parsedModSettings);
+				}
+
+				if (activeMode == "AP" || activeMode == "CACO+AP") {
+					const auto& apObj = (parsedModSettings.contains("alchemyPlus") && parsedModSettings["alchemyPlus"].is_object()) ? parsedModSettings["alchemyPlus"] : parsedModSettings;
+					alchemyplus::Adapter::ApplyConfigurationJson(apObj);
+				}
+
+				// --- Rebuild the ingredients from ingredient_details ---
+				std::vector<std::uint32_t> formIDs;
+				std::vector<Ingredient> parsedIngredients;
+				std::string resolutionStatus = "ok";
+				if (!ParseFormIDsFromIngredientDetails(row[kConfirmedColIngredientDetails], formIDs)) {
+					resolutionStatus = "ingredient_details_unparseable";
+				} else {
+					std::vector<std::uint32_t> selectionFormIDs;
+					if (ParseIngredientSelectionOrderFormIDs(row[kConfirmedColIngredientSelectionOrder], selectionFormIDs)) {
+						auto sortedA = formIDs, sortedB = selectionFormIDs;
+						std::sort(sortedA.begin(), sortedA.end());
+						std::sort(sortedB.begin(), sortedB.end());
+						if (sortedA == sortedB) {
+							formIDs = selectionFormIDs;  // evaluate in the order the player actually selected
+						}
+					}
+					for (const auto formID : formIDs) {
+						auto* form = RE::TESForm::LookupByID(formID);
+						auto* ingredient = form ? form->As<RE::IngredientItem>() : nullptr;
+						if (!ingredient) {
+							resolutionStatus = "ingredients_unavailable";
+							break;
+						}
+						parsedIngredients.emplace_back(ingredient);
+					}
+				}
+
+				double predictedValue = 0.0;
+				std::string predictedEffects = "unavailable";
+				bool haveResult = false;
+				if (resolutionStatus == "ok" && (parsedIngredients.size() == 2 || parsedIngredients.size() == 3)) {
+					std::vector<const Ingredient*> pointers;
+					pointers.reserve(parsedIngredients.size());
+					for (const auto& ingredient : parsedIngredients) {
+						pointers.push_back(&ingredient);
+					}
+					const auto nativeResult = effect::evaluatePotion(pointers, evaluatedPlayer, false, EvaluationAlgorithm::Automatic);
+					if (nativeResult.valid && std::isfinite(nativeResult.cost)) {
+						predictedValue = std::floor(nativeResult.cost);
+						predictedEffects = FormatExportCraftedEffects(nativeResult);
+						haveResult = true;
+					} else {
+						resolutionStatus = "evaluation_failed";
+					}
+				}
+
+				const double actualValue = ParseCsvDouble(row[kConfirmedColActualValue]);
+				const double difference = haveResult ? predictedValue - actualValue : 0.0;
+				const bool match = haveResult && std::abs(difference) < 0.5;
+				if (!match) ++mismatchCount;
+				if (!haveResult) ++unresolvedCount;
+
+				csv << CsvEscapeSingleLine(row[kConfirmedColMode]) << ","
+					<< CsvEscapeSingleLine(row[kConfirmedColIngredients]) << ","
+					<< row[kConfirmedColActualValue] << ","
+					<< (haveResult ? std::to_string(static_cast<long long>(predictedValue)) : std::string("unavailable")) << ","
+					<< (haveResult ? std::to_string(static_cast<long long>(difference)) : std::string("unavailable")) << ","
+					<< (haveResult ? (match ? "1" : "0") : "unavailable") << ","
+					<< row[kConfirmedColAlchemyLevel] << ","
+					<< row[kConfirmedColFortifyAlchemyLevel] << ","
+					<< row[kConfirmedColAlchemistRank] << ","
+					<< row[kConfirmedColPhysician] << ","
+					<< row[kConfirmedColBenefactor] << ","
+					<< row[kConfirmedColPoisoner] << ","
+					<< row[kConfirmedColPurity] << ","
+					<< row[kConfirmedColSeekerOfShadows] << ","
+					<< row[kConfirmedColAlchemistPerkMultiplier] << ","
+					<< CsvEscapeSingleLine(row[kConfirmedColIngredientDetails]) << ","
+					<< row[kConfirmedColPotionFormID] << ","
+					<< row[kConfirmedColPotionCostOverride] << ","
+					<< CsvEscapeSingleLine(row[kConfirmedColCraftedEffects]) << ","
+					<< CsvEscapeSingleLine(predictedEffects) << ","
+					<< CsvEscapeSingleLine(row[kConfirmedColIngredientSelectionOrder]) << ","
+					<< resolutionStatus << "\n";
+			}
+
+			csv.close();
+			std::scoped_lock lock(state.mutex);
+			state.isExporting = false;
+			state.exportProgressFraction = 1.0f;
+			state.message = "Exported " + std::to_string(total) + " row(s) for " + activeMode + " to " +
+				csvPath->filename().string() + " (" + std::to_string(mismatchCount) + " mismatch(es), " +
+				std::to_string(unresolvedCount) + " unresolved).";
+			state.busy = false;
+		});
+		backgroundWorker.detach();
+	}
+
+
 
 	void Open()
 	{
@@ -1887,6 +2452,11 @@ namespace alchemist::devhub {
 		view.selectionUnavailable = state.selectionUnavailable;
 		view.activeState = state.activeState;
 		view.pendingPerkRanks = state.pendingPerkRanks;
+		view.isExporting = state.isExporting.load(std::memory_order_relaxed);
+		view.exportProgressFraction = state.exportProgressFraction.load(std::memory_order_relaxed);
+		view.exportTotalRecipes = state.exportTotalRecipes;
+		view.exportCurrentRecipe = state.exportCurrentRecipe;
+		view.exportTaskName = state.exportTaskName;
 		return view;
 	}
 
@@ -2167,7 +2737,7 @@ namespace alchemist::devhub {
 			}
 
 			RefreshInventoryOnGameThread(false);
-			menu::RefreshAlchemyMenu(player.hasPerkPurity);
+			menu::RefreshAlchemyMenu(true);
 
 			engine::RecalculateAsync([onDone = std::move(onDone)]() {
 				auto* taskInterface = SKSE::GetTaskInterface();
@@ -2271,7 +2841,7 @@ namespace alchemist::devhub {
 			}
 
 			RefreshInventoryOnGameThread(false);
-			menu::RefreshAlchemyMenu(player.hasPerkPurity);
+			menu::RefreshAlchemyMenu(true);
 
 			engine::RecalculateAsync([onDone = std::move(onDone)]() {
 				auto* taskInterface = SKSE::GetTaskInterface();
@@ -3176,12 +3746,29 @@ namespace alchemist::devhub {
 			}
 			ImGui::EndDisabled();
 			DrawTestHint("Writes alchemist.ingredients.csv next to alchemist.dll with the active effect fields required by prediction scripts, including source and CACO-resolved FormIDs and keyword editor IDs.");
-			ImGui::BeginDisabled(view.busy);
+			ImGui::BeginDisabled(view.busy || view.isExporting);
 			if (ImGui::Button("Export potion predictions to CSV")) {
 				ExportPotionPredictionsCSVAsync();
 			}
 			ImGui::EndDisabled();
-			DrawTestHint("Refreshes the current ingredient list, then writes alchemist.potion-predictions.csv next to alchemist.dll with ingredients, predicted/displayed values, and FormID-bearing ingredient details for prediction fixtures.");
+			DrawTestHint("Refreshes the current ingredient list, then writes alchemist.potion-predictions.csv.zst next to alchemist.dll with the plugin's predicted potion values and calculation details.");
+			ImGui::BeginDisabled(view.busy || view.isExporting);
+			if (ImGui::Button("Export confirmed-potion predictions to CSV")) {
+				ExportConfirmedPotionPredictionsCSVAsync();
+			}
+			ImGui::EndDisabled();
+			DrawTestHint("Reads alchemist.potions-confirmed.csv, keeps only the rows recorded under the mode currently active "
+				"(Vanilla/CACO/CACO+AP/AP/Requiem/Apothecary), and re-evaluates each one with this session's calculation code. "
+				"Writes alchemist.potions-predicted.<mode>.csv next to alchemist.dll with predicted vs. actual value, a "
+				"per-row match flag, and why any row couldn't be resolved.");
+
+
+			if (view.isExporting) {
+				const std::string label = view.exportTaskName + ": " +
+					std::to_string(static_cast<int>(view.exportProgressFraction * 100.0f)) + "% (" +
+					std::to_string(view.exportCurrentRecipe) + " / " + std::to_string(view.exportTotalRecipes) + " recipes)";
+				ImGui::ProgressBar(view.exportProgressFraction, ImVec2(-1.0f, 22.0f), label.c_str());
+			}
 			ImGui::BeginDisabled(view.busy);
 			if (ImGui::Button("Export potion observations to CSV")) {
 				QueueTask([]() {
@@ -3382,6 +3969,12 @@ namespace alchemist::devhub {
 			}
 		}
 		ImGui::SeparatorText("Output");
+		if (view.isExporting) {
+			const std::string label = view.exportTaskName + ": " +
+				std::to_string(static_cast<int>(view.exportProgressFraction * 100.0f)) + "% (" +
+				std::to_string(view.exportCurrentRecipe) + " / " + std::to_string(view.exportTotalRecipes) + " recipes)";
+			ImGui::ProgressBar(view.exportProgressFraction, ImVec2(-1.0f, 22.0f), label.c_str());
+		}
 		if (!view.message.empty()) {
 			ImGui::TextWrapped("Status: %s", view.message.c_str());
 		}

@@ -14,7 +14,9 @@ namespace alchemist {
 		Automatic,
 		Vanilla,
 		AlchemyPlus,
-		CACO
+		CACO,
+		Requiem,
+		Apothecary
 	};
 
 	namespace engine {
@@ -50,6 +52,7 @@ namespace alchemist {
 		bool alchemyPlusActive = false;
 		bool cacoActive = false;
 		bool combinedActive = false;
+		bool requiemActive = false;
 		bool totalsAgree = false;
 		bool completed = false;
 	};

@@ -6,14 +6,14 @@
 
 ## Combined Alchemy Plus and CACO evaluation
 
-The production evaluator supports CACO and Alchemy Plus independently and together. When both adapters report active settings, Automatic mode uses CACO's live records and game settings first, applies Alchemy Plus's configured magnitude/duration rounding to the constructed effect input, and uses that post-rounding contribution for shared-effect priority, effect ordering, and the pre-adjustment gold total. Alchemy Plus's optional signed impure-cost correction is applied before CACO's optional truncating 20% impure-potion adjustment. This composition preserves the four supported modes: vanilla, Alchemy Plus only, CACO only, and both adapters.
+The production evaluator supports CACO and Alchemy Plus independently and together. When both adapters report active settings, Automatic mode uses CACO's live records and game settings first, applies Alchemy Plus's configured magnitude/duration rounding to the constructed effect input, and uses that post-rounding contribution for shared-effect priority, effect ordering, and the pre-adjustment gold total. Alchemy Plus's optional signed impure-cost correction is applied before CACO's optional truncating 20% impure-potion adjustment. Requiem is a fifth, independent compatibility path and is not combined with either adapter. This composition preserves the four CACO/AP combinations: vanilla, Alchemy Plus only, CACO only, and both adapters.
 
 This document details the potion-cost and potion-value mechanics in the Complete Alchemy and Cooking Overhaul (CACO) Papyrus source scripts, analyzes the calculation divergence between Skyrim's engine auto-calc and CACO's post-processing pipelines, and records how the implemented Prosperous Alchemist adapter models those behaviors. `C_pre` denotes the engine-generated gold value of a newly crafted potion prior to script adjustments, while `C_caco` represents the final integer value assigned after CACO's manual post-processing.
 
 ## Scope and Baseline Assumptions
 
 * **Historical baseline:** The original discrepancy was evaluated against the vanilla Prosperous Alchemist path; the current production evaluator includes the CACO adapter described below.
-* **Third-Party Mods:** The adapter supports CACO and Alchemy Plus independently and in combination; the historical source comparison below isolates CACO behavior where noted.
+* **Third-Party Mods:** The adapter supports CACO and Alchemy Plus independently and in combination, while Requiem is supported independently with both CACO and Alchemy Plus disabled; the historical source comparison below isolates CACO behavior where noted.
 * **Historical problem statement:** Earlier builds miscalculated CACO potion values—such as predicting 5,463 gold for a Jarrin Root, Nordic Barnacle, and Salmon Roe mixture that actually crafts for 93 gold—because they relied on vanilla cost formulas, ignored CACO's base-record rebalances, and omitted CACO's post-creation Papyrus logic. The current adapter addresses the supported live-record and post-processing portions without mutating the active menu.
 
 ## Ingredient selection order review
@@ -243,7 +243,7 @@ The non-CACO effect-strength and cost equations remain Prosperous Alchemist's va
 
 #### Adapter weight/name behavior
 
-The adapter models normal one-, two-, and three-or-more-effect weights as 0.3, 0.4, and 0.5, and pure Purity/Concentrated Poison overrides as 0.2, 0.3, and 0.4 (`alchemist/CACO/CACO.cpp:479-499`). The 0.5 normal three-or-more value is consistent with the English CACO description but is not an explicit write in the canonical Papyrus `CalculateWeight` fallback branch. Adapter naming and quality use the same effect-count and exemplar concepts (`:231-291,501-532`), and provider registration connects all callbacks (`:541-552`).
+The adapter models normal one-, two-, and three-or-more-effect weights as 0.3, 0.4, and 0.5, and pure Purity overrides as 0.2, 0.3, and 0.4 (`alchemist/CACO/CACO.cpp`). The 0.5 normal three-or-more value is consistent with the English CACO description but is not an explicit write in the canonical Papyrus `CalculateWeight` fallback branch. Adapter naming and quality use the same effect-count and exemplar concepts, and provider registration connects all callbacks.
 
 ### Source index
 
@@ -400,7 +400,7 @@ CACO_IngrDamageStamina3rd [LVLI:01CCA073]
 
 ## Current Prosperous Alchemist compatibility status
 
-The repository implements the four compatibility paths described at the beginning of this document: vanilla, Alchemy Plus only, CACO only, and Automatic with both adapters active.
+The repository implements five compatibility paths: vanilla, Alchemy Plus only, CACO only, Automatic with both CACO and Alchemy Plus active, and Requiem independently with the other adapters disabled.
 
 1. **Live CACO records:** `alchemist/CACO/CACO.cpp` resolves CACO's loaded effect records, ingredient-position lists, duration globals, option globals, game settings, and exemplar lists through editor IDs and documented FormID fallbacks. The evaluator uses those live records instead of a second hardcoded CACO cost table.
 2. **Duration variants:** The six Restore/Damage Health, Magicka, and Stamina selectors are read from their CACO globals. The selected effect variant and ingredient position are used before the ordinary effect estimate is calculated.

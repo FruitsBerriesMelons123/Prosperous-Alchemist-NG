@@ -16,7 +16,7 @@ if __name__ == "__main__":
     )
     apply_mode_config(
         mode_name="AP",
-        caco_enabled=False,
         ap_enabled=True,
         ap_json_data=ap_json,
     )
+    print("Next in-game command: run 'pat ap'")

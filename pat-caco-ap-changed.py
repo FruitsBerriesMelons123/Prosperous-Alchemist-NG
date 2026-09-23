@@ -15,3 +15,4 @@ if __name__ == "__main__":
             impure_cost_fix=True,
         ),
     )
+    print("Next in-game command: run 'pat caco-ap changed'")

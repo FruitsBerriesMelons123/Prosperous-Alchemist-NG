@@ -23,5 +23,7 @@ namespace alchemist::alchemyplus {
 		[[nodiscard]] static float AdjustImpureEffectCost(float a_effectCost, bool a_isPoison, bool a_isHostile, bool& a_impure) noexcept;
 		[[nodiscard]] static float FinalizeImpureCost(float a_cost) noexcept;
 		[[nodiscard]] static const nlohmann::json* GetConfiguration() noexcept;
+		static void ApplyConfigurationJson(const nlohmann::json& a_configuration) noexcept;
+		static void RestoreConfiguration() noexcept;
 	};
 }

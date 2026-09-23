@@ -1,6 +1,7 @@
 #include "CACO.h"
 
 #include "Localization.h"
+#include "PluginUtils.h"
 
 #include <RE/A/AlchemyItem.h>
 #include <RE/B/BGSKeyword.h>
@@ -18,6 +19,8 @@
 #include <RE/T/TESGlobal.h>
 #include <RE/T/TESCondition.h>
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -34,8 +37,15 @@ namespace alchemist::caco
 	{
 		constexpr std::string_view kCacoPlugin = "Complete Alchemy & Cooking Overhaul.esp";
 		constexpr std::string_view kCacoPluginEsm = "Complete Alchemy & Cooking Overhaul.esm";
+		constexpr std::string_view kCacoPluginEsl = "Complete Alchemy & Cooking Overhaul.esl";
+		constexpr std::string_view kCacoShortPlugin = "CACO.esp";
+		constexpr std::string_view kCacoShortPluginEsm = "CACO.esm";
+		constexpr std::string_view kCacoShortPluginEsl = "CACO.esl";
 		constexpr std::string_view kLegacyPlugin = "Update.esm";
-		constexpr std::array<std::string_view, 2> kCacoPlugins{ kCacoPlugin, kCacoPluginEsm };
+		constexpr std::array<std::string_view, 6> kCacoPlugins{
+			kCacoPlugin, kCacoPluginEsm, kCacoPluginEsl,
+			kCacoShortPlugin, kCacoShortPluginEsm, kCacoShortPluginEsl
+		};
 		constexpr RE::FormID kAlchemyEffectsListFormID = 0x0022DD8F;
 		constexpr RE::FormID kAlchemyAllPotionListFormID = 0x0022DD90;
 		constexpr RE::FormID kDisablePotionHandlingFormID = 0x00AAB031;
@@ -174,6 +184,8 @@ namespace alchemist::caco
 			std::string pluginName;
 			std::array<FamilyState, kFamilies.size()> families{};
 			std::array<int, kFamilies.size()> durationIndices{};
+			bool hasOverrides = false;
+			std::array<int, 6> durationOverrideIndices{};
 			std::uint64_t calculationRevision = 0;
 			RE::TESGlobal* disablePotionHandling = nullptr;
 			RE::TESGlobal* impurePotions = nullptr;
@@ -276,27 +288,10 @@ namespace alchemist::caco
 		{
 			PluginMatch result;
 			try {
-				auto* dataHandler = RE::TESDataHandler::GetSingleton();
-				if (!dataHandler) {
-					return result;
+				if (const auto* file = plugin_utils::FindLoadedPlugin("Complete Alchemy & Cooking Overhaul")) {
+					return MakePluginMatch(file, file->GetFilename());
 				}
-
-				for (const auto candidate : kCacoPlugins) {
-					try {
-						if (auto* file = dataHandler->LookupLoadedModByName(candidate)) {
-							return MakePluginMatch(file, candidate);
-						}
-					} catch (...) {
-					}
-					try {
-						if (auto* file = dataHandler->LookupLoadedLightModByName(candidate)) {
-							return MakePluginMatch(file, candidate);
-						}
-					} catch (...) {
-					}
-				}
-			} catch (...) {
-			}
+			} catch (...) {}
 			return result;
 		}
 
@@ -343,30 +338,17 @@ namespace alchemist::caco
 			}
 
 			try {
-				auto* dataHandler = RE::TESDataHandler::GetSingleton();
-				if (!dataHandler) {
-					return nullptr;
-				}
-				auto lookup = [&](std::string_view a_plugin) -> T* {
-					if (a_plugin.empty()) {
-						return nullptr;
-					}
-					try {
-						return dataHandler->LookupForm<T>(a_localFormID, a_plugin);
-					} catch (...) {
-						return nullptr;
-					}
-				};
-
-				if (auto* form = lookup(g_state.pluginName)) {
-					return form;
-				}
-				for (const auto plugin : kCacoPlugins) {
-					if (auto* form = lookup(plugin)) {
+				if (!g_state.pluginName.empty()) {
+					if (auto* form = plugin_utils::LookupFormFlexible<T>(a_localFormID, g_state.pluginName)) {
 						return form;
 					}
 				}
-				if (auto* form = lookup(kLegacyPlugin)) {
+				for (const auto plugin : kCacoPlugins) {
+					if (auto* form = plugin_utils::LookupFormFlexible<T>(a_localFormID, plugin)) {
+						return form;
+					}
+				}
+				if (auto* form = plugin_utils::LookupFormFlexible<T>(a_localFormID, kLegacyPlugin)) {
 					return form;
 				}
 				static constexpr std::array<std::string_view, 11> kFallbackPlugins{
@@ -383,7 +365,7 @@ namespace alchemist::caco
 					"Skyrim.esm"
 				};
 				for (const auto plugin : kFallbackPlugins) {
-					if (auto* form = lookup(plugin)) {
+					if (auto* form = plugin_utils::LookupFormFlexible<T>(a_localFormID, plugin)) {
 						return form;
 					}
 				}
@@ -419,6 +401,9 @@ namespace alchemist::caco
 		{
 			if (a_familyIndex >= g_state.families.size()) {
 				return 0;
+			}
+			if (g_state.hasOverrides) {
+				return (std::clamp)(g_state.durationOverrideIndices[a_familyIndex], 0, 2);
 			}
 			const auto* global = g_state.families[a_familyIndex].durationGlobal;
 			if (!global || !std::isfinite(global->value)) {
@@ -985,7 +970,11 @@ namespace alchemist::caco
 			float rankFallback = 1.0f;
 			if (Adapter::IsActive()) {
 				if (!Adapter::IsPotionHandlingEnabled()) {
-					rankFallback = 1.0f;
+					const int rank = (std::max)(0, static_cast<int>(a_context.alchemistPerkRank));
+					if (rank == 1) rankFallback = 1.20f;
+					else if (rank == 3) rankFallback = 1.45f;
+					else if (rank == 5) rankFallback = 1.75f;
+					else rankFallback = 1.0f;
 				} else if (a_context.alchemistPerkRank == 1) {
 					rankFallback = 1.20f;
 				} else if (a_context.alchemistPerkRank > 1) {
@@ -1019,6 +1008,9 @@ namespace alchemist::caco
 
 			const auto applyValue = [&](const RE::BGSPerk* a_perk, float a_value, bool a_affectsMagnitude, bool a_affectsDuration) {
 				if (IsAlchemistPerk(a_perk)) {
+					if (disableAllPotionHandling) {
+						return;
+					}
 					if (a_affectsMagnitude) {
 						alchemistMagnitude = hasAlchemistMagnitude ? (std::max)(alchemistMagnitude, static_cast<double>(a_value)) : static_cast<double>(a_value);
 						hasAlchemistMagnitude = true;
@@ -1097,7 +1089,7 @@ namespace alchemist::caco
 				for (const auto* perk : a_context.activePerks) {
 					inspectPerk(perk);
 				}
-				if (a_context.seeker.nativeContract) {
+				if (a_context.seeker.nativeContract && !seekerApplied) {
 					inspectPerk(a_context.seeker.perk);
 				}
 			} catch (...) {
@@ -1329,6 +1321,17 @@ namespace alchemist::caco
 		return 1.5f;
 	}
 
+	void Adapter::SetGameSettings(float a_initMult, float a_skillFactor) noexcept
+	{
+		if (std::isfinite(a_initMult) && a_initMult > 0.0f) {
+			g_state.alchemyIngredientInitMultiplier = a_initMult;
+		}
+		if (std::isfinite(a_skillFactor) && a_skillFactor > 0.0f) {
+			g_state.alchemySkillFactor = a_skillFactor;
+		}
+		g_state.alchemySettingsReady = true;
+	}
+
 	bool Adapter::TryGetSettings(Settings& a_settings) noexcept
 	{
 		if (!IsDetected()) {
@@ -1462,6 +1465,18 @@ namespace alchemist::caco
 			durationPerkMultiplier);
 		a_magnitudeMultiplier = baseEffectiveness * magnitudePerkMultiplier;
 		a_durationMultiplier = baseEffectiveness * durationPerkMultiplier;
+
+		// Restore/damage duration-family dilution (RestoreXDuration / DamageXDuration settings):
+		// these six families deliver the same total effect over a longer window, so the
+		// per-tick magnitude must shrink by the same factor the window grows.
+		const auto familyIndex = FindFamily(a_effect);
+		if (familyIndex >= 0) {
+			const float familySeconds = GetFamilyDurationSeconds(familyIndex);
+			if (std::isfinite(familySeconds) && familySeconds > 1.0f) {
+				a_magnitudeMultiplier /= familySeconds;
+			}
+		}
+
 		if (IsDurationBased(a_effect)) {
 			a_durationMultiplier = algorithm::CalculateDurationBasedIngredientPowerFactor(a_durationMultiplier);
 		}
@@ -1727,15 +1742,13 @@ namespace alchemist::caco
 		bool a_hasBeneficial,
 		bool a_hasHarmful,
 		bool a_hasPurity,
-		bool a_hasConcentratedPoison,
 		float& a_weight) noexcept
 	{
 		if (!IsReweightingEnabled() || a_effectCount == 0) {
 			return false;
 		}
 		const bool pureBeneficial = a_hasBeneficial && !a_hasHarmful && a_hasPurity;
-		const bool pureHarmful = a_hasHarmful && !a_hasBeneficial && a_hasConcentratedPoison;
-		const bool reducedWeight = pureBeneficial || pureHarmful;
+		const bool reducedWeight = pureBeneficial;
 		if (a_effectCount == 1) {
 			a_weight = reducedWeight ? 0.2f : 0.3f;
 		} else if (a_effectCount == 2) {
@@ -1743,6 +1756,102 @@ namespace alchemist::caco
 		} else {
 			a_weight = reducedWeight ? 0.4f : 0.5f;
 		}
+		return true;
+	}
+
+	SavedStateSnapshot Adapter::SaveStateSnapshot() noexcept
+	{
+		SavedStateSnapshot snapshot;
+		if (!IsDetected()) {
+			return snapshot;
+		}
+		for (std::size_t i = 0; i < kFamilies.size() && i < 6; ++i) {
+			if (g_state.families[i].durationGlobal) {
+				snapshot.durationGlobalValues[i] = g_state.families[i].durationGlobal->value;
+			}
+		}
+		if (g_state.disablePotionHandling) {
+			snapshot.disablePotionHandlingValue = g_state.disablePotionHandling->value;
+		}
+		if (g_state.impurePotions) {
+			snapshot.impurePotionsValue = g_state.impurePotions->value;
+		}
+		snapshot.valid = true;
+		return snapshot;
+	}
+
+	void Adapter::RestoreStateSnapshot(const SavedStateSnapshot& a_snapshot) noexcept
+	{
+		g_state.hasOverrides = false;
+		g_state.durationOverrideIndices = {};
+		if (!a_snapshot.valid || !IsDetected()) {
+			return;
+		}
+		for (std::size_t i = 0; i < kFamilies.size() && i < 6; ++i) {
+			if (g_state.families[i].durationGlobal) {
+				g_state.families[i].durationGlobal->value = a_snapshot.durationGlobalValues[i];
+			}
+		}
+		if (g_state.disablePotionHandling) {
+			g_state.disablePotionHandling->value = a_snapshot.disablePotionHandlingValue;
+		}
+		if (g_state.impurePotions) {
+			g_state.impurePotions->value = a_snapshot.impurePotionsValue;
+		}
+		RefreshOptions();
+	}
+
+	bool Adapter::ApplySettingsJson(const nlohmann::json& a_json) noexcept
+	{
+		if (!IsDetected() || !a_json.is_object()) {
+			return false;
+		}
+		const auto& cacoJson = (a_json.contains("caco") && a_json["caco"].is_object()) ? a_json["caco"] : a_json;
+
+		auto parseVal = [](const nlohmann::json& obj, const char* key) -> std::optional<float> {
+			const auto it = obj.find(key);
+			if (it == obj.end()) return std::nullopt;
+			if (it->is_number()) return it->get<float>();
+			if (it->is_string()) {
+				try { return std::stof(it->get<std::string>()); } catch (...) {}
+			}
+			return std::nullopt;
+		};
+
+		static constexpr std::array<const char*, 6> durationKeys{
+			"RestoreHealthDuration", "RestoreMagickaDuration", "RestoreStaminaDuration",
+			"DamageHealthDuration", "DamageMagickaDuration", "DamageStaminaDuration"
+		};
+		g_state.hasOverrides = true;
+		for (std::size_t i = 0; i < 6; ++i) {
+			const float v = parseVal(cacoJson, durationKeys[i]).value_or(0.0f);
+			const int clampedIdx = (std::clamp)(static_cast<int>(v), 0, 2);
+			g_state.durationOverrideIndices[i] = clampedIdx;
+			if (g_state.families[i].durationGlobal) {
+				g_state.families[i].durationGlobal->value = static_cast<float>(clampedIdx);
+			}
+		}
+
+		if (auto v = parseVal(cacoJson, "DisableAllPotionHandling")) {
+			if (g_state.disablePotionHandling) {
+				g_state.disablePotionHandling->value = *v;
+			}
+		}
+		if (auto v = parseVal(cacoJson, "ImpurePotionProcessing")) {
+			if (g_state.impurePotions) {
+				g_state.impurePotions->value = *v;
+			}
+		}
+		if (auto v = parseVal(cacoJson, "AlchemyIngredientInitMultiplier")) {
+			g_state.alchemyIngredientInitMultiplier = *v;
+			g_state.alchemySettingsReady = true;
+		}
+		if (auto v = parseVal(cacoJson, "AlchemySkillFactor")) {
+			g_state.alchemySkillFactor = *v;
+			g_state.alchemySettingsReady = true;
+		}
+
+		RefreshOptions();
 		return true;
 	}
 }
