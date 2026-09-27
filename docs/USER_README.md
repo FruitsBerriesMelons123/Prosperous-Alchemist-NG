@@ -1,5 +1,5 @@
 # Prosperous Alchemist NG
-This project is a from-scratch rewrite of the original Skyrim Legendary Edition SKSE plugin. The source code is available on [GitHub](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG)
+This project is a from-scratch rewrite of the original Skyrim Legendary Edition SKSE plugin. The source code is available on [GitHub](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG).
 
 Prosperous Alchemist recommends valuable potion and poison recipes from the ingredients currently in your inventory. It displays its recommendations in an overlay while Skyrim's native alchemy menu is open.
 
@@ -72,17 +72,24 @@ Most players can use the in-game Settings page rather than editing the INI file.
 
 ### Common options
 
-| Option | Default | Description |
-| --- | --- | --- |
-| **Ignore player state** (`IgnorePlayer`) | Off | Ignore Alchemy skill, perks, and worn Fortify Alchemy gear when estimating values. Ingredient availability is still based on inventory. |
-| **Protect ingredients** (`ProtectIngredients`) | Off | Enable configured protection and tracking so reserved ingredients are excluded from recommendations. |
-| **Use only manual/custom protection** (`ManualProtectionOnly`) | Off | Use manual/custom reservations and selected protected effects instead of automatic quest, craftable-item, and Atronach Forge reservations. |
-| **Filter potions by selected ingredients** (`FilterPotionsBySelectedIngredients`) | On | Show only recipes containing all ingredients selected in the native alchemy menu. |
-| **Use single-threaded calculation** (`Singlethreaded`) | Off | Run recipe evaluation on the main thread instead of using worker threads. |
-| **Cache duration** (`CacheDurationSeconds`) | 180 seconds | How long the in-memory recipe cache is retained after closing the alchemy menu. Set to `0` to expire it immediately. |
-| **Stale recalculation threshold** (`StaleRecalculateThresholdMs`) | 500 ms | When a calculation exceeds this time, keep the existing list visible and offer **Recalculate**. Set to `0` to disable this behavior. |
-| **Craft debounce** (`CraftDebounceMs`) | 400 ms | Coalesce repeated recalculation requests after rapid crafting or inventory changes. |
-| **Language** (`Language`) | Automatic | Select a language or follow the Windows user interface language. |
+* **Ignore player state** (`IgnorePlayer`) — *Default: Off*
+Ignore Alchemy skill, perks, and worn Fortify Alchemy gear when estimating values. Ingredient availability is still based on inventory.
+* **Protect ingredients** (`ProtectIngredients`) — *Default: Off*
+Enable configured protection and tracking so reserved ingredients are excluded from recommendations.
+* **Use only manual/custom protection** (`ManualProtectionOnly`) — *Default: Off*
+Use manual/custom reservations and selected protected effects instead of automatic quest, craftable-item, and Atronach Forge reservations.
+* **Filter potions by selected ingredients** (`FilterPotionsBySelectedIngredients`) — *Default: On*
+Show only recipes containing all ingredients selected in the native alchemy menu.
+* **Use single-threaded calculation** (`Singlethreaded`) — *Default: Off*
+Run recipe evaluation on the main thread instead of using worker threads.
+* **Cache duration** (`CacheDurationSeconds`) — *Default: 180 seconds*
+How long the in-memory recipe cache is retained after closing the alchemy menu. Set to `0` to expire it immediately.
+* **Stale recalculation threshold** (`StaleRecalculateThresholdMs`) — *Default: 500 ms*
+When a calculation exceeds this time, keep the existing list visible and offer **Recalculate**. Set to `0` to disable this behavior.
+* **Craft debounce** (`CraftDebounceMs`) — *Default: 400 ms*
+Coalesce repeated recalculation requests after rapid crafting or inventory changes.
+* **Language** (`Language`) — *Default: Automatic*
+Select a language or follow the Windows user interface language.
 
 **Reset all settings** restores the declared defaults for the active profile and removes tracking overrides.
 
@@ -106,11 +113,11 @@ Custom protected ingredients can be entered by displayed name, editor ID, or hex
 Compatibility is selected from the mods and settings loaded by the game. Keep overhauls configured as intended by their authors; combinations not listed below should not be assumed supported.
 
 - **Vanilla Skyrim:** Uses the game's loaded ingredient and effect records.
-- **Alchemy Plus:** When `AlchemyPlus.dll` and its `SKSE/Plugins/AlchemyPlus.json` configuration are available, supported potency-rounding and impure-cost settings are applied to predictions. A JSON file alone does not activate the integration.
-- **Complete Alchemy & Cooking Overhaul (CACO):** Uses loaded CACO records and supported live settings, including ingredient-effect duration choices. Some CACO post-craft handling can change a potion after its initial creation, so the final in-inventory item may differ from a prediction.
+- **[Alchemy Plus](https://www.nexusmods.com/skyrimspecialedition/mods/80882):** When `AlchemyPlus.dll` and its `SKSE/Plugins/AlchemyPlus.json` configuration are available, supported potency-rounding and impure-cost settings are applied to predictions. A JSON file alone does not activate the integration.
+- **[Complete Alchemy & Cooking Overhaul (CACO)](https://www.nexusmods.com/skyrimspecialedition/mods/19924):** Uses loaded CACO records and supported live settings, including ingredient-effect duration choices. Some CACO post-craft handling can change a potion after its initial creation, so the final in-inventory item may differ from a prediction.
 - **CACO + Alchemy Plus:** Supported combined path; both integrations contribute their supported prediction behavior.
-- **Requiem:** Supported as a separate compatibility path using Requiem records, alchemy effectiveness, and perk behavior. Use Requiem without CACO or Alchemy Plus.
-- **Apothecary – An Alchemy Overhaul:** Automatically detects Apothecary and models its effect scaling using loaded records and relevant Skyrim alchemy settings. It is a separate compatibility path; Alchemy Plus behavior is not combined with it.
+- **[Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888):** Supported as a separate compatibility path using Requiem records, alchemy effectiveness, and perk behavior. Use Requiem without CACO or Alchemy Plus.
+- **[Apothecary – An Alchemy Overhaul](https://www.nexusmods.com/skyrimspecialedition/mods/52130):** Automatically detects Apothecary and models its effect scaling using loaded records and relevant Skyrim alchemy settings. It is a separate compatibility path; Alchemy Plus behavior is not combined with it.
 
 Compatibility improves estimates for supported records and settings, but the plugin does not invoke Skyrim's private potion-construction process to preview every possible recipe. Other mods that change ingredient effects or potion creation may affect the final result.
 

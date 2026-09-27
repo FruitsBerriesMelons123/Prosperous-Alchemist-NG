@@ -19,9 +19,9 @@
 ### Default Profile Saves
 - `E:\Projects\games\skyrim\1.6.1170\profiles\Default\saves`
 ### Backed Up Load Order Files
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\lockedorder.txt.2026_09_23_15_48_17`
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\loadorder.txt.2026_09_23_15_48_17`
-- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\plugins.txt.2026_09_23_15_48_17`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\lockedorder.txt.2026_09_23_09_56_33`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\loadorder.txt.2026_09_23_09_56_33`
+- `E:\Projects\games\skyrim\1.6.1170\profiles\Default\plugins.txt.2026_09_23_09_56_33`
 
 ## Alchemy Plus
 ### Source Code
@@ -61,11 +61,13 @@
 
 ## Caprica
 ### Compiler
-- `C:\path\to\Caprica`
+- `E:\Projects\games\skyrim\utils\Caprica.v0.3.0`
+### Source Code
+- `E:\Projects\games\skyrim\git\Orvid-Caprica`
 
 ## Creation Kit
 ### Extracted Vanilla Scripts and Tools
-- `C:\path\to\CreationKit`
+- `E:\Projects\games\skyrim\utils\CreationKit`
 
 ## Requiem
 ### Source Code

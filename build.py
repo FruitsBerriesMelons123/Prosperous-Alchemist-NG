@@ -4,9 +4,11 @@ The wrapper is intentionally Windows/x64-focused: it configures the standalone
 ``alchemist`` CMake consumer with Ninja, validates a fresh DLL, and copies that
 DLL and the bundled locale resources to the local deployment path. With
 ``--package``, it also converts the user guide to a Nexus-ready BBCode text
-file in ``dist`` before creating the release archive. Release builds deploy the
-plugin PDB beside the DLL for local symbol-assisted diagnostics and include it
-beside the DLL in the release archive.
+file in ``dist`` before creating the release archive. With ``--md2nexus``, it
+runs only the md2nexus conversion step to generate the BBCode description
+without building the plugin. Release builds deploy the plugin PDB beside the
+DLL for local symbol-assisted diagnostics and include it beside the DLL in the
+release archive.
 """
 
 from __future__ import annotations
@@ -804,6 +806,11 @@ def main() -> int:
 	parser.add_argument("--build-dir", default="build-alchemist")
 	parser.add_argument("--cmake", default="cmake")
 	parser.add_argument("--package", action="store_true", help="Create a release distribution zip archive.")
+	parser.add_argument(
+		"--md2nexus",
+		action="store_true",
+		help="Convert the user guide to Nexus BBCode using md2nexus without building.",
+	)
 	args = parser.parse_args()
 
 	repo_root = Path(__file__).resolve().parent
@@ -850,6 +857,13 @@ def main() -> int:
 	imgui_install_dir = Path(IMGUI_INSTALL_DIR).resolve()
 	deployed = Path(DLL_DEPLOY).resolve()
 	md2nexus = Path(MD2NEXUS).resolve()
+	if args.md2nexus:
+		convert_user_readme_to_bbcode(
+			repo_root,
+			md2nexus,
+			repo_root / "dist" / NEXUS_BBCODE_FILENAME,
+		)
+		return 0
 	artifact = build_dir / f"{TARGET}.dll"
 	symbol_artifact = build_dir / f"{TARGET}.pdb"
 	if not source_dir.is_dir():

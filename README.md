@@ -88,6 +88,12 @@ python build.py --package
 
 Packaging creates a version-named archive under `dist/` and converts `docs/USER_README.md` into a Nexus-ready description. The package includes the plugin, PDB, applicable locale, font, license, and user-guide resources, plus `alchemist.ini` when present. The PDB is included in the archive but is optional at runtime; font resources and the INI are also optional.
 
+To run only the Nexus BBCode description conversion without building the plugin:
+
+```powershell
+python build.py --md2nexus
+```
+
 Do not edit generated version metadata, build outputs, deployed artifacts, or release archives by hand. A release version change must be applied consistently to the authoritative project version sources before rebuilding and packaging.
 
 ## Validation and test references
@@ -101,6 +107,39 @@ python potion_prediction_test.py --check-confirmed-csv --check-baseline
 Use [`potion-prediction-default-settings.md`](potion-prediction-default-settings.md) for mode baselines and [`test-suite.md`](test-suite.md) for the in-game craft and prediction-export test plan. Test captures and plugin-generated observation files are evidence: never patch or rewrite them manually. Generate updated observations in game. The in-game `pat` tests use the supported modes `vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, and `apothecary`; Requiem is tested independently from CACO and AP.
 
 The optional Developer Test Hub is hidden unless `developer=1` is enabled for the active profile. Its diagnostic operations can change the live player's state or inventory; use a dedicated test character/profile rather than normal gameplay.
+
+## In-game `pat` command setup
+
+The detailed test blocks and command behavior are documented in [`test-suite.md`](test-suite.md) and [`skyrim-console.md`](skyrim-console.md). They assume the test environment is already installed; the setup below describes the MO2 layout and local configuration needed to make the commands available.
+
+Install and enable the runtime command bridge in the MO2 profile used for testing: SKSE, ConsoleUtil-Extended, Extended-Console (the `CustomConsole` YAML command loader), and PapyrusExtenderSSE. Install the Prosperous Alchemist NG mod in that profile as well. The compiled test script and command definition must be deployed into that mod's virtual file tree alongside the plugin:
+
+```text
+<MO2 instance>/
+  mods/
+	Prosperous Alchemist NG/
+	  SKSE/
+		Plugins/alchemist.dll
+		CustomConsole/pa-tests.yaml
+	  Scripts/ProsperousAlchemistTests.pex
+	ConsoleUtil-Extended/
+	Extended-Console/
+	Papyrus Extender/
+	Alchemy Plus/                         (when testing AP or CACO+AP)
+	Complete Alchemy & Cooking Overhaul/ (when testing CACO or CACO+AP)
+	Requiem - The Roleplaying Overhaul/   (when testing Requiem)
+	Apothecary - An Alchemy Overhaul/     (when testing Apothecary)
+  profiles/
+	<test profile>/
+```
+
+These are MO2 virtual mod directories; the names may differ with a user's installation. `pa-console-tests/` in this repository contains the YAML and Papyrus source, not the installed runtime files. `pa-console-tests/compile.ps1` compiles and deploys the command files, while `build.py` builds/deploys the plugin DLL. The compile script currently contains machine-specific paths for Caprica, script imports, and the destination mod directory; adjust them for the local installation before compiling. Keep test mods enabled only in the intended MO2 profile. Requiem is tested independently and must not be combined with CACO or AP. For CACO captures, keep `CACO_OptionDisableAllPotionHandling = 1` and `CACO_OptionImpurePotions = 0`.
+
+### Configure an AI agent for local test setup
+
+To let an AI coding agent prepare or update this environment, open the repository root as its workspace and provide access to the local MO2 instance and the compiler/source directories it needs. Copy `config.example.py` to the ignored local `config.py` and `user-paths.example.md` to the ignored local `user-paths.md`; replace their example paths with the real MO2 instance/profile, mod directories, deployed plugin path, Papyrus compiler, and required script-source locations. Keep these machine-specific files local and do not commit them. The repository's `AGENTS.md` tell the agent how to use `user-paths.md` and the project test rules.
+
+With those paths and filesystem access in place, the agent can update the test sources, run the Papyrus compile/deploy step, and prepare the pre-launch mode scripts. The agent cannot perform the in-game portion: launch Skyrim through MO2 yourself, run the requested `pat` commands in the console, and return the resulting observations to the agent for validation. Never grant access to or ask an agent to edit generated in-game observation files; they must be produced by the game.
 
 ## Configuration and profiles
 
