@@ -2,6 +2,7 @@
 
 #include "AlchemistEngine.h"
 #include "CACO/CACO.h"
+#include "Vanilla/Vanilla.h"
 
 #include <cstdint>
 #include <map>
@@ -47,7 +48,7 @@ namespace alchemist::devhub {
 		std::uint32_t seekerRewardGlobalFormId = 0;
 		float seekerRewardGlobalValue = 0.0f;
 		bool seekerNativeContract = false;
-		caco::AlchemyEvaluationContext alchemyEvaluationContext;
+		vanilla::EvaluationContext alchemyEvaluationContext;
 	};
 
 	struct ComparisonRecord {
@@ -78,7 +79,7 @@ namespace alchemist::devhub {
 		float effectiveAlchemy = -1.0f;
 		int creationAlchemySkill = -1;
 		float creationEffectiveAlchemy = -1.0f;
-		caco::AlchemyEvaluationContext creationAlchemyEvaluationContext;
+		vanilla::EvaluationContext creationAlchemyEvaluationContext;
 		std::vector<std::string> perks;
 		std::vector<std::string> spells;
 		std::vector<std::string> gear;

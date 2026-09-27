@@ -6,7 +6,9 @@
 
 #include "AlchemistEngine.h"
 #include "AlchemyPlus/AlchemyPlus.h"
+#include "AlchemyMath.h"
 #include "CACO/CACO.h"
+#include "Vanilla/Vanilla.h"
 #include "Requiem/Requiem.h"
 #include "Apothecary/Apothecary.h"
 #include "Localization.h"
@@ -340,7 +342,7 @@ namespace alchemist {
 		bool hasPerkBenefactor;
 		bool hasPerkPoisoner;
 		bool hasSeekerOfShadows;
-		caco::AlchemyEvaluationContext alchemyEvaluationContext;
+		vanilla::EvaluationContext alchemyEvaluationContext;
 		requiem::EvaluationContext requiemContext;
 		apothecary::EvaluationContext apothecaryContext;
 		string state;
@@ -988,7 +990,7 @@ namespace alchemist {
 			const Player& evaluatedPlayer,
 			bool mixedPotion = false) {
 			if (evaluatedPlayer.alchemyEvaluationContext.captured) {
-				return caco::Adapter::TryGetVanillaAlchemyEffectivenessMultipliers(
+				return vanilla::Adapter::TryGetAlchemyEffectivenessMultipliers(
 					effect.baseEffect,
 					evaluatedPlayer.alchemyLevel,
 					getFallbackAlchemistMultiplier(evaluatedPlayer),
@@ -1000,9 +1002,9 @@ namespace alchemist {
 					durationPowerFactor);
 			}
 
-			const float initMult = caco::Adapter::GetAlchemyIngredientInitMultiplier();
-			const float skillFactor = caco::Adapter::GetAlchemySkillFactor();
-			const float effectiveness = caco::algorithm::CalculateVanillaAlchemyEffectiveness(
+			const float initMult = vanilla::Adapter::GetAlchemyIngredientInitMultiplier();
+			const float skillFactor = vanilla::Adapter::GetAlchemySkillFactor();
+			const float effectiveness = algorithm::CalculateVanillaAlchemyEffectiveness(
 				evaluatedPlayer.alchemyLevel, getFallbackAlchemistMultiplier(evaluatedPlayer), 1.0f, initMult, skillFactor);
 			magnitudePowerFactor = effectiveness;
 			durationPowerFactor = effectiveness;
@@ -1046,7 +1048,7 @@ namespace alchemist {
 				effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, mixedPotion)) {
 				return value;
 			}
-			const float playerFactor = caco::algorithm::CalculateAlchemyActorValueMultiplier(
+			const float playerFactor = algorithm::CalculateAlchemyActorValueMultiplier(
 				evaluatedPlayer.fortifyAlchemyLevel);
 			if (!std::isfinite(playerFactor) || playerFactor <= 0.0f) {
 				return value;
@@ -1110,12 +1112,30 @@ namespace alchemist {
 			} else if (useApothecaryNative) {
 				float apMagnitudePowerFactor = 1.0f;
 				float apDurationPowerFactor = 1.0f;
+				// Apothecary keeps the vanilla type perks: Physician x1.25 on Restore effects (with type perks),
+				// Benefactor x1.25 on beneficial effects in potions, Poisoner x1.25 on harmful effects in poisons,
+				// and Seeker of Shadows x1.1 on everything. Confirmed by in-game crafts.
+				float apEffectPerkMultiplier = 1.0f;
+				if (includeTypePerks) {
+					if (evaluatedPlayer.hasPerkPhysician && isPhysicianEffect(effect)) {
+						apEffectPerkMultiplier = static_cast<float>(static_cast<double>(apEffectPerkMultiplier) * 1.25);
+					}
+					if (potion && evaluatedPlayer.hasPerkBenefactor && effect.beneficial) {
+						apEffectPerkMultiplier = static_cast<float>(static_cast<double>(apEffectPerkMultiplier) * 1.25);
+					} else if (!potion && evaluatedPlayer.hasPerkPoisoner && !effect.beneficial) {
+						apEffectPerkMultiplier = static_cast<float>(static_cast<double>(apEffectPerkMultiplier) * 1.25);
+					}
+				}
+				if (evaluatedPlayer.hasSeekerOfShadows) {
+					apEffectPerkMultiplier = static_cast<float>(static_cast<double>(apEffectPerkMultiplier) * 1.1);
+				}
 				if (!apothecary::Adapter::TryGetAlchemyEffectivenessMultipliers(
 					effect.baseEffect,
 					evaluatedPlayer.alchemyLevel,
 					getFallbackAlchemistMultiplier(evaluatedPlayer),
 					potion,
 					includeTypePerks,
+					apEffectPerkMultiplier,
 					evaluatedPlayer.apothecaryContext,
 					apMagnitudePowerFactor,
 					apDurationPowerFactor)) {
@@ -1138,7 +1158,7 @@ namespace alchemist {
 				durationPowerFactor = 1.0f;
 				return true;
 			}
-			const float playerFactor = caco::algorithm::CalculateAlchemyActorValueMultiplier(
+			const float playerFactor = algorithm::CalculateAlchemyActorValueMultiplier(
 				evaluatedPlayer.fortifyAlchemyLevel);
 			if (!std::isfinite(playerFactor) || playerFactor <= 0.0f) {
 				return false;
@@ -1158,13 +1178,13 @@ namespace alchemist {
 					baseCost = 8.3f;
 				}
 			}
-			return caco::algorithm::CalculateEffectCostPrecise(
+			return algorithm::CalculateEffectCostPrecise(
 				baseCost, magnitude, duration, noMagnitude(effect), noDuration(effect));
 		}
 
 		inline double calculateNativeEffectContribution(
 			const Effect& effect,
-			const caco::algorithm::EffectInput& input) {
+			const algorithm::EffectInput& input) {
 			float baseCost = effect.baseCost;
 			if (caco::Adapter::IsActive()) {
 				const auto* edid = effect.baseEffect ? effect.baseEffect->GetFormEditorID() : nullptr;
@@ -1173,7 +1193,7 @@ namespace alchemist {
 					baseCost = 8.3f;
 				}
 			}
-			return caco::algorithm::CalculateEffectContribution(
+			return algorithm::CalculateEffectContribution(
 				baseCost, input, noMagnitude(effect), noDuration(effect));
 		}
 
@@ -1182,7 +1202,7 @@ namespace alchemist {
 			bool potion,
 			bool includeTypePerks,
 			bool includePlayerFactors,
-			caco::algorithm::EffectInput& input,
+			algorithm::EffectInput& input,
 			const Player& evaluatedPlayer,
 			bool useCacoNative,
 			bool mixedPotion = false,
@@ -1194,7 +1214,7 @@ namespace alchemist {
 				effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative)) {
 				return false;
 			}
-			input = caco::algorithm::CalculateEffectInput(
+			input = algorithm::CalculateEffectInput(
 				effect.magnitude,
 				effect.duration,
 				noMagnitude(effect),
@@ -1202,13 +1222,14 @@ namespace alchemist {
 				effect.powerAffectsMagnitude,
 				effect.powerAffectsDuration,
 				magnitudePowerFactor,
-				durationPowerFactor);
+				durationPowerFactor,
+				useRequiemNative);
 			return input.valid;
 		}
 
 		inline bool applyAlchemyPlusRoundingToInput(
 			const Effect& effect,
-			caco::algorithm::EffectInput& input,
+			algorithm::EffectInput& input,
 			bool applyRounding) {
 			if (!applyRounding) {
 				return true;
@@ -1232,7 +1253,7 @@ namespace alchemist {
 			bool applyAlchemyPlusRounding,
 			bool useRequiemNative = false,
 			bool useApothecaryNative = false) {
-			caco::algorithm::EffectInput input;
+			algorithm::EffectInput input;
 			if (!calculateNativeEffectInput(effect, false, false, true, input, evaluatedPlayer, useCacoNative, false, useRequiemNative, useApothecaryNative)) {
 				return false;
 			}
@@ -1282,7 +1303,7 @@ namespace alchemist {
 			bool mixedPotion = false,
 			bool useRequiemNative = false,
 			bool useApothecaryNative = false) {
-			caco::algorithm::EffectInput nativeInput;
+			algorithm::EffectInput nativeInput;
 			if (!calculateNativeEffectInput(
 					effect, potion, includeTypePerks, includePlayerFactors, nativeInput, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative)) {
 				return false;
@@ -1292,7 +1313,7 @@ namespace alchemist {
 				return false;
 			}
 
-			caco::algorithm::EffectInput constructedInput = nativeInput;
+			algorithm::EffectInput constructedInput = nativeInput;
 			if (includePlayerFactors && !applyAlchemyPlusRoundingToInput(
 					effect, constructedInput, applyAlchemyPlusRounding)) {
 				return false;
@@ -1306,7 +1327,7 @@ namespace alchemist {
 			Effect calculatedEffect = effect;
 			calculatedEffect.calcMagnitude = constructedInput.magnitude;
 			calculatedEffect.calcDuration = constructedInput.duration;
-			calculatedEffect.calcCost = static_cast<float>(caco::algorithm::FloorGoldValue(constructedContribution));
+			calculatedEffect.calcCost = static_cast<float>(algorithm::FloorGoldValue(constructedContribution));
 			calculatedEffect.nativeCost = constructedContribution;
 			calculatedEffect.nativeOrderCost = constructedContribution;
 			result = std::move(calculatedEffect);
@@ -1474,7 +1495,7 @@ namespace alchemist {
 			if (hasPurity) {
 				selectedEffects.erase(std::remove_if(selectedEffects.begin(), selectedEffects.end(),
 					[initialPotion](const auto& selected) {
-						return caco::algorithm::ShouldRemoveOpposingAlchemyEffect(
+						return algorithm::ShouldRemoveOpposingAlchemyEffect(
 							initialPotion, selected.source.beneficial, selected.source.harmful);
 					}), selectedEffects.end());
 			}
@@ -1598,7 +1619,7 @@ namespace alchemist {
 			if (impure) {
 				totalCost = static_cast<double>(alchemyplus::Adapter::FinalizeImpureCost(static_cast<float>(totalCost)));
 			}
-			result.preAdjustmentGold = caco::algorithm::FloorGoldValue(totalCost);
+			result.preAdjustmentGold = algorithm::FloorGoldValue(totalCost);
 			result.cost = (cacoNative || requiemNative) ? static_cast<float>(result.preAdjustmentGold) :
 				(std::isfinite(totalCost) ? static_cast<float>(totalCost) : 0.0f);
 
@@ -1829,8 +1850,8 @@ namespace alchemist {
 		sourceBaseEffect = effect ? effect->baseEffect : nullptr;
 		baseEffect = baseEffectOverride ? baseEffectOverride : (effect ? effect->baseEffect : nullptr);
 		name = baseEffect ? baseEffect->GetFullName() : effect::getName(effect);
-		beneficial = caco::Adapter::HasBeneficialKeyword(baseEffect);
-		harmful = caco::Adapter::HasHarmfulKeyword(baseEffect);
+		beneficial = vanilla::Adapter::HasBeneficialKeyword(baseEffect);
+		harmful = vanilla::Adapter::HasHarmfulKeyword(baseEffect);
 		hostile = baseEffect && baseEffect->IsHostile();
 		powerAffectsMagnitude = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsMagnitude);
 		const bool noMagnitudeValue = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kNoMagnitude);
@@ -1838,8 +1859,8 @@ namespace alchemist {
 		// Calculation paths begin with the source values and replace them when player or compatibility factors apply.
 		calcMagnitude = magnitude;
 		powerAffectsDuration = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kPowerAffectsDuration);
-		durationBased = caco::Adapter::IsDurationBased(baseEffect) ||
-			caco::Adapter::IsDurationBased(sourceBaseEffect);
+		durationBased = vanilla::Adapter::IsDurationBased(baseEffect) ||
+			vanilla::Adapter::IsDurationBased(sourceBaseEffect);
 		const bool noDurationValue = baseEffect && baseEffect->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kNoDuration);
 		duration = noDurationValue ? 0.0f : effect::getDuration(effect);
 		calcDuration = duration;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+Unified the shared alchemy calculations across Vanilla, Alchemy Plus, CACO, Requiem, and Apothecary, improving effect magnitude, duration, and potion value predictions, including Fortify Alchemy and perk interactions.
+Refined CACO and Apothecary compatibility.
+
 ## 1.4.0
 Added automatic Requiem compatibility, including Requiem ingredient records, alchemy effectiveness, Alchemical Lore ranks, and supported perk and keyword effects.
 Added automatic Apothecary compatibility using loaded ingredient records and Apothecary's alchemy-effectiveness rules.

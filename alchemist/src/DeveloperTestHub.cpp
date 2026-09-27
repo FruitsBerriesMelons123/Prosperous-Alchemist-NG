@@ -1175,8 +1175,8 @@ namespace alchemist::devhub {
 						const bool peakValueModifier = active->HasArchetype(RE::EffectArchetypes::ArchetypeID::kPeakValueModifier);
 						const float resolvedMagnitude = noMag ? 0.0f : eff->GetMagnitude();
 						const auto resolvedDuration = noDur ? 0 : static_cast<int>(eff->GetDuration());
-						const bool beneficial = caco::Adapter::HasBeneficialKeyword(active);
-						const bool harmful = caco::Adapter::HasHarmfulKeyword(active);
+						const bool beneficial = vanilla::Adapter::HasBeneficialKeyword(active);
+						const bool harmful = vanilla::Adapter::HasHarmfulKeyword(active);
 						const bool hostile = active->IsHostile();
 
 						std::ostringstream line;
@@ -1195,7 +1195,7 @@ namespace alchemist::devhub {
 							<< (beneficial ? 1 : 0) << ","
 							<< (harmful ? 1 : 0) << ","
 							<< (hostile ? 1 : 0) << ","
-							<< (caco::Adapter::IsDurationBased(active) ? 1 : 0) << ","
+							<< (vanilla::Adapter::IsDurationBased(active) ? 1 : 0) << ","
 							<< CsvEscape(EffectKeywords(active, false)) << ","
 							<< FormID(source->GetFormID()) << ","
 							<< FormID(active->GetFormID()) << ","
@@ -2102,6 +2102,7 @@ namespace alchemist::devhub {
 
 		// Cheap, synchronous refresh so "current mode" and the calculation paths that
 		// evaluatePotion() takes reflect what's actually loaded right now.
+		vanilla::Adapter::Refresh();
 		caco::Adapter::Refresh();
 		alchemyplus::Adapter::Refresh();
 		requiem::Adapter::Refresh();
@@ -2259,7 +2260,7 @@ namespace alchemist::devhub {
 				float initMult = parseJsonFloat(parsedModSettings, "AlchemyIngredientInitMultiplier", 4.0f);
 				float skillFactor = parseJsonFloat(parsedModSettings, "AlchemySkillFactor", 1.5f);
 
-				caco::Adapter::SetGameSettings(initMult, skillFactor);
+				vanilla::Adapter::SetGameSettings(initMult, skillFactor);
 				requiem::Adapter::SetGameSettings(initMult, skillFactor);
 				apothecary::Adapter::SetGameSettings(initMult, skillFactor);
 

@@ -195,6 +195,8 @@ def update_mo2_modlist(
         new_lines.append(line)
 
     modlist_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    time.sleep(0.05)
+    modlist_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
     for mod_name, (final_state, default_str) in target_states.items():
         init_state = initial_states.get(mod_name)

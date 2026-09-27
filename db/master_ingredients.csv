@@ -1,0 +1,374 @@
+ingredient_name,form_id,edid,origin_plugin,containing_plugin
+Abecean Longfin,0x106E1B,MAG_CritterPondFish02Ingredient,Skyrim.esm,Apothecary.esp
+Alocasia Fruit,0xFE004D62,,,
+Aloe Vera Leaves,0xFE0060D0,,,
+Ambrosia,0xFE004836,,,
+Ancestor Moth Wing,0x20059BA,MAG_DLC01MothWingAncestor,Dawnguard.esm,Apothecary.esp
+Angelfish,0x50008EB,ccBGSSSE001_AngelfishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Angler Larvae,0x50008F0,ccBGSSSE001_AnglerLarvaeIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Ash Creep Cluster,0x401CD74,MAG_DLC2AshCreepCluster,Dragonborn.esm,Apothecary.esp
+Ash Hopper Jelly,0x401CD71,MAG_DLC2AshHopperJelly,Dragonborn.esm,Apothecary.esp
+Ashen Grass Pod,0x4016E26,MAG_DLC2SpikyGrassAsh01,Dragonborn.esm,Apothecary.esp
+Aster Bloom Core,0xFE004D66,,,
+Bear Claws,0x6BC02,MAG_BearClaws,Skyrim.esm,Apothecary.esp
+Bee,0xA9195,MAG_CritterBeeIngredient,Skyrim.esm,Apothecary.esp
+Beehive Husk,0xA9191,MAG_BeeHiveHusk,Skyrim.esm,Apothecary.esp
+Berit's Ashes,0x705B7,MAG_FavorThadgeirAshes,Skyrim.esm,Apothecary.esp
+Bittergreen Petals,0xFE004D68,,,
+Bleeding Crown,0x4DA20,MAG_Mushroom02,Skyrim.esm,Apothecary.esp
+Blind Watcher's Eye,0xFE004822,,,
+Bliss Bug Thorax,0x6059155,ccBGSSSE025_Blissbug,ccbgssse025-advdsgs.esm,Apothecary - Saints & Seducers Patch.esp
+Blister Pod Cap,0xFE004D6A,,,
+Blisterwort,0x4DA25,MAG_Mushroom06,Skyrim.esm,Apothecary.esp
+Blue Butterfly Wing,0x727DE,MAG_MothWingBlue,Skyrim.esm,Apothecary.esp
+Blue Dartwing,0xE4F0C,MAG_DragonflyBlue,Skyrim.esm,Apothecary.esp
+Blue Mountain Flower,0x77E1C,MAG_MountainFlower01Blue,Skyrim.esm,Apothecary.esp
+Boar Tusk,0x401CD6F,MAG_DLC2BoarTusk,Dragonborn.esm,Apothecary.esp
+Bog Beacon,0xFE004D6C,,,
+Bone Meal,0x34CDD,MAG_BoneMeal,Skyrim.esm,Apothecary.esp
+Briar Heart,0x3AD61,MAG_BriarHeart,Skyrim.esm,Apothecary.esp
+Bungler's Bane,0xFE004802,,,
+Burnt Spriggan Wood,0x401CD6E,MAG_DLC2BurntSprigganWood,Dragonborn.esm,Apothecary.esp
+Butterfly Wing,0x727E0,MAG_MothWingMonarch,Skyrim.esm,Apothecary.esp
+Canis Root,0x6ABCB,MAG_CanisRoot01,Skyrim.esm,Apothecary.esp
+Charred Skeever Hide,0x52695,MAG_CharredSkeeverHide,Skyrim.esm,Apothecary.esp
+Chaurus Eggs,0x3AD56,MAG_ChaurusEggs,Skyrim.esm,Apothecary.esp
+Chaurus Hunter Antennae,0x20183B7,MAG_DLC01ChaurusHunterAntennae,Dawnguard.esm,Apothecary.esp
+Chicken's Egg,0x23D77,MAG_BirdEgg03,Skyrim.esm,Apothecary.esp
+Chokeberry,0xFE004838,,,
+Chokeweed,0xFE004804,,,
+Coda Flower,0xFE004805,,,
+Comberry,0xFE004806,,,
+Congealed Putrescence,0xFE004807,,,
+Corkbulb Root,0xFE004809,,,
+Creep Cluster,0xB2183,MAG_CreepClusterRoot,Skyrim.esm,Apothecary.esp
+Crimson Nirnroot,0xB701A,MAG_NirnrootRed,Skyrim.esm,Apothecary.esp
+Cyrodilic Spadetail,0x106E19,MAG_CritterPondFish04Ingredient,Skyrim.esm,Apothecary.esp
+Daedra Heart,0x3AD5B,MAG_DaedraHeart,Skyrim.esm,Apothecary.esp
+Daedra Silk,0xFE00480A,,,
+Daedra Venin,0xFE00480B,,,
+Daedroth Teeth,0xFE004826,,,
+Deathbell,0x516C8,MAG_deathBell,Skyrim.esm,Apothecary.esp
+Dragon's Tongue,0x889A2,MAG_DragonsTongue,Skyrim.esm,Apothecary.esp
+Dreugh Wax,0xFE004827,,,
+Dwarven Oil,0xF11C0,MAG_DwarvenOil,Skyrim.esm,Apothecary.esp
+Ectoplasm,0x3AD63,MAG_Ectoplasm,Skyrim.esm,Apothecary.esp
+Elves Ear,0x34D31,MAG_ElvesEar,Skyrim.esm,Apothecary.esp
+Elytra Ichor,0xFE004828,,,
+Emperor Parasol Moss,0x401FF75,MAG_DLC2HangingMoss,Dragonborn.esm,Apothecary.esp
+Eye of Sabre Cat,0x6BC07,MAG_SabrecatEyeball,Skyrim.esm,Apothecary.esp
+Falmer Ear,0x3AD5D,MAG_FalmerEar,Skyrim.esm,Apothecary.esp
+Felsaad Tern Feathers,0x403CD8E,MAG_DLC2TernFeathers,Dragonborn.esm,Apothecary.esp
+Fire Petal,0xFE004829,,,
+Fire Salts,0x3AD5E,MAG_FireSalts,Skyrim.esm,Apothecary.esp
+Flame Stalk,0xFE00482A,,,
+Fly Amanita,0x4DA00,MAG_Mushroom01,Skyrim.esm,Apothecary.esp
+Frost Mirriam,0x34D32,MAG_FrostMirriam,Skyrim.esm,Apothecary.esp
+Frost Salts,0x3AD5F,MAG_FrostSalts,Skyrim.esm,Apothecary.esp
+Fungus Stalk,0xFE00482B,,,
+Garlic,0x34D22,MAG_Garlic,Skyrim.esm,Apothecary.esp
+Giant Lichen,0x7E8C1,MAG_GiantLichen,Skyrim.esm,Apothecary.esp
+Giant's Toe,0x3AD64,MAG_GiantToes,Skyrim.esm,Apothecary.esp
+Glassfish,0x50008EE,ccBGSSSE001_GlassfishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Gleamblossom,0x200B097,MAG_DLC01GlowPlant01Ingredient,Dawnguard.esm,Apothecary.esp
+Glow Dust,0x3AD73,MAG_glowDust,Skyrim.esm,Apothecary.esp
+Glowing Mushroom,0x7EE01,MAG_GlowingMushroom,Skyrim.esm,Apothecary.esp
+Gnarl Bark,0xFE00482C,,,
+Gold Kanet,0xFE00482D,,,
+Goldfish,0x50008EF,ccBGSSSE001_GoldfishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Grass Pod,0x83E64,MAG_SpikyGrass01,Skyrim.esm,Apothecary.esp
+Green Butterfly Wing,0x6059151,ccBGSSSE025_GreenButterfly,ccbgssse025-advdsgs.esm,Apothecary - Saints & Seducers Patch.esp
+Hackle-Lo Leaf,0xFE00482E,,,
+Hagraven Claw,0x6B689,MAG_HagravenClaw,Skyrim.esm,Apothecary.esp
+Hagraven Feathers,0x3AD66,MAG_HagravenFeathers,Skyrim.esm,Apothecary.esp
+Hanging Moss,0x57F91,MAG_HangingMoss,Skyrim.esm,Apothecary.esp
+Hawk Beak,0xE7EBC,MAG_HawkBeak,Skyrim.esm,Apothecary.esp
+Hawk Feathers,0xE7ED0,MAG_HawkFeathers,Skyrim.esm,Apothecary.esp
+Hawk's Egg,0x300F1CC,MAG_BYOHHawkEgg01,HearthFires.esm,Apothecary.esp
+Heart of Order,0xFE004851,,,
+Histcarp,0x106E18,MAG_CritterPondFish05Ingredient,Skyrim.esm,Apothecary.esp
+Honeycomb,0xB08C5,MAG_BeeHoneyComb,Skyrim.esm,Apothecary.esp
+Human Flesh,0x1016B3,MAG_HumanFlesh,Skyrim.esm,Apothecary.esp
+Human Heart,0xB18CD,MAG_HumanHeart,Skyrim.esm,Apothecary.esp
+Hunger Tongue,0xFE00480C,,,
+Hydnum Azure Giant Spore,0xFE00480D,,,
+Hypha Facia,0xFE00480E,,,
+Ice Wraith Teeth,0x3AD6A,MAG_IceWraithTeeth,Skyrim.esm,Apothecary.esp
+Imp Gall,0xFE00480F,,,
+Imp Stool,0x4DA23,MAG_Mushroom04,Skyrim.esm,Apothecary.esp
+Jarrin Root,0x1BCBC,MAG_DBJarrinRoot,Skyrim.esm,Apothecary.esp
+Jazbay Grapes,0x6AC4A,MAG_JazBay,Skyrim.esm,Apothecary.esp
+Juniper Berries,0x5076E,MAG_JuniperBerries,Skyrim.esm,Apothecary.esp
+Juvenile Mudcrab,0x50008F2,ccBGSSSE001_JuvenileMudcrabIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Kagouti Hide,0xFE004810,,,
+Kresh Fiber,0xFE004811,,,
+Large Antlers,0x6BC0A,MAG_AntlersLarge,Skyrim.esm,Apothecary.esp
+Lavender,0x45C28,MAG_Lavender,Skyrim.esm,Apothecary.esp
+Lichor,0xFE004837,,,
+Luminous Russula,0xFE004813,,,
+Luna Moth Wing,0x727DF,MAG_MothWingLuna,Skyrim.esm,Apothecary.esp
+Lyretail Anthias,0x50008F1,ccBGSSSE001_LyretailAnthiasIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Marshmerrow,0xFE004814,,,
+Minotaur Horn,0xFE004815,,,
+Moon Sugar,0xD8E3F,MAG_MoonSugar,Skyrim.esm,Apothecary.esp
+Mora Tapinella,0xEC870,MAG_MoraTapinellaBits,Skyrim.esm,Apothecary.esp
+Mudcrab Chitin,0x6BC00,MAG_MudcrabChitin,Skyrim.esm,Apothecary.esp
+Namira's Rot,0x4DA24,MAG_Mushroom05,Skyrim.esm,Apothecary.esp
+Netch Jelly,0x401CD72,MAG_DLC2NetchJelly,Dragonborn.esm,Apothecary.esp
+Nightshade,0x2F44C,MAG_Nightshade,Skyrim.esm,Apothecary.esp
+Nirnroot,0x59B86,MAG_Nirnroot,Skyrim.esm,Apothecary.esp
+Nordic Barnacle,0x7EDF5,MAG_NordicBarnacles,Skyrim.esm,Apothecary.esp
+Ogre's Teeth,0xFE004816,,,
+Orange Dartwing,0xBB956,MAG_DragonflyOrange,Skyrim.esm,Apothecary.esp
+Pearl,0x854FE,MAG_Pearl,Skyrim.esm,Apothecary.esp
+Pearlfish,0x50008EC,ccBGSSSE001_PearlfishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Pine Thrush Egg,0x23D6F,MAG_BirdEgg02,Skyrim.esm,Apothecary.esp
+Poison Bloom,0x20185FB,MAG_DLC01PoisonBloom,Dawnguard.esm,Apothecary.esp
+Powdered Mammoth Tusk,0x6BC10,MAG_PowderedMammothTusk,Skyrim.esm,Apothecary.esp
+Purple Butterfly Wing,0x6059153,ccBGSSSE025_PurpleButterfly,ccbgssse025-advdsgs.esm,Apothecary - Saints & Seducers Patch.esp
+Purple Mountain Flower,0x77E1E,MAG_MountainFlower01Purple,Skyrim.esm,Apothecary.esp
+Pygmy Sunfish,0x50008ED,ccBGSSSE001_PygmySunfishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Red Kelp Gas Bladder,0xFE004817,,,
+Red Mountain Flower,0x77E1D,MAG_MountainFlower01Red,Skyrim.esm,Apothecary.esp
+Redwort Flower,0xFE004818,,,
+River Betty,0x106E1A,MAG_CritterPondFish03Ingredient,Skyrim.esm,Apothecary.esp
+Rock Warbler Egg,0x7E8C8,MAG_BirdEgg01,Skyrim.esm,Apothecary.esp
+Roobrush,0xFE004819,,,
+Rot Scale,0x100306D,MAG_ccBGS_RootRotScaleIngredient,Update.esm,Apothecary.esp
+Sabre Cat Tooth,0x6BC04,MAG_SabrecatTooth,Skyrim.esm,Apothecary.esp
+Salmon Roe,0x3003545,MAG_BYOHSalmonRoe01,HearthFires.esm,Apothecary.esp
+Salt Pile,0x74A19,MAG_MS03BlackBriarSecretIngredient,Skyrim.esm,Apothecary.esp
+Saltrice,0xFE00481A,,,
+Scalon Fin,0xFE00481B,,,
+Scaly Pholiota,0x6F950,MAG_ScalyPholiotaBits,Skyrim.esm,Apothecary.esp
+Scathecraw,0x4017E97,MAG_DLC2Scathecraw01,Dragonborn.esm,Apothecary.esp
+Screaming Maw,0x100306E,MAG_ccBGS_RootScreamingMawIngredient,Update.esm,Apothecary.esp
+Scrib Jelly,0xFE00481C,,,
+Scrib Jerky,0xFE00481D,,,
+Silverside Perch,0x106E1C,MAG_CritterPondFish01Ingredient,Skyrim.esm,Apothecary.esp
+Skeever Tail,0x3AD6F,MAG_SkeeverTail,Skyrim.esm,Apothecary.esp
+Slaughterfish Egg,0x7E8C5,MAG_SlaughterfishEgg01,Skyrim.esm,Apothecary.esp
+Slaughterfish Scales,0x3AD70,MAG_SlaughterfishScales,Skyrim.esm,Apothecary.esp
+Sload Soap,0xFE00481E,,,
+Small Antlers,0x6BC0B,MAG_AntlersSmall,Skyrim.esm,Apothecary.esp
+Small Pearl,0x85500,MAG_PearlSmall,Skyrim.esm,Apothecary.esp
+Snowberries,0x1B3BD,MAG_Snowberry,Skyrim.esm,Apothecary.esp
+Spadefish,0x50008F3,ccBGSSSE001_PinnateSpadefishIng,ccBGSSSE001-Fish.esm,Apothecary - Fishing Patch.esp
+Spawn Ash,0x401CD6D,MAG_DLC2GhoulAsh,Dragonborn.esm,Apothecary.esp
+Spider Egg,0x9151B,MAG_SpiderEgg,Skyrim.esm,Apothecary.esp
+Spriggan Sap,0x63B5F,MAG_SprigganSap,Skyrim.esm,Apothecary.esp
+Stoneflower Petals,0xFE00481F,,,
+Swamp Fungal Pod,0x7E8B7,MAG_SwampFungalPod01,Skyrim.esm,Apothecary.esp
+Taproot,0x3AD71,MAG_Taproot,Skyrim.esm,Apothecary.esp
+Thistle Branch,0x134AA,MAG_Thistle01,Skyrim.esm,Apothecary.esp
+Thorn Hook,0x100306F,MAG_ccBGS_RootThornHookIngredient,Update.esm,Apothecary.esp
+Torchbug Thorax,0x4DA73,MAG_FireflyThorax,Skyrim.esm,Apothecary.esp
+Trama Root,0x4017008,MAG_DLC2TramaRoot01,Dragonborn.esm,Apothecary.esp
+Troll Fat,0x3AD72,MAG_TrollFat,Skyrim.esm,Apothecary.esp
+Tundra Cotton,0x3F7F8,MAG_TundraCotton,Skyrim.esm,Apothecary.esp
+Vampire Dust,0x3AD76,MAG_vampireDust,Skyrim.esm,Apothecary.esp
+Void Essence,0xFE004820,,,
+Void Salts,0x3AD60,MAG_VoidSalts,Skyrim.esm,Apothecary.esp
+Watcher's Eye,0xFE004821,,,
+Wheat,0x4B0BA,MAG_Wheat,Skyrim.esm,Apothecary.esp
+White Cap,0x4DA22,MAG_Mushroom03,Skyrim.esm,Apothecary.esp
+Wisp Stalk Caps,0xFE004823,,,
+Wisp Wrappings,0x6BC0E,MAG_WispWrappings,Skyrim.esm,Apothecary.esp
+Withering Moon,0xFE004824,,,
+Worm's Head Cap,0xFE004825,,,
+Yellow Mountain Flower,0x2002A78,MAG_DLC1MountainFlower01Yellow,Dawnguard.esm,Apothecary.esp
+Akatosh Butterfly,0x833F5DE,CACO_MothDiurnal07_Akatosh,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Alkanet Flower,0x8316D7D,CACO_Alkanet_CITSHarvestables,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Aloe Vera,0x8A100AD,CACO_Aloe_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ancestor Moth,0x20059BA,MAG_DLC01MothWingAncestor,Dawnguard.esm,Apothecary.esp
+Argonian Scales,0x1CCA135,CACO_NPCArgonianScales,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Arrowroot,0x8102EA7,CACO_ArrowRoot_IoT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ash Salts,0x401CD6D,MAG_DLC2GhoulAsh,Dragonborn.esm,Apothecary.esp
+Atlas Moth,0x83353B8,CACO_MothNocturnal06_Atlas,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ayleid Moon Moth,0x832B1A3,CACO_MothNocturnal04_Ayleid,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Banded Pennant,0x8660004,CACO_Dragonfly04Pennant,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Barley,0x897B010,CACO_Barley,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Barley Extract,0x89EA788,CACO_BarleyExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Bear Bile,0x8326085,CACO_BearGall_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Bear Fat,0x1CCA143,CACO_BearFat,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Bergamot Seeds,0x80CB2B6,CACO_BergamotSeeds_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Bitterling,0x833F5DC,CACO_CritterPondFishBrackish03_Bitterling,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Black Lichen,0x8A10056,CACO_BlackLichen_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Black Pearl,0x1CC0635,CACO_PearlBlack,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Blackbrow Bleak,0x8326087,CACO_CritterPondFishTundra01_Bleak,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blind Betty,0x8326088,CACO_CritterPondFishCave01_XXX,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blister Pod,0xFE004D6A,,,
+Bloatspore,0x8A1007F,CACO_BloatsporePod_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Bosmer,0x80EEA6F,CACO_BloodBosmer_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Breton,0x80EEA5C,CACO_BloodBreton_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Dunmer,0x80EEA69,CACO_BloodDunmer_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Khajiit,0x80EEA74,CACO_BloodKhajiit_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Nord,0x80EEA5B,CACO_BloodNord_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of a Redguard,0x80EEA5F,CACO_BloodRedguard_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of an Altmer,0x80EEA67,CACO_BloodAltmer_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of an Argonian,0x80EEA72,CACO_BloodArgonian_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of an Imperial,0x80EEA66,CACO_BloodImperial_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blood of an Orc,0x80EEA70,CACO_BloodOrc_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blue Clipper Butterfly,0x833F5E0,CACO_MothDiurnal08_BlueClipper,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blue Mountain Flower Extract,0x85A97EA,CACO_MountainFlower01BlueExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blue Orfe,0x832608F,CACO_CritterPondFishRift01_Orfe,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Blue Swallowtail,0x727DE,MAG_MothWingBlue,Skyrim.esm,Apothecary.esp
+Bone Hawk Claw,0x1CCA133,CACO_DLC1BoneHawkClaw,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Bone Hawk Feathers,0x1CCA134,CACO_DLC1BoneHawkFeathers,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Canis Root Extract,0x85A97E8,CACO_CanisRootExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Cavefish,0x8326092,CACO_CritterPondFishCave02_XXX,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ceanothus Moth,0x8326094,CACO_MothNocturnal01_Ceanothus,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Cecropia Moth,0x8326096,CACO_MothNocturnal02_Cecropia,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Charred Skeever Meat,0x52695,MAG_CharredSkeeverHide,Skyrim.esm,Apothecary.esp
+Chicken Egg,0x23D77,MAG_BirdEgg03,Skyrim.esm,Apothecary.esp
+Chicken Feathers,0x1CC0640,CACO_ChickenFeathers,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Chokeberries,0xFE004838,,,
+Clouded Funnel Cap,0x8A10059,CACO_MushroomCloudedFunnelCap_KRY,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Columbine Root Extract,0x85A97E6,CACO_ColumbineRootExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Columbine Root Pulp,0x8102EC0,CACO_ColumbineRootPulp_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Comet Moth,0x832609C,CACO_MothNocturnal03_Comet,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Common Blue Butterfly,0x832609A,CACO_MothDiurnal01_Blue,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Common Shiner,0x832609E,CACO_CritterPondFishTundra03_Shiner,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Creep Cluster Extract,0x85A97E4,CACO_CreepClusterRootExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Crimson Marsh Glider,0x8660005,CACO_Dragonfly05Magenta,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Crushed Amber,0x1CC0634,CACO_Amber,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Crushed Ant Paste,0x83260A0,CACO_CrushedAntPaste_SF_XXX,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Crushed Onyx,0x1CC0636,CACO_Onyx,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Darkwater Minnow,0x833F5D9,CACO_CritterPondFishRift04_Darkwater,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Demented Swallowtail,0x6059153,ccBGSSSE025_PurpleButterfly,ccbgssse025-advdsgs.esm,Apothecary - Saints & Seducers Patch.esp
+Direnni's Dartwing,0x8660000,CACO_Dragonfly01Daedric,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Dragon Heartscales,0x80A2A42,CACO_DragonHeartScaleIngr_KRY,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Dragon Tooth,0x1CC0639,CACO_DragonTooth,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Dragon's Tongue Extract,0x85A97E2,CACO_DragonsTongueExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Druadach Dart,0x83302A5,CACO_CritterPondFishReach01_Druadach,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ebony Jewelwing,0x8660003,CACO_Dragonfly03Ebony,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Elven Heart,0x8A100FF,CACO_ElvenHeart_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Elves Ear Extract,0x85A97E0,CACO_ElvesEarExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Emerald Darner,0x8660013,CACO_Dragonfly10Green,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Emerald Swallowtail,0x83353B9,CACO_MothDiurnal02_EmeraldSWT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Emperor Dartwing,0x8660011,CACO_Dragonfly09Emperor,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Emperor Moth,0x83302A8,CACO_MothNocturnal05_Emperor,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Falkreath Minnow,0x83302AA,CACO_CritterPondFishReach02_FalkMinnow,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Falmer Blood,0x8102EA3,CACO_BloodCreatureFalmer_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fennel Seed Extract,0x85A97DE,CACO_FennelSeedExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fennel Seeds,0x1CCA117,CACO_FennelSeeds,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Fine-Cut Ash Salts,0x85A980E,CACO_RefinedAshSalts,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fine-Cut Fire Salts,0x85A9807,CACO_RefinedFireSalts,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fine-Cut Frost Salts,0x85A9808,CACO_RefinedFrostSalts,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fine-Cut Void Salts,0x85A980A,CACO_RefinedVoidSalts,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Finely Ground Bone Meal,0x85A980C,CACO_RefinedBoneMeal,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Fire Petals,0xFE004829,,,
+Flame Skimmer,0x8660007,CACO_Dragonfly07Flame,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Flax Seed Extract,0x85A97DC,CACO_FlaxSeedExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Flax Seeds,0x1CCA118,CACO_FlaxSeeds,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Fox Fat,0x1CCA144,CACO_FoxFat,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Foxglove Nectar,0x80D0413,CACO_FoxgloveNectar_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Frogspawn,0x816009F,CACO_Frogspawn_aSP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Frost Mirriam Extract,0x85A97DA,CACO_FrostMirriamExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Frost Skimmer,0x8660006,CACO_Dragonfly06Frost,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Garlic Extract,0x85A97D9,CACO_GarlicExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ghostfish,0x83353AF,CACO_CritterPondFishCave03_XXX,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Giant's Blood,0x8102EA1,CACO_BloodCreatureGiant_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ginseng,0x80D0415,CACO_GinsengRoot_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Glowing Mushroom Extract,0x85A46D8,CACO_GlowingMushroomExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Goat Eye,0x81FB129,CACO_GoatEye_RWS,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Golden Rudd,0x83353B0,CACO_CritterPondFishTundra02_Rudd,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Golden Skimmer,0x8660016,CACO_Dragonfly08Yellow,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Golden-Ringed Darner,0x8660012,CACO_Dragonfly11Ringed,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Gravedust,0x80D0439,CACO_GraveDust_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Gravetar,0x1CCA139,CACO_GraveTar,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Green Tench,0x832608E,CACO_CritterPondFishTundra04_Tench,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Gudgeon,0x832608D,CACO_CritterPondFishBrackish02_Gudgeon,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Hanging Moss Extract,0x85A46D4,CACO_HangingMossExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Hawk Egg,0x300F1CC,MAG_BYOHHawkEgg01,HearthFires.esm,Apothecary.esp
+Heather,0x8A100B3,CACO_Heather_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Heather Extract,0x85A46D2,CACO_HeatherExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Horker Tusk,0x1CCA131,CACO_HorkerTuskIngr,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Horse Hair,0x1CC0641,CACO_HorseHair,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Ironwood Extract,0x85A46D0,CACO_IronwoodNutExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ironwood Nuts,0x1CCA115,CACO_IronwoodNuts,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Jazbay Extract,0x85A46CE,CACO_JazBayExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Juniper Berry Extract,0x85A46CC,CACO_JuniperBerriesExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Khajiit Eye,0x8102EB9,CACO_NPCKhajiitEye_KRY,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Kwama Cuttle,0x8A10100,CACO_KwamaCuttle_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Kwama Egg,0x8A10101,CACO_KwamaEgg_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Lavender Extract,0x85A46CA,CACO_LavenderExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Lotus Seeds,0x80D0429,CACO_LotusSeeds_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Luna Moth,0x727DF,MAG_MothWingLuna,Skyrim.esm,Apothecary.esp
+Mandrake Root,0x80A2A39,CACO_Mandrake_CITSHarvestables,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Manic Monarch Butterfly,0x6059151,ccBGSSSE025_GreenButterfly,ccbgssse025-advdsgs.esm,Apothecary - Saints & Seducers Patch.esp
+Marsh Fritillary,0x833F5E5,CACO_MothDiurnal10_Fritillary,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Marshmerrow Extract,0x85A46C8,CACO_MarshmerrowExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Monarch Butterfly,0x727E0,MAG_MothWingMonarch,Skyrim.esm,Apothecary.esp
+Monkshood Root Pulp,0x80D041D,CACO_MonkshoodRootPulp_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Morning Glory Root Pulp,0x80D0421,CACO_MorningGloryRootPulp_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Mother of Pearl,0x854FE,MAG_Pearl,Skyrim.esm,Apothecary.esp
+Mourning Cloak,0x83353BC,CACO_MothDiurnal03_MourningClk,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Mugwort Seeds,0x80D0423,CACO_MugwortSeeds_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Nightshade Extract,0x85A46C6,CACO_NightshadeExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Nordic Swallowtail,0x83353C0,CACO_MothDiurnal04_NordicSWT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ogre Teeth,0xFE004816,,,
+Orange Tip Butterfly,0x83353B2,CACO_MothDiurnal09_OrangeTip,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Orc Liver,0x8102EBA,CACO_NPCOrcLiver_Exc,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Oxgall,0x83353C3,CACO_Oxgall_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Padomaic Tigerfish,0x833F5D5,CACO_CritterPondFishBrackish01_Tigerfish,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Painted Lady,0x83353C6,CACO_MothDiurnal05_PaintedLady,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Peacock Butterfly,0x83353C8,CACO_MothDiurnal06_Peacock,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Peony Seeds,0x80D0426,CACO_PeonySeeds_IOT,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Pheasant Feathers,0x83353CA,CACO_PheasantFeathers_Exc,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Polyphemus Moth,0x83353CC,CACO_MothNocturnal08_Polyphemus,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Purple Mountain Flower Extract,0x85A46C4,CACO_MountainFlower01PurpleExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Putrefied Flesh,0x1CCA136,CACO_DecayedMeat,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Racer Plumes,0x1CCA142,CACO_RacerPlumeFeathers,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Red Admiral Butterfly,0x833F5E6,CACO_MothDiurnal11_Admiral,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Red Cracker Butterfly,0x833A4CF,CACO_MothDiurnal12_RedCracker,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Red Lichen,0x8A1005D,CACO_RedLichen_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Red Mountain Flower Extract,0x85A46C2,CACO_MountainFlower01RedExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Redbelly Dace,0x83353B6,CACO_CritterPondFishRift03_Dace,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Ruby Shiner,0x833A4D2,CACO_CritterPondFishReach03_ShinerRuby,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Sabre Cat Eye,0x6BC07,MAG_SabrecatEyeball,Skyrim.esm,Apothecary.esp
+Saltrice Extract,0x85A46C0,CACO_SaltriceExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Sawtooth Butterfly,0x80D041A,CACO_MothDiurnal13_Sawtooth,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Scamp Skin,0x8A10127,CACO_ScampSkin_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Silverjaw Minnow,0x833F5D7,CACO_CritterPondFishReach04_Silverjaw,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Silverside,0x106E1C,MAG_CritterPondFish01Ingredient,Skyrim.esm,Apothecary.esp
+Snowberry Extract,0x85A46BE,CACO_SnowberryExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Soul Husk,0x1CCA132,CACO_SoulHuskIngr,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Spider Silk,0x1CC0638,CACO_SpiderSilk,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Spiky Grass Extract,0x85A46D6,CACO_SpikyGrassExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+St. Jahn's Wort Nectar,0x80D042C,CACO_StJahnsWortNectar_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Stoneflower,0xFE00481F,,,
+Sulfur,0x1CC0637,CACO_Sulfur,Update.esm,Complete Alchemy & Cooking Overhaul.esp
+Swamp Betty,0x833F5DA,CACO_CritterPondFishBrackish04_SwampBetty,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Thistle Extract,0x85A46BC,CACO_ThistleExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Tiger Lily Nectar,0x80D042E,CACO_TigerLilyNectar_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Tinder Polypore Cap,0x8A1001E,CACO_TinderPolyporeCap_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Torchbug Abdomen,0x4DA73,MAG_FireflyThorax,Skyrim.esm,Apothecary.esp
+Troll's Blood,0x8102EA0,CACO_BloodCreatureTroll_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Tundra Cotton Extract,0x85A46BB,CACO_TundraCottonExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Violet Coprinus,0x8A10060,CACO_VioletCoprinusCap,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Warpaint Shiner,0x83302A6,CACO_CritterPondFishRift02_Warpaint,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Water Hyacinth Nectar,0x80D0430,CACO_WaterHyacinthNectar_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Werebear Claws,0x80F3B77,CACO_WerebearClaws_KRY,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Werewolf Blood,0x8102EA9,CACO_BloodCreatureWerewolf_BP,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Wheat Extract,0x85A46B8,CACO_WheatExtract,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+White Witch Moth,0x83353BE,CACO_MothNocturnal07_WhiteWitch,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Widow Skimmer,0x8660002,CACO_Dragonfly02Widow,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Wisp Stalks,0xFE004823,,,
+Wolf Liver,0x81FB127,CACO_WolfLiver_Exc,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Wormwood Leaves,0x8A1013F,CACO_Wormwood_SF,Complete Alchemy & Cooking Overhaul.esp,Complete Alchemy & Cooking Overhaul.esp
+Bear Heart,0x804365F,REQ_Ingredient_BearHeart,Requiem.esp,Requiem.esp
+Blue Glitterdust,0x83AB3C5,REQ_Ingredient_BlueDust,Requiem.esp,Requiem.esp
+Claws,0x6BC02,MAG_BearClaws,Skyrim.esm,Apothecary.esp
+Heart,0xB18CD,MAG_HumanHeart,Skyrim.esm,Apothecary.esp
+Horker Fat,0x8034E09,REQ_Ingredient_HorkerFat,Requiem.esp,Requiem.esp
+Jon's Giant Abecean Longfin,0x80972E6,REQ_Ingredient_Cleese_CritterPondFish,Requiem.esp,Requiem.esp
+Mammoth Heart,0x8043661,REQ_Ingredient_MammothHeart,Requiem.esp,Requiem.esp
+Poisonous Bloom,0x20185FB,MAG_DLC01PoisonBloom,Dawnguard.esm,Apothecary.esp
+Red Glitterdust,0x83AB3BC,REQ_Ingredient_RedGemDust,Requiem.esp,Requiem.esp
+Sabre Cat Heart,0x8043665,REQ_Ingredient_SabrecatHeart,Requiem.esp,Requiem.esp
+Salt,0x34CDF,MAG_SaltPile,Skyrim.esm,Apothecary.esp
+Sinderion's Serendipity,0x8AE38E9,REQ_Ingredient_SinderionsSerendipity,Requiem.esp,Requiem.esp
+Strange Remains,0x807524B,REQ_Ingredient_StrangeRemains,Requiem.esp,Requiem.esp
+Venomous Spittle,0x844C4A8,REQ_Ingredient_FrostBiteSpiderSalvia,Requiem.esp,Requiem.esp
+Wolf Heart,0x804365E,REQ_Ingredient_WolfHeart,Requiem.esp,Requiem.esp

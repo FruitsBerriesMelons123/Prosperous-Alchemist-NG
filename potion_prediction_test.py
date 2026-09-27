@@ -228,6 +228,27 @@ def _snapshot_int(
 	return max(minimum, min(maximum, parsed))
 
 
+def _snapshot_caco_duration_index(values: Mapping[str, str], name: str) -> int:
+	"""Resolve a raw CACO duration global the way CACO_AlchDurationModifier does.
+
+	The perk's 5-second (x0.2) and 10-second (x0.1) entries are conditioned on
+	GetGlobalValue == 1 and == 2 exactly; any other value (e.g. 5 or 10) matches
+	neither and behaves like the 1-second option. Mirrors caco NormalizeDurationIndex.
+	"""
+	value = _snapshot_value(values, name)
+	if value is None or not value:
+		return 0
+	try:
+		parsed = float(value)
+	except ValueError as error:
+		raise ValueError(f"INI setting {name!r} must be numeric") from error
+	if parsed == 1.0:
+		return 1
+	if parsed == 2.0:
+		return 2
+	return 0
+
+
 def _snapshot_float(
 	values: Mapping[str, str], name: str, default: float, minimum: float | None = None
 ) -> float:
@@ -263,26 +284,26 @@ class CACOSettings:
 	@classmethod
 	def from_ini(cls, values: Mapping[str, str]) -> "CACOSettings":
 		return cls(
-			restore_health_duration=_snapshot_int(
-				values, "RestoreHealthDuration", 0, 0, 2
+			restore_health_duration=_snapshot_caco_duration_index(
+				values, "RestoreHealthDuration"
 			),
-			restore_magicka_duration=_snapshot_int(
-				values, "RestoreMagickaDuration", 0, 0, 2
+			restore_magicka_duration=_snapshot_caco_duration_index(
+				values, "RestoreMagickaDuration"
 			),
-			restore_stamina_duration=_snapshot_int(
-				values, "RestoreStaminaDuration", 0, 0, 2
+			restore_stamina_duration=_snapshot_caco_duration_index(
+				values, "RestoreStaminaDuration"
 			),
 			restore_effects_do_not_stack=_snapshot_bool(
 				values, "RestoreEffectsDoNotStack", False
 			),
-			damage_health_duration=_snapshot_int(
-				values, "DamageHealthDuration", 0, 0, 2
+			damage_health_duration=_snapshot_caco_duration_index(
+				values, "DamageHealthDuration"
 			),
-			damage_magicka_duration=_snapshot_int(
-				values, "DamageMagickaDuration", 0, 0, 2
+			damage_magicka_duration=_snapshot_caco_duration_index(
+				values, "DamageMagickaDuration"
 			),
-			damage_stamina_duration=_snapshot_int(
-				values, "DamageStaminaDuration", 0, 0, 2
+			damage_stamina_duration=_snapshot_caco_duration_index(
+				values, "DamageStaminaDuration"
 			),
 			disable_all_potion_handling=_snapshot_bool(
 				values, "DisableAllPotionHandling", False
@@ -1326,8 +1347,6 @@ def effect_apothecary_power_factors(
 	base = float(init_multiplier) * (1.0 + (float(skill_factor) - 1.0) * (skill_level / 100.0))
 	mult = base * perk_mult
 
-	levels = max(0.0, skill_level - 15.0)
-
 	skill_kw = {
 		"magicalchfortifymarksman",
 		"magicalchfortifyonehanded",
@@ -1336,6 +1355,17 @@ def effect_apothecary_power_factors(
 		"magicalchfortifyunarmed",
 		"magicalchfortifysneakattacks",
 		"magicalchfortifypowerattacks",
+	}
+	resist_kw = {
+		"magicalchresistfire",
+		"magicalchresistfrost",
+		"magicalchresistshock",
+		"magicalchresistmagic",
+		"magicalchresistpoison",
+		"magicslow",
+	}
+	reflect_kw = {
+		"mag_magicalchreflectdamage",
 	}
 	restore_kw = {
 		"magicalchrestorehealth",
@@ -1364,19 +1394,46 @@ def effect_apothecary_power_factors(
 		"magicalchfortifyillusion",
 		"magicalchfortifyrestoration",
 	}
+	illusion_kw = {
+		"mag_magicalchillusioneffect",
+	}
 
 	if (keywords & skill_kw) or effect.duration_based:
 		category_mult = 1.0
-	elif (keywords & restore_kw) or (keywords & damage_kw):
-		category_mult = 1.0 + 0.00667 * levels
+	elif keywords & resist_kw:
+		category_mult = 1.0
+	elif keywords & reflect_kw:
+		category_mult = 1.0 + 0.015 * skill_level
+	elif keywords & restore_kw:
+		category_mult = 1.0 + 0.00667 * skill_level
+	elif keywords & damage_kw:
+		category_mult = 1.0 + 0.0052 * skill_level
 	elif (keywords & regen_kw) or (keywords & attribute_kw):
 		category_mult = 1.0 + 0.015 * skill_level
 	elif keywords & power_kw:
 		category_mult = 1.0
+	elif keywords & illusion_kw:
+		category_mult = 0.8
 	else:
-		category_mult = 1.0 + 0.0125 * levels
+		category_mult = 1.0
 
-	final_mult = f32(mult * category_mult)
+	# Type perks.  Confirmed by in-game crafts (rows with Physician / Benefactor /
+	# Poisoner / Seeker of Shadows enabled): Physician x1.25 on Restore effects,
+	# Benefactor x1.25 on beneficial effects in potions, Poisoner x1.25 on harmful
+	# effects in poisons, Seeker of Shadows x1.1 on everything.  Physician and
+	# Benefactor stack on Restore effects (1.25 * 1.25 = 1.5625).
+	perk_effect_mult = 1.0
+	if include_type_perks:
+		if player.physician and is_physician_effect(effect):
+			perk_effect_mult = f32(perk_effect_mult * 1.25)
+		if potion and player.benefactor and effect.beneficial:
+			perk_effect_mult = f32(perk_effect_mult * 1.25)
+		elif not potion and player.poisoner and not effect.beneficial:
+			perk_effect_mult = f32(perk_effect_mult * 1.25)
+	if player.seeker_of_shadows:
+		perk_effect_mult = f32(perk_effect_mult * 1.1)
+
+	final_mult = f32(mult * category_mult * perk_effect_mult)
 	return final_mult, final_mult
 
 
@@ -2457,13 +2514,7 @@ def confirmed_settings(
 		elif mod_settings:
 			req_values = mod_settings
 		else:
-			raw_req = parse_confirmed_json(row, "requiem_settings", path, line_number)
-			if "requiem" in raw_req and isinstance(raw_req["requiem"], dict):
-				req_values = raw_req["requiem"]
-			elif "Requiem" in raw_req and isinstance(raw_req["Requiem"], dict):
-				req_values = raw_req["Requiem"]
-			else:
-				req_values = raw_req
+			req_values = {}
 
 		def _json_bool(mapping: Mapping[str, object], key: str, fallback: bool) -> bool:
 			if key not in mapping:
@@ -2538,18 +2589,14 @@ def confirmed_settings(
 		alchemy_plus_values = mod_settings if alchemy_plus_enabled else {}
 
 	if caco_enabled and not caco_values:
-		caco_values = parse_confirmed_json(row, "caco_settings", path, line_number)
-	if caco_enabled and not caco_values:
-		raise ValueError(f"{path} row {line_number} is missing caco_settings / mod_settings")
+		raise ValueError(f"{path} row {line_number} is missing mod_settings")
 
 	caco_settings = CACOSettings.from_ini(
 		{str(key): str(value) for key, value in caco_values.items()}
 	)
 
 	if alchemy_plus_enabled and not alchemy_plus_values:
-		alchemy_plus_values = parse_confirmed_json(row, "alchemy_plus_settings", path, line_number)
-	if alchemy_plus_enabled and not alchemy_plus_values:
-		raise ValueError(f"{path} row {line_number} is missing alchemy_plus_settings / mod_settings")
+		raise ValueError(f"{path} row {line_number} is missing mod_settings")
 
 	alchemy_plus = (
 		AlchemyPlusSettings.from_mapping(alchemy_plus_values)
@@ -3089,9 +3136,15 @@ def run_confirmed_fixture_check(
 			f"have {cpp_failed_count} failing row(s) against empirical in-game crafts ({cpp_divergences} model divergences)."
 		)
 	if not action_required:
-		action_required.append(
-			"NO FIXES REQUIRED: Both Python and C++ prediction engines match empirical in-game crafts 100%!"
-		)
+		if cpp_status == "NO DATA":
+			action_required.append(
+				"C++ NOT TESTED: no setting-matched alchemist.potions-predicted.<mode>.csv rows were found. "
+				"Python passes, but the plugin must be re-exported in-game (test-suite.md Phase 7) before its predictions can be judged."
+			)
+		else:
+			action_required.append(
+				"NO FIXES REQUIRED: Both Python and C++ prediction engines match empirical in-game crafts 100%!"
+			)
 
 	box_lines = [
 		"=" * 80,
@@ -3381,9 +3434,8 @@ def run_predicted_fixture_check(
 					matching_conf = confirmed_by_key.get((mode, row.get("ingredients", "").strip()))
 
 				if matching_conf:
-					for settings_field in ("mod_settings", "caco_settings", "alchemy_plus_settings", "requiem_settings"):
-						if settings_field in matching_conf and matching_conf[settings_field]:
-							merged_row[settings_field] = matching_conf[settings_field]
+					if matching_conf.get("mod_settings"):
+						merged_row["mod_settings"] = matching_conf["mod_settings"]
 
 			if apothecary_enabled:
 				db_key = "apothecary"
@@ -3519,7 +3571,7 @@ def format_confirmed_row_settings(
 		f"    seeker_of_shadows: {player.seeker_of_shadows}",
 	]
 
-	if caco_enabled or row.get("caco_settings"):
+	if caco_enabled:
 		caco = settings.caco_settings
 		lines.extend(
 			[
@@ -3538,7 +3590,7 @@ def format_confirmed_row_settings(
 			]
 		)
 
-	if alchemy_plus_enabled or row.get("alchemy_plus_settings"):
+	if alchemy_plus_enabled:
 		ap = settings.alchemy_plus
 		lines.extend(
 			[

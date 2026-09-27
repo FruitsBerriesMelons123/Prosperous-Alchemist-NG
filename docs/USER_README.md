@@ -1,157 +1,185 @@
 # Prosperous Alchemist NG
-This project is a from-scratch rewrite of the original Skyrim Legendary Edition SKSE plugin. The source code is available on [GitHub](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG).
 
-Prosperous Alchemist recommends valuable potion and poison recipes from the ingredients currently in your inventory. It displays its recommendations in an overlay while Skyrim's native alchemy menu is open.
+Prosperous Alchemist NG looks at the ingredients you are carrying and shows the most valuable potions and poisons you can craft with them. The list appears in an overlay next to Skyrim's alchemy menu.
 
-The plugin recommends recipes only. It does not automatically craft items, consume ingredients, change perks, alter game records, or store profile settings in your Skyrim save.
+It only recommends recipes. It never crafts anything, uses up ingredients, changes your perks or game records, or touches your save file. You can install or remove it at any point in a playthrough.
+
+This is a from-scratch rewrite of the original [Prosperous Alchemist](https://www.nexusmods.com/skyrim/mods/38634) for Skyrim LE. The source code is on [GitHub](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG).
 
 ## Features
 
-- Compares ingredient pairs and trios and sorts valid recipes by estimated value.
-- Uses available ingredient forms and, by default, your Alchemy skill, relevant perks, and worn Fortify Alchemy equipment.
-- Searches by recipe name, ingredient name, and effect description.
-- Sorts by value or name, displays pages of results, and optionally shows effects in the recipe list.
-- Can filter the visible list to recipes containing ingredients currently selected in Skyrim's alchemy menu.
-- Includes optional ingredient protection and tracking tools.
-- Supports multiple settings profiles and a localized interface.
+- Checks every ingredient pair and trio you can make and sorts the recipes by estimated value.
+- Takes your Alchemy skill, alchemy perks, and any Fortify Alchemy gear you are wearing into account. You can turn this off.
+- Handles Vanilla Skyrim, Alchemy Plus, Complete Alchemy & Cooking Overhaul (CACO), CACO with Alchemy Plus, Requiem, and Apothecary automatically.
+- Search by recipe name, ingredient, or effect, with support for AND, OR, exact phrases, and near matches.
+- Sort by value or by name, page through long lists, and optionally show each recipe's effects.
+- Narrow the list to recipes that use the ingredients you have already picked in the alchemy menu.
+- Optionally hold back ingredients you want to keep: quest items, crafting materials, Atronach Forge ingredients, favorite effects, or your own list.
+- Separate settings profiles for each character.
+- Translated into more than 35 languages.
+- Works on Skyrim Special Edition, Anniversary Edition, and Skyrim VR. No ESP, so it takes no plugin slot.
 
 ## Requirements
 
 - Skyrim Special Edition, Anniversary Edition, or Skyrim VR on Windows.
-- SKSE matching the installed Skyrim runtime.
-- Address Library for SKSE Plugins for Special Edition/Anniversary Edition, or VR Address Library for Skyrim VR. Install the version that matches your game runtime.
-- Launch the game through SKSE.
+- [SKSE64](https://skse.silverlock.org/) ([Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/30379)) for your game version, or SKSEVR for Skyrim VR.
+- [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444) for SE/AE, or [VR Address Library for SKSEVR](https://www.nexusmods.com/skyrimspecialedition/mods/58101) for VR. Get the file that matches your game version.
 
-The native Skyrim alchemy menu is required. SkyUI is optional and supported. No ESP/ESL or replacement menu files are required.
+Optional:
+
+- [SkyUI](https://www.nexusmods.com/skyrimspecialedition/mods/12604) is supported but not needed. The overlay works with Skyrim's normal alchemy menu.
 
 ### Skyrim VR
 
-The overlay appears on Skyrim's desktop mirror window. To see it in the headset, use SteamVR Desktop View or a compatible desktop overlay.
+The overlay shows up on the desktop mirror window. To see it in your headset, use SteamVR Desktop View or a similar desktop overlay.
 
 ## Installation
 
-Install the release archive with Mod Organizer 2, Vortex, or another mod manager. The plugin must be available in the active game's data directory at:
+1. Install the archive with [Mod Organizer 2](https://www.nexusmods.com/skyrimspecialedition/mods/6194), [Vortex](https://www.nexusmods.com/about/vortex/), or another mod manager, and enable it.
+2. Start the game through SKSE (in Mod Organizer 2, pick the SKSE executable).
 
-```text
-SKSE/Plugins/alchemist.dll
-```
+When installed, the plugin sits at `Data/SKSE/Plugins/alchemist.dll`. The archive also includes translations, a default `alchemist.ini`, and an `alchemist.pdb` file. The PDB only helps with crash reports and is not needed to play. If you install by hand, copy the `SKSE` folder from the archive into your `Data` folder.
 
-The release archive includes locale resources and a PDB file; the PDB is not needed for gameplay. Optional fonts and an INI may also be included. If installing only the DLL, place it in the same `SKSE/Plugins` location. Enable the mod in your mod manager and launch the intended profile through SKSE.
+**Upgrading from an older Prosperous Alchemist release:** uninstall the old version first, including any ESP or menu files it came with. This version needs neither.
 
-The plugin creates `alchemist.ini` with default settings when it first starts. Do not install an ESP/ESL for Prosperous Alchemist; it does not use one.
+**Uninstalling:** remove the mod at any time. Nothing is stored in your save.
 
 ## Using the overlay
 
-1. Launch Skyrim through SKSE.
-2. Open an Alchemy Table and the native alchemy menu.
-3. Review the Prosperous Alchemist recipe list.
-4. Search, sort, and page through recommendations. Selecting a row in the overlay does not select or craft that recipe in Skyrim.
-5. Close the overlay or the alchemy menu when finished.
+1. Start Skyrim through SKSE.
+2. Use an Alchemy Lab. The overlay opens next to the alchemy menu.
+3. Search, sort, and page through the recipes. Clicking a row only highlights it; it does not select or craft anything in Skyrim.
+4. Craft the recipe you want in the alchemy menu as usual. The list updates after each craft.
 
-The list shows a potion or poison name, effect descriptions, estimated value, and ingredients. Ingredient names are displayed alphabetically. Values are predictions from the available game data and settings; they are not a guarantee of the final value for every mod or effect.
+Each row shows the potion or poison name, estimated value, ingredients (in alphabetical order), and optionally its effects. The values are estimates based on your game data and settings. In most setups they match the game exactly, but other mods that change ingredients or potion creation can cause small differences.
 
-### Search and list controls
+### Search
 
-Search supports multiple terms as an implicit **AND**. Use standalone **OR** between alternatives, double quotes around an exact phrase, and a trailing `~` for a small spelling variation. Examples: `restore health`, `restore OR damage`, `"fortify health"`, and `restor~`. The words `AND` and `OR` are case-insensitive operators only when entered as separate words.
+- Several words must all match: `restore health`
+- Put **OR** between alternatives: `restore OR damage`
+- Put quotes around an exact phrase: `"fortify health"`
+- End a word with `~` to allow a small typo: `restor~`
 
-The sort choices are value descending, value ascending, name ascending, and name descending. Enable **Effects** to show calculated effect descriptions in the table. Large lists are divided into pages.
+`AND` and `OR` only count as operators when you type them as separate words. Case does not matter.
 
-By default, the list shows recipes containing every distinct ingredient currently selected in Skyrim's alchemy menu. With no ingredients selected, all calculated recipes are shown. Disable **Filter potions by selected ingredients** in Settings to ignore the native menu selection. This filter only changes the displayed list; it does not change calculations or consume ingredients.
+### Sorting, pages, and effects
+
+You can sort by value (high to low or low to high) or by name (A–Z or Z–A). Long lists are split into pages. Turn on **Effects** to see each recipe's magnitudes and durations.
+
+### Filter by selected ingredients
+
+By default, when you select ingredients in the alchemy menu, the overlay only shows recipes that use all of them. With nothing selected, you see every recipe. You can turn this off with **Filter potions by selected ingredients** in Settings. The filter only changes what is shown; it does not change any values.
 
 ### Recalculation
 
-The plugin keeps a temporary in-memory recipe cache to avoid repeating work unnecessarily. It updates recommendations as relevant ingredients or player state change. If a recalculation takes longer than the configured threshold, the existing list may remain visible as outdated while a **Recalculate** action is offered. Select it to request an immediate update. Cache contents are not saved to disk.
+Results are kept in memory for a while so the list comes back instantly when you reopen the alchemy menu. The list updates when your ingredients or Alchemy stats change. If an update takes a while, the old list stays up, marked as outdated, and a **Recalculate** button appears so you can refresh it immediately.
 
 ## Settings and profiles
 
-Open **Settings** in the overlay to change the active profile's preferences. Changes are saved automatically in `Data/SKSE/Plugins/alchemist.ini`. Settings are not written to the Skyrim save; the game does not need to be restarted after changes made in the overlay.
+Click **Settings** in the overlay. Changes save immediately to `Data/SKSE/Plugins/alchemist.ini`, never to your save, and take effect without restarting the game.
 
-Profiles are associated with Skyrim characters. The plugin restores the profile last used for a character and creates a blank profile for a character without one. From Settings, you can rename the active profile, create a blank profile, create a profile from another profile, switch between profiles for the current character, or delete a non-active profile after confirmation. A copied profile keeps preferences such as language and calculation options, but starts with separate character-specific protection and tracking data.
+Profiles are tied to your characters. Each character gets the profile it used last, and a new character gets a fresh one. In Settings you can rename the current profile, create a blank profile, copy another profile, switch profiles for the current character, or delete a profile you are not using. A copied profile keeps preferences such as language and calculation options, but starts with its own ingredient protection list.
 
-Most players can use the in-game Settings page rather than editing the INI file. If you edit the INI manually, exit Skyrim first and restart it for changes to take effect. Keep the INI in the active profile's effective `Data/SKSE/Plugins` directory.
+### Options
 
-### Common options
+* **Ignore player state** (`IgnorePlayer`): *Default Off*
+Ignores your Alchemy skill, perks, and Fortify Alchemy gear when estimating values. Only your inventory is used.
+* **Protect ingredients** (`ProtectIngredients`): *Default Off*
+Leaves protected ingredients out of the recommendations.
+* **Use only manual/custom protection** (`ManualProtectionOnly`): *Default Off*
+Protects only the ingredients and effects you choose yourself, and skips automatic quest, crafting, and Atronach Forge detection.
+* **Filter potions by selected ingredients** (`FilterPotionsBySelectedIngredients`): *Default On*
+Shows only recipes that use every ingredient selected in the alchemy menu.
+* **Use single-threaded calculation** (`Singlethreaded`): *Default Off*
+Runs the calculation on one thread. Only useful for troubleshooting.
+* **Cache duration** (`CacheDurationSeconds`): *Default 180 seconds*
+How long results are kept after you close the alchemy menu. `0` discards them immediately.
+* **Stale recalculation threshold** (`StaleRecalculateThresholdMs`): *Default 500 ms*
+If an update takes longer than this, the old list stays visible and **Recalculate** appears. `0` turns this off.
+* **Craft debounce** (`CraftDebounceMs`): *Default 400 ms*
+Waits this long after quick crafts or inventory changes before updating, so the list is not recalculated after every single craft.
+* **Language** (`Language`): *Default Automatic*
+Pick a language, or leave it on Automatic to follow your Windows language.
 
-* **Ignore player state** (`IgnorePlayer`) — *Default: Off*
-Ignore Alchemy skill, perks, and worn Fortify Alchemy gear when estimating values. Ingredient availability is still based on inventory.
-* **Protect ingredients** (`ProtectIngredients`) — *Default: Off*
-Enable configured protection and tracking so reserved ingredients are excluded from recommendations.
-* **Use only manual/custom protection** (`ManualProtectionOnly`) — *Default: Off*
-Use manual/custom reservations and selected protected effects instead of automatic quest, craftable-item, and Atronach Forge reservations.
-* **Filter potions by selected ingredients** (`FilterPotionsBySelectedIngredients`) — *Default: On*
-Show only recipes containing all ingredients selected in the native alchemy menu.
-* **Use single-threaded calculation** (`Singlethreaded`) — *Default: Off*
-Run recipe evaluation on the main thread instead of using worker threads.
-* **Cache duration** (`CacheDurationSeconds`) — *Default: 180 seconds*
-How long the in-memory recipe cache is retained after closing the alchemy menu. Set to `0` to expire it immediately.
-* **Stale recalculation threshold** (`StaleRecalculateThresholdMs`) — *Default: 500 ms*
-When a calculation exceeds this time, keep the existing list visible and offer **Recalculate**. Set to `0` to disable this behavior.
-* **Craft debounce** (`CraftDebounceMs`) — *Default: 400 ms*
-Coalesce repeated recalculation requests after rapid crafting or inventory changes.
-* **Language** (`Language`) — *Default: Automatic*
-Select a language or follow the Windows user interface language.
+**Reset all settings** puts the current profile back to its defaults.
 
-**Reset all settings** restores the declared defaults for the active profile and removes tracking overrides.
+### Editing the INI file
 
-## Ingredient protection and tracking
+You shouldn't need to edit the INI; everything is in Settings. If you do edit it, close Skyrim first, and make sure you are editing the copy your mod manager actually uses. One setting is only available in the INI:
 
-Protection is off by default. Open **Track** in the overlay to enable protection and manage reservations. When enabled, the plugin can reserve ingredients from:
+* **Single profile** (`singleprofile`): *Default 0*
+Set it to `1` in a profile's section to make every character use that profile.
 
-- Custom protected ingredients and quantities.
-- Selected ingredient effects, including Fortify Enchanting and Fortify Smithing by default when available.
-- Ingredients needed for loaded craftable items and reachable vanilla Atronach Forge recipes.
-- Detected quest requirements and manual tracking requirements.
+## Ingredient protection
 
-The tracking view groups records by ingredient identity, so ingredients with the same displayed name remain separate. Click an ingredient to inspect its detected sources and adjust quantities. Effects can protect all matching copies or a specified quantity per ingredient. Completed quest requirements are excluded from active reservations.
+Protection is off by default. Open **Track** to turn it on and choose what to keep. Protected ingredients can come from:
 
-**Refresh detection** scans currently loaded game records and quest objective text for possible ingredient requirements. Quest objectives are written as player-facing text rather than structured ingredient requirements, so detection can miss requirements or identify a name that is not actually required. Review detected entries and use manual controls when needed.
+- Your own list of ingredients, with an optional quantity for each.
+- Chosen effects. Fortify Enchanting and Fortify Smithing are selected by default.
+- Ingredients needed for craftable items in your load order and for Atronach Forge recipes.
+- Ingredients mentioned in active quest objectives, plus requirements you add yourself.
 
-Custom protected ingredients can be entered by displayed name, editor ID, or hexadecimal FormID. Separate entries with commas; an optional `|count` reserves that quantity, while an entry without a count protects all copies. For example: `Daedra Heart|3,Blue Butterfly Wing`.
+Click an ingredient to see why it is protected and change the quantity. Effect protection can keep every copy of an ingredient or only a set number. Ingredients for finished quests are released automatically. Ingredients that share a name are tracked separately.
+
+**Refresh detection** scans your load order and quest objectives again. Quest text is written for players, not for mods, so detection can miss something or flag an ingredient a quest doesn't actually need. Check the results and adjust them by hand if needed.
+
+To add ingredients to your own list, use the ingredient name, editor ID, or hex FormID, separated by commas. Add `|count` to keep that many; leave it off to keep all of them. Example: `Daedra Heart|3,Blue Butterfly Wing`.
 
 ## Compatibility
 
-Compatibility is selected from the mods and settings loaded by the game. Keep overhauls configured as intended by their authors; combinations not listed below should not be assumed supported.
+The plugin detects which mods are installed and adjusts its calculations to match. No patches or settings are needed.
 
-- **Vanilla Skyrim:** Uses the game's loaded ingredient and effect records.
-- **[Alchemy Plus](https://www.nexusmods.com/skyrimspecialedition/mods/80882):** When `AlchemyPlus.dll` and its `SKSE/Plugins/AlchemyPlus.json` configuration are available, supported potency-rounding and impure-cost settings are applied to predictions. A JSON file alone does not activate the integration.
-- **[Complete Alchemy & Cooking Overhaul (CACO)](https://www.nexusmods.com/skyrimspecialedition/mods/19924):** Uses loaded CACO records and supported live settings, including ingredient-effect duration choices. Some CACO post-craft handling can change a potion after its initial creation, so the final in-inventory item may differ from a prediction.
-- **CACO + Alchemy Plus:** Supported combined path; both integrations contribute their supported prediction behavior.
-- **[Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888):** Supported as a separate compatibility path using Requiem records, alchemy effectiveness, and perk behavior. Use Requiem without CACO or Alchemy Plus.
-- **[Apothecary – An Alchemy Overhaul](https://www.nexusmods.com/skyrimspecialedition/mods/52130):** Automatically detects Apothecary and models its effect scaling using loaded records and relevant Skyrim alchemy settings. It is a separate compatibility path; Alchemy Plus behavior is not combined with it.
+- **Vanilla Skyrim**, including the official DLCs and Creation Club ingredients.
+- **[Alchemy Plus](https://www.nexusmods.com/skyrimspecialedition/mods/80882):** follows your Alchemy Plus settings for magnitude and duration rounding (including per-effect rounding overrides) and the impure-cost fix.
+- **[Complete Alchemy & Cooking Overhaul (CACO)](https://www.nexusmods.com/skyrimspecialedition/mods/19924):** uses CACO's ingredients and your CACO MCM settings, including the Restore Health/Magicka/Stamina duration options. CACO's optional scripted potion handling can change a potion after you craft it, so if that option is on, the final item may not match the estimate.
+- **CACO + Alchemy Plus:** supported together.
+- **[Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888):** uses Requiem's ingredients, alchemy effectiveness, Alchemical Lore ranks, and perks. Use Requiem without CACO or Alchemy Plus.
+- **[Apothecary – An Alchemy Overhaul](https://www.nexusmods.com/skyrimspecialedition/mods/52130):** uses Apothecary's ingredients and effect scaling. Not combined with Alchemy Plus.
+- **[kryptopyr's Patch Hub](https://www.nexusmods.com/skyrimspecialedition/mods/19518):** the CACO Rare Curios patch is supported.
 
-Compatibility improves estimates for supported records and settings, but the plugin does not invoke Skyrim's private potion-construction process to preview every possible recipe. Other mods that change ingredient effects or potion creation may affect the final result.
+Other mods that add ingredients work too, since the plugin reads ingredients straight from your load order. Mods that change how potions are built or priced, and overhaul combinations not listed here, may make the estimates less accurate.
 
-## Localization
+## Languages
 
-The interface follows the Windows user interface language unless a language is selected in Settings. Bundled translations are available for Arabic, Bulgarian, Chinese (Hong Kong, Simplified, and Traditional), Croatian, Czech, Danish, Dutch, English, Finnish, French (including Canadian French), German, Greek, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Malay, Norwegian Bokmål, Polish, Portuguese (Brazil and Europe), Romanian, Russian, Slovak, Spanish (including Latin American and Mexican Spanish), Swedish, Tagalog, Thai, Turkish, Ukrainian, and Vietnamese.
+The overlay uses your Windows language unless you pick one in Settings. Included languages: Arabic, Bulgarian, Chinese (Simplified, Traditional, and Hong Kong), Croatian, Czech, Danish, Dutch, English, Finnish, French (France and Canada), German, Greek, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Malay, Norwegian Bokmål, Polish, Portuguese (Brazil and Portugal), Romanian, Russian, Slovak, Spanish (Spain, Latin America, and Mexico), Swedish, Tagalog, Thai, Turkish, Ukrainian, and Vietnamese.
 
-Custom translations can be placed beside the plugin in `SKSE/Plugins/locales/` as `alchemist.<language-tag>.json`. The language tag may be a BCP 47 tag such as `fr`, `fr-CA`, `es-419`, or `zh-CN`. Missing or invalid translations fall back to English. See `SKSE/Plugins/locales/README.md` in the release archive for the custom translation format.
+**Your own translation:** add a file named `alchemist.<language>.json` to `SKSE/Plugins/locales/`, for example `alchemist.fr.json` or `alchemist.es-419.json`. Anything missing falls back to English. `SKSE/Plugins/locales/README.md` in the download explains the format.
 
-Optional font files can be placed in `SKSE/Plugins/fonts/` and referenced by the selected locale resource. Fonts are only needed if the available system fonts do not contain the characters for your language. Use fonts that you are permitted to redistribute or install.
+**Fonts:** if some characters show up as boxes, your Windows fonts may not cover that language. Put a suitable font (such as [Noto Sans](https://fonts.google.com/noto)) in `SKSE/Plugins/fonts/` and follow `SKSE/Plugins/fonts/README.md` in the download.
 
 ## Troubleshooting
 
 ### The overlay does not appear
 
-- Confirm the plugin is enabled in the active mod-manager profile and is located at `SKSE/Plugins/alchemist.dll` in the effective game data directory.
-- Confirm SKSE and Address Library match the installed Skyrim runtime, and launch the game through SKSE.
-- Open Skyrim's native alchemy menu. SkyUI is optional; the native menu is required.
-- Reopen the alchemy menu after changing profiles or enabling the plugin.
+- Make sure the mod is enabled in your mod manager and that you started the game through SKSE.
+- Make sure your SKSE and Address Library versions match your game version.
+- Use an Alchemy Lab; the overlay only appears in the alchemy menu.
+- Check `Documents/My Games/Skyrim Special Edition/SKSE/alchemist.log` for errors.
 
 ### No recipes are listed
 
-- Confirm at least two available ingredients share an effect.
-- Check whether ingredient protection is enabled and reserving those ingredients.
-- If the selected-ingredient filter is enabled, select the ingredients in Skyrim's native menu or disable the filter in Settings.
+- You need at least two ingredients that share an effect.
+- If ingredient protection is on, it may be holding back those ingredients.
+- If the selected-ingredient filter is on, clear your selection in the alchemy menu or turn the filter off in Settings.
 
-### A setting change did not take effect
+### A setting did not change
 
-Changes made in the overlay are saved automatically. After editing `alchemist.ini` manually, exit Skyrim and restart it, and make sure you edited the INI used by the active mod-manager profile.
+Changes made in Settings save automatically. If you edited `alchemist.ini` by hand, restart Skyrim and make sure you edited the copy your mod manager uses.
 
-### Text is missing or appears as boxes
+### Text shows up as boxes
 
-Choose another language in Settings or use the Windows locale. If only some characters are missing, install a suitable font for those characters and follow the locale resource instructions.
+Pick another language in Settings, or add a font as described under **Languages**.
+
+### Reporting a problem
+
+Post in the Nexus comments or open an issue on [GitHub](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG/issues). Include your game version, the overhaul mods you use, `alchemist.log`, and a crash log if the game crashed.
+
+## Credits
+
+- Built with [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG), [Dear ImGui](https://github.com/ocornut/imgui), [nlohmann/json](https://github.com/nlohmann/json), and [Zstandard](https://github.com/facebook/zstd).
+- Thanks to the [SKSE team](https://skse.silverlock.org/), the Address Library author, and the authors of Alchemy Plus, CACO, Requiem, and Apothecary.
+- Thanks to all translators and contributors.
 
 ## License
 
-Prosperous Alchemist is licensed under the [GNU General Public License version 3 or later](../COPYING), with the [Modding Exception and GPL-3.0 Linking Exception](../EXCEPTIONS.md). Third-party notices are included with the release.
+Prosperous Alchemist is licensed under the [GNU General Public License version 3 or later](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG/blob/main/COPYING), with the [Modding Exception and GPL-3.0 Linking Exception](https://github.com/FruitsBerriesMelons123/Prosperous-Alchemist-NG/blob/main/EXCEPTIONS.md). Third-party notices are included in the download.

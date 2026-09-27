@@ -570,6 +570,7 @@ namespace alchemist {
 
 
 	void initAlchemist() {
+		vanilla::Adapter::Refresh();
 		caco::Adapter::Refresh();
 		alchemyplus::Adapter::Refresh();
 		requiem::Adapter::Refresh();
@@ -669,6 +670,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* msg)
 		alchemist::render::Install();
 	}
 	if (msg->type == SKSE::MessagingInterface::kDataLoaded) {
+		alchemist::vanilla::Adapter::Refresh();
 		alchemist::caco::Adapter::Initialize();
 		alchemist::requiem::Adapter::Initialize();
 		alchemist::apothecary::Adapter::Initialize();

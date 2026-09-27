@@ -1,5 +1,8 @@
 # Instructions
 
+## Minimize Token Usage
+Use appropriate strategies to minimize token usage.
+
 ## User Paths
 See **user-paths.md** for paths for all filesystem locations relevant to the project.
 
@@ -87,11 +90,18 @@ When adding compatibility for new mods or updating existing mod integrations, fo
   - **Single Comprehensive Testing Session:** Agents MUST compile all necessary test cases, create/update all target test CSV files (e.g., `specific-test-1.csv`), configure all pre-launch Python scripts (`pat-<mode>-<config number>.py`), update Papyrus runtime handlers (`ProsperousAlchemistTests.psc` / `pa-tests.yaml`), recompile via `compile.ps1`, and build/deploy `alchemist.dll` BEFORE presenting test instructions to the user.
   - **Full-Session Instructions:** Provide the user with explicit, step-by-step instructions for the entire testing session so the user can perform as many test blocks as possible per in-game session (sequentially running `pat <mode> <next-config-number>` while keeping Skyrim open) across all necessary pre-launch modes before returning to prompt the AI again.
   - **Zero Manual Console Commands:** Agents MUST NEVER instruct or ask the user to type extra manual console commands (`set ...`, `setgs ...`, `player.addperk ...`) in Skyrim's console. In-game setup MUST ONLY consist of running standard `pat <mode>` or indexed variants like `pat caco 2`.
-	- **Mandatory Recipe Craftability Validation Rule (`validate_ingredient_combination`):** Whenever selecting, creating, or updating test craft recipes or ingredient combinations for any test block or Papyrus script (`ProsperousAlchemistTests.psc`), agents MUST validate each proposed ingredient pair/trio using `validate_ingredient_combination(ingredients, caco_enabled, requiem_enabled)` in `pat_config_helper.py` (or against `ingredients-vanilla.csv`, `ingredients-caco.csv`, or `ingredients-requiem.csv`). Agents MUST verify with 100% certainty that every selected ingredient pair shares at least one alchemy effect and produces a valid craftable potion/poison in Skyrim BEFORE incorporating it into `ProsperousAlchemistTests.psc`, compiling via `compile.ps1`, or presenting test instructions to the user. Never guess ingredient combinations or propose unvalidated pairs.
+	- **Mandatory Multi-Schema Recipe Craftability & Single-Effect Isolation Rule (`validate_ingredient_combination`):**
+	  - **Multi-Schema Cross-Validation Mandate:** Whenever selecting, creating, or updating test craft recipes or ingredient combinations for any test block or Papyrus script (`ProsperousAlchemistTests.psc`), agents MUST validate each proposed ingredient pair/trio using `validate_ingredient_combination(ingredients, caco_enabled, requiem_enabled, apothecary_enabled)` in `pat_config_helper.py` against **BOTH** the active mod's ingredient database (`ingredients-<mode>.csv`) AND the base Vanilla game database (`ingredients-vanilla.csv`). A proposed recipe is ONLY valid if it produces a valid craftable potion/poison in the target mode WITHOUT causing zero-shared-effect uncraftable failures in Vanilla base game data.
+	  - **Single-Effect Isolation Verification:** For test cases intended to measure or isolate a specific target effect (e.g. single-effect baseline tests, slope interval pinning, or sibling effect probes), agents MUST verify that the candidate ingredient pair shares **strictly 1 effect** (exactly 1 shared effect) in both target mode and base vanilla data, preventing dual-effect or multi-effect contamination from skewing predicted potion values.
+	  - **Automated Pre-Flight Script Audit:** Before modifying `test-suite.md` or `ProsperousAlchemistTests.psc`, agents MUST write and run an automated Python pre-flight audit script testing every proposed recipe against `validate_ingredient_combination` across all relevant schemas and verify 100% PASS before presenting instructions to the user. Never guess ingredient combinations, rely on memory, or propose unvalidated pairs.
 	- **Mandatory FormID Verification & Anti-Hallucination Rule (Zero Unverified FormIDs):**
 	  - **Never Hardcode or Guess FormIDs from Memory:** AI agents MUST NEVER invent, guess, hallucinate, or hardcode any Skyrim engine or mod FormID (whether passed to `ProvisionForm`, `Game.GetFormFromFile`, `Game.GetForm`, `Game.GetFormEx`, or any C++/Python fixture) from memory or LLM weights.
 	  - **Verification Against Real Game Plugins & Authoritative Snapshots:** EVERY SINGLE FormID referenced anywhere in Papyrus scripts (`ProsperousAlchemistTests.psc`), C++ source files, Python scripts, or documentation MUST be verified with 100% precision against actual binary game plugin files (`Skyrim.esm`, `Dawnguard.esm`, `Dragonborn.esm`, `ccbgssse037-curios.esl`, `Complete Alchemy & Cooking Overhaul.esp`, `Requiem.esp`, `Apothecary.esp`) or authoritative CSV snapshots (`ingredients-*.csv`).
 	  - **Mandatory `Game.GetFormFromFile` Syntax:** In Papyrus scripts, NEVER use raw `Game.GetForm(0x...)` for loading forms because raw `GetForm` expects a hardcoded runtime load-order index which resolves to `None` at runtime. ALWAYS use `Game.GetFormFromFile(local_form_id, "MasterPlugin.esm")` specifying the exact local FormID (without load-order prefix) and the originating master plugin filename.
+	  - **Mandatory Plugin Name & FormID Match Audit (`ProvisionForm` Cross-Check):**
+	    - In Papyrus runtime test scripts (`ProsperousAlchemistTests.psc`), every single `ProvisionForm(player, local_form_id, "MasterPlugin.ext")` call MUST be cross-checked against the authoritative plugin mapping in `ingredients-*.csv`.
+	    - Creation Club Rare Curios ingredients (`Coda Flower`, `Bog Beacon`, `Comberry`, `Watcher's Eye`, etc.) originate from `"ccbgssse037-curios.esl"`. Creation Club Saints & Seducers ingredients (`Bliss Bug Thorax`, `Purple Butterfly Wing`, `Elytra Ichor`, `Flame Stalk`, etc.) originate from `"ccbgssse025-advdsgs.esm"` (with `"Skyrim.esm"` fallback).
+	    - AI verification scripts MUST parse all `ConsoleUtil.PrintMessage` craft instructions in every test block, match them to the `ProvisionForm` calls in that block, and verify that EVERY ingredient printed in the craft message has a matching `ProvisionForm` call with the EXACT correct plugin filename. Verification MUST fail if any ingredient is missing from inventory provisioning or assigned an incorrect plugin name.
 - **Papyrus Scripting Syntax Rule for GameSettings vs Globals:**
   - Inside `ProsperousAlchemistTests.psc`: mutate engine GameSettings via `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`, and mutate mod globals via `Game.GetFormFromFile(...)` / `.SetValue(val)`. Never use non-existent Papyrus functions like `Utility.SetGameSettingFloat`.
 - **Non-Default Settings Reporting Rule:**
@@ -192,6 +202,10 @@ Always use reference files and tools appropriately. Read **user-paths.md**. You 
 ### Quest Tracker NG
 - Source code location listed in **user-paths.md**.
 - To provide examples for implementing quest related code.
+
+### CACO Potion Builder
+- Source code location listed in **user-paths.md**.
+- To possibly help with implementing CACO related code.
 
 ### ConsoleUtil-Extended
 - Source code location listed in **user-paths.md**.

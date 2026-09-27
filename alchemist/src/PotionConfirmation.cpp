@@ -465,39 +465,10 @@ namespace alchemist::confirmations
 			return fields;
 		}
 
-		bool isLegacy21ColumnHeader(const std::vector<std::string>& a_fields)
-		{
-			return a_fields.size() == 21 &&
-				   a_fields[0] == "mode" &&
-				   a_fields[12] == "caco_settings" &&
-				   a_fields[13] == "alchemy_plus_settings" &&
-				   a_fields[14] == "requiem_settings";
-		}
-
-		bool isLegacy20ColumnHeader(const std::vector<std::string>& a_fields)
-		{
-			return a_fields.size() == 20 &&
-				   a_fields[0] == "mode" &&
-				   a_fields[12] == "caco_settings" &&
-				   a_fields[13] == "alchemy_plus_settings" &&
-				   a_fields[14] == "alchemist_perk_multiplier";
-		}
-
-		bool isLegacy19ColumnHeader(const std::vector<std::string>& a_fields)
-		{
-			return a_fields.size() == 19 &&
-				   a_fields[0] == "mode" &&
-				   a_fields[11] == "concentrated_poison" &&
-				   a_fields[12] == "mod_settings";
-		}
-
 		bool isCompatibleHeader(const std::vector<std::string>& a_fields)
 		{
 			if (a_fields.empty()) {
 				return false;
-			}
-			if (isLegacy21ColumnHeader(a_fields) || isLegacy20ColumnHeader(a_fields) || isLegacy19ColumnHeader(a_fields)) {
-				return true;
 			}
 			return a_fields.size() <= kHeader.size() &&
 				std::equal(a_fields.begin(), a_fields.end(), kHeader.begin(),
@@ -512,63 +483,12 @@ namespace alchemist::confirmations
 				return true;
 			}
 
-			const bool isLegacy21 = isLegacy21ColumnHeader(a_records.front());
-			const bool isLegacy20 = isLegacy20ColumnHeader(a_records.front());
-			const bool isLegacy19 = isLegacy19ColumnHeader(a_records.front());
-			if (!isLegacy21 && !isLegacy20 && !isLegacy19 && !isCompatibleHeader(a_records.front())) {
+			if (!isCompatibleHeader(a_records.front())) {
 				return false;
 			}
 
-			if (isLegacy21) {
-				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
-					if (record->size() >= 21) {
-						const std::string& m = (*record)[0];
-						std::string modSetting = "{}";
-						if (m == "Requiem") {
-							modSetting = (*record)[14];
-						} else if (m == "CACO") {
-							modSetting = (*record)[12];
-						} else if (m == "AP") {
-							modSetting = (*record)[13];
-						} else if (m == "CACO+AP") {
-							nlohmann::json combined = nlohmann::json::object();
-							try { combined["caco"] = nlohmann::json::parse((*record)[12]); } catch (...) {}
-							try { combined["alchemyPlus"] = nlohmann::json::parse((*record)[13]); } catch (...) {}
-							modSetting = combined.dump();
-						}
-						(*record)[12] = std::move(modSetting);
-						record->erase(record->begin() + 13, record->begin() + 15);
-						record->erase(record->begin() + 11);
-					}
-					record->resize(expectedHeader.size());
-				}
-			} else if (isLegacy20) {
-				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
-					if (record->size() >= 20) {
-						const std::string& m = (*record)[0];
-						std::string modSetting = "{}";
-						if (m == "CACO") {
-							modSetting = (*record)[12];
-						} else if (m == "AP") {
-							modSetting = (*record)[13];
-						}
-						(*record)[12] = std::move(modSetting);
-						record->erase(record->begin() + 13);
-						record->erase(record->begin() + 11);
-					}
-					record->resize(expectedHeader.size());
-				}
-			} else if (isLegacy19) {
-				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
-					if (record->size() >= 19) {
-						record->erase(record->begin() + 11);
-					}
-					record->resize(expectedHeader.size());
-				}
-			} else {
-				for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
-					record->resize(expectedHeader.size());
-				}
+			for (auto record = a_records.begin() + 1; record != a_records.end(); ++record) {
+				record->resize(expectedHeader.size());
 			}
 
 			a_records.front() = expectedHeader;
@@ -744,6 +664,10 @@ namespace alchemist::confirmations
 		}
 
 		bool sessionActive = false;
+		// Player state captured before the pending craft. Crafting grants alchemy XP, so the
+		// player refreshed after the craft can already be a skill level higher than the one used.
+		Player preCraftPlayer;
+		bool preCraftPlayerValid = false;
 		InventorySnapshot sessionBaseline;
 		PendingInventoryChanges pendingInventoryChanges;
 		std::chrono::steady_clock::time_point lastInventoryEvidence;
@@ -881,6 +805,7 @@ namespace alchemist::confirmations
 	void EndAlchemySession() noexcept
 	{
 		sessionActive = false;
+		preCraftPlayerValid = false;
 		sessionBaseline = {};
 		pendingInventoryChanges = {};
 		lastInventoryEvidence = {};
@@ -1129,7 +1054,7 @@ namespace alchemist::confirmations
 		}
 	}
 
-	void DrainPendingConfirmations([[maybe_unused]] const Player& a_player) noexcept
+	void DrainPendingConfirmations(const Player& a_player) noexcept
 	{
 		if (kDeveloper.GetValue() != 1) {
 			return;
@@ -1137,13 +1062,28 @@ namespace alchemist::confirmations
 		try {
 			if (!sessionActive) {
 				BeginAlchemySession();
+				preCraftPlayer = a_player;
+				preCraftPlayerValid = true;
 				return;
+			}
+			const auto craftPending = [] {
+				return !pendingInventoryChanges.netDeltas.empty() ||
+					!pendingInventoryChanges.removedIngredients.empty();
+			};
+			const bool craftInFlight = craftPending();
+			if (!craftInFlight) {
+				preCraftPlayer = a_player;
+				preCraftPlayerValid = true;
 			}
 			if (!IsDrainReady()) {
 				return;
 			}
 			initAlchemist();
-			RecordCraftedPotions(player);
+			RecordCraftedPotions(craftInFlight && preCraftPlayerValid ? preCraftPlayer : player);
+			if (!craftPending()) {
+				preCraftPlayer = player;
+				preCraftPlayerValid = true;
+			}
 		} catch (const std::exception&) {
 		} catch (...) {
 		}

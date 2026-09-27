@@ -164,11 +164,11 @@ The source also changes the archetype of listed restore effects between `ValueMo
 
 | Potion state | Explicit weight written | Weight list |
 | --- | ---: | --- |
-| One effect, pure beneficial with `Purity`, or pure harmful with `ConcentratedPoison` | 0.2 | `CACO_AlchemyPotionWeightList02` |
+| One effect, pure beneficial with `Purity` | 0.2 | `CACO_AlchemyPotionWeightList02` |
 | One effect, all other states | 0.3 | `CACO_AlchemyPotionWeightList03` |
-| Two effects, pure beneficial with `Purity`, or pure harmful with `ConcentratedPoison` | 0.3 | `CACO_AlchemyPotionWeightList03` |
+| Two effects, pure beneficial with `Purity` | 0.3 | `CACO_AlchemyPotionWeightList03` |
 | Two effects, all other states | 0.4 | `CACO_AlchemyPotionWeightList04` |
-| Three or more effects with either of the two pure/perk combinations | 0.4 | `CACO_AlchemyPotionWeightList04` |
+| Three or more effects with the pure-beneficial `Purity` combination | 0.4 | `CACO_AlchemyPotionWeightList04` |
 
 These are the explicit branches at `caco_adjustpotionthread.psc:257-294`. For three or more effects without a qualifying pure/perk combination, the function has no `else` write and leaves the existing weight unchanged. The English description states the intended normal weights as 0.3, 0.4, and 0.5 for one, two, and three-or-more effects, with the perk reductions described separately (`complete alchemy & cooking overhaul_english.txt:229,233-234`). Thus 0.5 is the documented/default value, not an explicit `SetWeight(0.5)` in `CalculateWeight`.
 

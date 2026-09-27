@@ -97,7 +97,7 @@ These blocks have no confirmed-craft baseline until they are captured in-game; a
 
 ## Default CACO and runtime alchemy inputs
 
-These values are present in the `caco_settings` JSON of the 23 canonical default CACO-enabled rows (the 14-row CACO baseline and nine-row CACO+AP default-control set):
+These values are present in the `mod_settings` JSON of the 23 canonical default CACO-enabled rows (the 14-row CACO baseline and nine-row CACO+AP default-control set):
 
 - `AlchemyIngredientInitMultiplier = 3`
 - `AlchemySkillFactor = 3`
@@ -266,11 +266,11 @@ The CACO+AP Large Antlers result is zero because the default Alchemy Plus signed
 
 ## Completed AlchemySkillFactor capture
 
-The ten appended factor-one rows use the live setting `AlchemySkillFactor=1` in their exported `caco_settings` and match the Python model: five CACO values `19, 129, 812, 75, 75` and five CACO+AP values `19, 49, 782, 0, 0`.
+The ten appended factor-one rows use the live setting `AlchemySkillFactor=1` in their exported `mod_settings` and match the Python model: five CACO values `19, 129, 812, 75, 75` and five CACO+AP values `19, 49, 782, 0, 0`.
 
 ## Completed AlchemyIngredientInitMultiplier capture
 
-The ten appended ingredient-init rows use `AlchemyIngredientInitMultiplier=2` and the canonical `AlchemySkillFactor=3` in their exported `caco_settings`. They match the Python model: five CACO values `39, 275, 1739, 144, 144` and five CACO+AP values `39, 110, 1674, 0, 0`. Before the duration capture, the Python confirmed-row gate passed all 51 rows.
+The ten appended ingredient-init rows use `AlchemyIngredientInitMultiplier=2` and the canonical `AlchemySkillFactor=3` in their exported `mod_settings`. They match the Python model: five CACO values `39, 275, 1739, 144, 144` and five CACO+AP values `39, 110, 1674, 0, 0`. Before the duration capture, the Python confirmed-row gate passed all 51 rows.
 
 ## Completed `DamageHealthDuration=1` capture
 

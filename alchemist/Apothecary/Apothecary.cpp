@@ -120,6 +120,7 @@ namespace alchemist::apothecary
 		float a_fallbackAlchemistMultiplier,
 		bool /*a_potion*/,
 		bool /*a_includeTypePerks*/,
+		float a_effectPerkMultiplier,
 		const EvaluationContext& /*a_context*/,
 		float& a_magnitudeMultiplier,
 		float& a_durationMultiplier) noexcept
@@ -132,7 +133,8 @@ namespace alchemist::apothecary
 			a_fallbackAlchemistMultiplier : 1.0f;
 
 		const float finalMultiplier = algorithm::CalculateApothecaryEffectiveness(
-			a_effect, a_alchemyLevel, perkMult, g_state.alchemyIngredientInitMultiplier, g_state.alchemySkillFactor);
+			a_effect, a_alchemyLevel, perkMult, g_state.alchemyIngredientInitMultiplier, g_state.alchemySkillFactor,
+			a_effectPerkMultiplier);
 		a_magnitudeMultiplier = finalMultiplier;
 		a_durationMultiplier = finalMultiplier;
 		return true;

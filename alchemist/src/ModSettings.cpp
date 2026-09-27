@@ -38,7 +38,7 @@ namespace alchemist::modsettings
 		float GetActiveIngredientInitMultiplier() noexcept
 		{
 			if (caco::Adapter::IsActive()) {
-				return caco::Adapter::GetAlchemyIngredientInitMultiplier();
+				return vanilla::Adapter::GetAlchemyIngredientInitMultiplier();
 			}
 			if (requiem::Adapter::IsActive()) {
 				return requiem::Adapter::GetAlchemyIngredientInitMultiplier();
@@ -59,7 +59,7 @@ namespace alchemist::modsettings
 		float GetActiveSkillFactor() noexcept
 		{
 			if (caco::Adapter::IsActive()) {
-				return caco::Adapter::GetAlchemySkillFactor();
+				return vanilla::Adapter::GetAlchemySkillFactor();
 			}
 			if (requiem::Adapter::IsActive()) {
 				return requiem::Adapter::GetAlchemySkillFactor();
@@ -95,13 +95,13 @@ namespace alchemist::modsettings
 		SectionValues BuildCacoValues(const caco::Settings& a_settings)
 		{
 			return {
-				{ "RestoreHealthDuration", std::to_string(a_settings.restoreHealthDuration) },
-				{ "RestoreMagickaDuration", std::to_string(a_settings.restoreMagickaDuration) },
-				{ "RestoreStaminaDuration", std::to_string(a_settings.restoreStaminaDuration) },
+				{ "RestoreHealthDuration", FormatFloat(a_settings.restoreHealthDuration) },
+				{ "RestoreMagickaDuration", FormatFloat(a_settings.restoreMagickaDuration) },
+				{ "RestoreStaminaDuration", FormatFloat(a_settings.restoreStaminaDuration) },
 				{ "RestoreEffectsDoNotStack", FormatBool(a_settings.restoreEffectsDoNotStack) },
-				{ "DamageHealthDuration", std::to_string(a_settings.damageHealthDuration) },
-				{ "DamageMagickaDuration", std::to_string(a_settings.damageMagickaDuration) },
-				{ "DamageStaminaDuration", std::to_string(a_settings.damageStaminaDuration) },
+				{ "DamageHealthDuration", FormatFloat(a_settings.damageHealthDuration) },
+				{ "DamageMagickaDuration", FormatFloat(a_settings.damageMagickaDuration) },
+				{ "DamageStaminaDuration", FormatFloat(a_settings.damageStaminaDuration) },
 				{ "DisableAllPotionHandling", FormatBool(a_settings.disableAllPotionHandling) },
 				{ "AlchemyXPMultiplier", FormatFloat(a_settings.alchemyXPMultiplier) },
 				{ "AlchemyIngredientInitMultiplier", FormatFloat(a_settings.alchemyIngredientInitMultiplier) },
