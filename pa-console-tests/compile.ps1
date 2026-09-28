@@ -1,16 +1,12 @@
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $scriptDir
+$pathsFile = Join-Path $scriptDir "compile-paths.ps1"
+if (-not (Test-Path $pathsFile)) {
+    Write-Error "Could not find 'compile-paths.ps1'. Copy 'compile-paths.example.ps1' to 'compile-paths.ps1' and update your machine paths."
+    exit 1
+}
 
-$caprica = "E:\Projects\games\skyrim\utils\Caprica.v0.3.0\Caprica.exe"
-$flags = "E:\Projects\games\skyrim\utils\CreationKit\Data\Source\Scripts\TESV_Papyrus_Flags.flg"
-$importSKSE = "E:\Projects\games\skyrim\1.6.1170\mods\skse64_1_6_1170 scripts\Scripts\Source"
-$import2 = "E:\Projects\games\skyrim\utils\CreationKit\Data\Source\Scripts"
-$import3 = "E:\Projects\games\skyrim\git\powerof3-PapyrusExtenderSSE\Papyrus\Source\scripts"
-$import4 = "E:\Projects\games\skyrim\git\KrisV-777-ConsoleUtil-Extended\dist\Source\Scripts"
-
-# Destination directories in the live mod profile
-$output = "E:\Projects\games\skyrim\1.6.1170\mods\Prosperous Alchemist NG\Scripts"
-$customConsoleDir = "E:\Projects\games\skyrim\1.6.1170\mods\Prosperous Alchemist NG\SKSE\CustomConsole"
+. $pathsFile
 
 if (-not (Test-Path $output)) { New-Item -ItemType Directory -Force -Path $output | Out-Null }
 if (-not (Test-Path $customConsoleDir)) { New-Item -ItemType Directory -Force -Path $customConsoleDir | Out-Null }

@@ -64,12 +64,12 @@ The predictions model each mod's mechanics from loaded records and supported set
 | `docs/` | [USER_README.md](docs/USER_README.md), the player guide that becomes the Nexus description, and [CHANGELOG.md](docs/CHANGELOG.md). |
 | `licenses/`, `COPYING`, `EXCEPTIONS.md` | Project license, exceptions, and third-party notices. |
 | `build.py` | The supported entry point for building, deploying, and packaging. |
-| `config.example.py`, `user-paths.example.md` | Templates for the git-ignored, machine-specific `config.py` and `user-paths.md`. |
+| `config.example.py`, `user-paths.example.md`, `pa-console-tests/compile-paths.example.ps1` | Templates for the git-ignored, machine-specific `config.py`, `user-paths.md`, and `pa-console-tests/compile-paths.ps1`. |
 | `potion_prediction_test.py`, `potion_prediction_baseline.json` | Offline prediction harness and the baseline of passing rows used for regression checks. |
 | `ingredients-*.csv` | Ingredient and effect snapshots for Vanilla, CACO, Requiem, and Apothecary, used by the harness and by recipe validation. |
 | `db/`, `build_ingredient_db.py` | Canonical ingredient database generated from game plugins and the snapshots. |
 | `pat-*.py`, `pat_config_helper.py` | Pre-launch scripts that set up the MO2 mod list, `plugins.txt`, and `AlchemyPlus.json` for each test mode. |
-| `pa-console-tests/` | Papyrus source and CustomConsole YAML for the in-game `pat` command, plus `compile.ps1`. |
+| `pa-console-tests/` | Papyrus source and CustomConsole YAML for the in-game `pat` command, plus `compile.ps1` and `compile-paths.example.ps1`. |
 | `sync_potion_predictions.py`, `save_predicted_*_settings.py`, `toggle-predicted-settings.py`, `tail_predicted.py` | Helpers for prediction-export fixtures (`potions-predicted-*.csv.zst`). |
 | `reset_saves_and_start_skyrim.py` | Clears the test profile's saves and launches SKSE through MO2. |
 | `verify_*.py` | Consistency checks between the test scripts, compiled commands, and `test-suite.md`. |
@@ -137,7 +137,11 @@ cp config.example.py config.py
 cp user-paths.example.md user-paths.md
 ```
 
-`config.py` feeds the Python scripts. `user-paths.md` is the human- and agent-readable version of the same locations. Keep the two in sync and never commit either one. The settings that matter most:
+```bash
+cp pa-console-tests/compile-paths.example.ps1 pa-console-tests/compile-paths.ps1
+```
+
+`config.py` feeds the Python scripts. `user-paths.md` is the human- and agent-readable version of the same locations. `compile-paths.ps1` feeds `pa-console-tests/compile.ps1` for compiling test scripts. Keep them in sync with your machine paths and never commit local configuration files. The settings that matter most:
 
 | Setting | Used for |
 | --- | --- |
@@ -240,7 +244,7 @@ Folder names can differ; the scripts use whatever paths `config.py` gives them.
 pwsh pa-console-tests/compile.ps1
 ```
 
-`compile.ps1` currently has its paths hardcoded: the Caprica executable, `TESV_Papyrus_Flags.flg`, the SKSE, vanilla, Papyrus Extender, and ConsoleUtil Extended script imports, and the output mod folder. Change them to match your machine before the first compile. The vanilla script sources and the flags file come from the Creation Kit's `Scripts.zip`. See [skyrim-console.md](skyrim-console.md) for how the command works.
+`compile.ps1` loads its machine-specific paths from `pa-console-tests/compile-paths.ps1` (git-ignored). Copy `pa-console-tests/compile-paths.example.ps1` to `pa-console-tests/compile-paths.ps1` and update your machine paths before compiling (the Caprica executable, `TESV_Papyrus_Flags.flg`, the SKSE, vanilla, Papyrus Extender, and ConsoleUtil Extended script imports, and the output mod folder). The vanilla script sources and the flags file come from the Creation Kit's `Scripts.zip`. See [skyrim-console.md](skyrim-console.md) for how the command works.
 
 ### Developer mode
 
@@ -299,6 +303,7 @@ Restart Skyrim after editing the INI by hand.
 ## Troubleshooting
 
 - **Build: missing `config.py`.** Copy `config.example.py` to `config.py` and fill in real paths.
+- **Compile: missing `compile-paths.ps1`.** Copy `pa-console-tests/compile-paths.example.ps1` to `pa-console-tests/compile-paths.ps1` and set your machine paths.
 - **Build: invalid vcpkg or ImGui layout.** The static prefix must be under `VCPKG_ROOT` and outside the repository, and the ImGui build and install folders must not sit inside the ImGui source tree.
 - **Build: `zstd` or `nlohmann_json` package not found.** Install the missing package into the same `x64-windows-static` prefix (see step 2).
 - **Build: deployment failed.** Skyrim is holding the DLL. Close it and build again.

@@ -18,6 +18,7 @@ vcpkg-packages/
 user-paths.md
 user-paths.md-*
 config.py
+compile-paths.ps1
 .vs
 .suo
 *.VC.opendb
