@@ -65,6 +65,12 @@
 ### Source Code
 - `E:\Projects\games\skyrim\git\Orvid-Caprica`
 
+## Champollion
+### Decompiler
+- `E:\Projects\games\skyrim\utils\Champollion.v1.3.2`
+### Source Code
+- `E:\Projects\games\skyrim\git\Orvid-Champollion`
+
 ## Creation Kit
 ### Extracted Vanilla Scripts and Tools
 - `E:\Projects\games\skyrim\utils\CreationKit`
@@ -86,3 +92,9 @@
 ## Alchemy Potions and Food Adjustments
 ### Source Code
 - `E:\Projects\games\skyrim\utils\apafa\source\scripts`
+
+## Ordinator - Perks of Skyrim
+### Mod Directory
+- `E:\Projects\games\skyrim\1.6.1170\mods\Ordinator - Perks of Skyrim`
+### Source Code
+- `E:\Projects\games\skyrim\utils\ordinator\scripts\source`

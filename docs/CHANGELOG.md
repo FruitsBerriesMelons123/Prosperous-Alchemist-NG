@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.0
+Added standalone Ordinator compatibility, including its Alchemy Mastery ranks, selected Physician attribute, Poisoner, Pure Mixture, Advanced Lab, and permanent AlchemyPowerMod effects on potion predictions.
+
 ## 1.5.0
 Added automatic compatibility for Alchemy Potions and Food Adjustments (APAFA), including its ingredient and effect records and potion-related MCM settings.
 

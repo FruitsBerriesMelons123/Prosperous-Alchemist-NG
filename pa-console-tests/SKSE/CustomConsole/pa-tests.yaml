@@ -10,8 +10,8 @@ subs:
       - name: mode
         type: string
         required: true
-        help: The mode to apply default settings for (vanilla/caco/ap/caco-ap/requiem/apothecary/apafa).
-    help: Sets the canonical default state (alchemy 100, default perks) for the given mode (vanilla/caco/ap/caco-ap/requiem/apothecary/apafa) for the default-settings prediction export.
+        help: The mode to apply default settings for (vanilla/caco/ap/caco-ap/requiem/apothecary/apafa/ordinator).
+    help: Sets the canonical default state (alchemy 100, default perks) for the given mode for the default-settings prediction export.
   - name: vanilla
     alias: v
     func: SetupVanilla
@@ -75,6 +75,15 @@ subs:
         required: false
         help: Optional variant index 2-10 or changed.
     help: Sets the game state for APAFA mode.
+  - name: ordinator
+    alias: o
+    func: SetupOrdinator
+    args:
+      - name: variant
+        type: string
+        required: false
+        help: Optional variant index 2-18 or changed.
+    help: Sets the game state for standalone Ordinator mode.
   - name: clear
     alias: clean
     func: ClearIngredients

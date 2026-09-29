@@ -1,22 +1,22 @@
 # Prosperous Alchemist NG - Full Minimal & Comprehensive Test Suite
 
-This document defines the full minimal but comprehensive test suite for Prosperous Alchemist NG. It tests all combinations of ingredient effects, selection orders, modes (`AP`, `Vanilla`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`), settings (GameSettings, CACO duration index families, AP JSON thresholds/multipliers/overrides/impure cost fix, Requiem lore/type-perk gates and effect categories, Apothecary skill/category/rank branches, APAFA-adjusted ingredient/effect records), and player levels/perks/purity filters using a minimal, deterministic set of test blocks.
+This document defines the full minimal but comprehensive test suite for Prosperous Alchemist NG. It tests all combinations of ingredient effects, selection orders, modes (`AP`, `Vanilla`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`, `Ordinator`), settings (GameSettings, CACO duration index families, AP JSON thresholds/multipliers/overrides/impure cost fix, Requiem lore/type-perk gates and effect categories, Apothecary skill/category/rank branches, APAFA-adjusted ingredient/effect records), and player levels/perks/purity filters using a minimal, deterministic set of test blocks.
 
 ---
 
 ## Overview & Architecture
 
 1. **Two-Tier Configuration Architecture & Disk vs In-Game Setting Rule**:
-   - **Pre-Launch Disk Setup**: Modes with NO disk-based configuration files (`Vanilla`, `CACO`, `Requiem`, `Apothecary`, `APAFA`) use a **single** root Python script (`pat-vanilla.py`, `pat-caco.py`, `pat-requiem.py`, `pat-apothecary.py`, `pat-apafa.py`) for observed craft testing because multiple disk scripts are redundant when on-disk settings do not change. Modes WITH disk-based configuration files (`AP`, `CACO+AP` with `AlchemyPlus.json`) use enough pre-launch disk scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-ap-3.py`, `pat-ap-4.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`, `pat-caco-ap-3.py`, `pat-caco-ap-4.py`) to test all distinct on-disk setting configurations.
-   - **In-Game Setting Blocks**: Every supported mode features in-game setting blocks (`pat <mode>` through variant ranges: `vanilla` 1-18, `caco` 1-27, `ap` 1-13, `caco-ap` 1-23, `requiem` 1-18, `apothecary` 1-57, `apafa` 1-10), providing 166 observed craft blocks total across the test suite. Each in-game `pat` command contains **no more than 4 tests** (crafts or gate checks).
+   - **Pre-Launch Disk Setup**: Modes with NO disk-based configuration files (`Vanilla`, `CACO`, `Requiem`, `Apothecary`, `APAFA`, `Ordinator`) use a **single** root Python script (`pat-vanilla.py`, `pat-caco.py`, `pat-requiem.py`, `pat-apothecary.py`, `pat-apafa.py`, `pat-ordinator.py`) for observed craft testing because multiple disk scripts are redundant when on-disk settings do not change. Modes WITH disk-based configuration files (`AP`, `CACO+AP` with `AlchemyPlus.json`) use enough pre-launch disk scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-ap-3.py`, `pat-ap-4.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`, `pat-caco-ap-3.py`, `pat-caco-ap-4.py`) to test all distinct on-disk setting configurations.
+   - **In-Game Setting Blocks**: Every supported mode features in-game setting blocks (`pat <mode>` through variant ranges: `vanilla` 1-18, `caco` 1-27, `ap` 1-13, `caco-ap` 1-23, `requiem` 1-18, `apothecary` 1-57, `apafa` 1-10, `ordinator` 1-18), providing 184 observed craft blocks total across the test suite. Each in-game `pat` command contains **no more than 4 tests** (crafts or gate checks).
    - **Skill Level Distribution Rule**: Across the blocks in each mode, **at least 9 blocks use Player Alchemy Level 100**, and **at least 1 block uses Player Alchemy Level < 100** (e.g. Level 50 or 75), ensuring maximum coverage at peak level while validating non-100 skill scaling.
    - **Targeted Ingredient Selection Rule**: Ingredient combinations in every block are strictly chosen to contain the specific effects modified by that block's active settings, perks, overrides, duration indices, or scaling branches (e.g., Physician tests Restore Health/Magicka/Stamina; Poisoner tests poison effects; Purity tests mixed beneficial/harmful recipes; AP magnitude overrides test Restore Health/Stamina; Apothecary tests each of its four category scaling branches).
 2. **Optional Full Prediction Export Phase Scripts**:
-   - Phase 9 is optional. It exercises full potion prediction exports (`potions-predicted-*.csv.zst`) across **ALL** supported modes/mods (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`) using **dedicated, separate** pre-launch disk scripts for default settings (`pat-default-<mode>.py`) and changed settings (`pat-<mode>-changed.py`). These scripts are separate from the observed craft testing scripts. Skipping Phase 9 does not skip the confirmed-craft checks in Phase 8 or prevent completing the required test suite.
+   - Phase 9 is optional. It exercises full potion prediction exports (`potions-predicted-*.csv.zst`) across **ALL** supported modes/mods (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`, `Ordinator`) using **dedicated, separate** pre-launch disk scripts for default settings (`pat-default-<mode>.py`) and changed settings (`pat-<mode>-changed.py`). These scripts are separate from the observed craft testing scripts. Skipping Phase 9 does not skip the confirmed-craft checks in Phase 8 or prevent completing the required test suite.
 3. **Automated In-Game Pre-Test Cleanup & Zero Manual Overhead**:
    Every single in-game command (`pat <mode> [variant]`, e.g. `pat vanilla 2`, `pat caco 3`, `pat ap 4`, `pat requiem 5`, `pat apothecary 8`, `pat default caco`, `pat <mode>-changed`, etc.) automatically handles 100% of state resetting and inventory cleanup at the beginning of the setup function in Papyrus (`ProsperousAlchemistTests.psc`) BEFORE provisioning the new test block:
    - **Clear Player Ingredients**: Automatically removes 100% of all alchemy ingredients from player inventory (`ClearPlayerIngredients`). Utilizes `PO3_SKSEFunctions.AddItemsOfTypeToArray(player, 30)` (FormType 30 = `Ingredient`) and `PO3_SKSEFunctions.AddItemsWithKeywordStringToArray(player, "VendorItemIngredient")` to sweep and strip every single alchemy ingredient item (vanilla, DLC, Creation Club Rare Curios, CACO, Requiem, Apothecary, or any modded ingredient) from the player's inventory prior to provisioning new test block ingredients.
-   - **Strip All Perks & Spells**: Automatically strips all 13 alchemy perks (`Alchemist 1-5`, `Physician`, `Benefactor`, `Poisoner`, `Experimenter 1-3`, `Snakeblood`, `Green Thumb`, `Purity`) and `Seeker of Shadows` (`ClearAllAlchemyPerks`).
+   - **Strip All Perks & Spells**: Automatically strips all 13 alchemy perks (`Alchemist 1-5`, `Physician`, `Benefactor`, `Poisoner`, `Experimenter 1-3`, `Snakeblood`, `Green Thumb`, `Purity`) and `Seeker of Shadows`, plus Ordinator Alchemy Mastery, Physician selection, Poisoner, Pure Mixture, Advanced Lab, and related value perks (`ClearAllAlchemyPerks`).
    - **Unequip Gear & Reset Actor Values**: Automatically unequips Circlet & Necklace of Peerless Alchemy and resets `FortifyAlchemy` actor value back to `0` (`ClearFortifyAlchemyState`).
    - **Reset GameSettings & Mod Globals**: Resets engine GameSettings (`fAlchemyIngredientInitMult`, `fAlchemySkillFactor`) and active mod option globals/durations to match the specific block.
    - **Provision New Block Ingredients**: Grants only the specific perks/gear for that block and provisions 99x of only the required test ingredients.
@@ -1994,7 +1994,7 @@ Each block uses the MO2 `Default` profile, APAFA enabled, and Alchemy Plus, CACO
     1. Press **F** while the Alchemy Lab UI is focused.
     2. Craft:
        - `Blister Pod Cap + Bog Beacon`
-    3. **Optional Next Step**: For Phase 9A, exit Skyrim and run `python pat-default-apafa.py`.
+    3. **Next Command**: Exit Skyrim and run `python pat-ordinator.py` to begin Ordinator's standalone test mode.
 
 1. Exit Skyrim. Run `python pat-apafa.py`, then `python reset_saves_and_start_skyrim.py`.
 2. In the Alchemy Lab, run `pat apafa`, then `pat apafa 2` through `pat apafa 10` in order without exiting Skyrim. Craft the one recipe listed for each block.
@@ -2004,7 +2004,7 @@ Each block uses the MO2 `Default` profile, APAFA enabled, and Alchemy Plus, CACO
 
 ### Phase 8: Confirmed-Potion Prediction Export Verification (All Modes)
 
-This phase verifies the C++ plugin's predictions against every row of `alchemist.potions-confirmed.csv`. For each confirmed row the plugin rebuilds the craft from the row's own recorded ingredients, player state, and `mod_settings`, predicts the potion, and writes the result to `alchemist.potions-predicted.<mode>.csv` next to `alchemist.dll`. `python potion_prediction_test.py --check-confirmed-csv` then reports, for each row, the in-game value, the Python prediction, and the C++ prediction. Because every row supplies its own settings, no `pat` command and no in-game setting changes are needed. Only the enabled-mod combination must match the mode being exported, and each export covers only the confirmed rows of the active mode.
+This phase verifies the C++ plugin's predictions against every row of `alchemist.potions-confirmed.csv`. For each confirmed row the plugin rebuilds the craft from the row's own recorded ingredients, player state, and `mod_settings`, predicts the potion, and writes the result to `alchemist.potions-predicted.<mode>.csv` next to `alchemist.dll`. Each report keeps the confirmed CSV's full 18-column schema in the same order, then appends `predicted_value`, `difference`, `match`, `predicted_effects`, and `resolution_status`. That makes each report row self-contained while preserving the comparison details. `python potion_prediction_test.py --check-confirmed-csv` then reports, for each row, the in-game value, the Python prediction, and the C++ prediction. Because every row supplies its own settings, no `pat` command and no in-game setting changes are needed. Only the enabled-mod combination must match the mode being exported, and each export covers only the confirmed rows of the active mode.
 
 Re-run this phase after every rebuild of `alchemist.dll` and after adding new confirmed rows. The `alchemist.potions-predicted.<mode>.csv` files are generated by the plugin; do not edit, blank, or rewrite them.
 
@@ -2062,9 +2062,16 @@ Re-run this phase after every rebuild of `alchemist.dll` and after adding new co
       1. Exit Skyrim. Run `python pat-default-apafa.py` on disk.
       2. Run `python reset_saves_and_start_skyrim.py`.
       3. In the Developer Test Hub (requires `developer=1`), press **Export confirmed-potion predictions to CSV** and wait for completion. This writes `alchemist.potions-predicted.apafa.csv`.
-      4. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline` on disk.
+      4. **Next Command**: Exit Skyrim and run `python pat-default-ordinator.py` on disk.
 
-8. **Verify**:
+8. **Ordinator Mode (Confirmed Rows)**:
+   - **Disk**: Ordinator enabled; AP/CACO/Requiem/Apothecary/APAFA disabled; each row supplies its recorded player/mod settings.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-default-ordinator.py`, then launch Skyrim through MO2.
+      2. Press **Export confirmed-potion predictions to CSV** in the Developer Test Hub and wait for completion (`alchemist.potions-predicted.ordinator.csv`).
+      3. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline`.
+
+9. **Verify**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline`.
       2. Confirm the Python harness passes every row, the baseline reports zero regressions, and the C++ plugin line reports no failing rows (`cpp_divergences=0`). Rows whose C++ value is `N/A` had no matching prediction in the export and must be explained, not ignored.
@@ -2074,7 +2081,7 @@ Re-run this phase after every rebuild of `alchemist.dll` and after adding new co
 
 ### Phase 9 (Optional): Full Potion Prediction Export Verification (Default & Changed Settings)
 
-This optional phase verifies the full in-game potion value prediction exports (`alchemist.potion-predictions.csv.zst` and the per-mode `potions-predicted-*.csv.zst` fixtures) generated by the SKSE plugin across all supported modes (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`) under both **Default Settings** and **Changed (Non-Default) Settings**. It is supplementary: the required suite and confirmed-craft validation are complete after Phase 8. Skip this entire phase if full prediction-export fixtures are not needed. When run, use separate, dedicated pre-launch scripts (`pat-default-<mode>.py` and `pat-<mode>-changed.py`), distinct from the observed craft testing scripts.
+This optional phase verifies the full in-game potion value prediction exports (`alchemist.potion-predictions.csv.zst` and the per-mode `potions-predicted-*.csv.zst` fixtures) generated by the SKSE plugin across all supported modes (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`, `Ordinator`) under both **Default Settings** and **Changed (Non-Default) Settings**. It is supplementary: the required suite and confirmed-craft validation are complete after Phase 8. Skip this entire phase if full prediction-export fixtures are not needed. When run, use separate, dedicated pre-launch scripts (`pat-default-<mode>.py` and `pat-<mode>-changed.py`), distinct from the observed craft testing scripts.
 
 #### Sub-Phase 9A (Optional): Default Settings Prediction Exports
 
@@ -2146,9 +2153,19 @@ This optional phase verifies the full in-game potion value prediction exports (`
       3. In Skyrim console, run `pat default apafa`.
       4. In the Developer Test Hub, press **Export potion predictions to CSV** and wait for completion.
       5. Run `python sync_potion_predictions.py` -> syncs to `potions-predicted-apafa.csv.zst`.
-      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv` on disk.
+      6. **Next Command**: Exit Skyrim and run `python pat-default-ordinator.py`.
 
-8. **Verify & Archive Default Predictions**:
+8. **Ordinator Mode (Default Settings)**:
+   - **Default Settings**: Ordinator enabled; AP/CACO/Requiem/Apothecary/APAFA disabled. Skill 100, Fortify 0, no perks, `InitMult=4.0`, `SkillFactor=1.5`, Advanced Lab type 0.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-default-ordinator.py`.
+      2. Run `python reset_saves_and_start_skyrim.py`.
+      3. In Skyrim console, run `pat default ordinator`.
+      4. In the Developer Test Hub press **Export potion predictions to CSV** and wait for completion.
+      5. Run `python sync_potion_predictions.py` -> `potions-predicted-ordinator.csv.zst`.
+      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv`.
+
+9. **Verify & Archive Default Predictions**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv`.
       2. Run `python save_predicted_default_settings.py` on disk to archive default setting CSV fixtures to:
@@ -2159,6 +2176,7 @@ This optional phase verifies the full in-game potion value prediction exports (`
           - `potions-predicted-requiem.default.settings.csv.zst`
           - `potions-predicted-apothecary.default.settings.csv.zst`
           - `potions-predicted-apafa.default.settings.csv.zst`
+          - `potions-predicted-ordinator.default.settings.csv.zst`
       3. **Next Command**: Exit Skyrim and run `python pat-vanilla-changed.py` on disk.
 
 ---
@@ -2233,9 +2251,19 @@ This optional phase verifies the full in-game potion value prediction exports (`
       3. In Skyrim console, run `pat apafa changed`.
       4. In the Developer Test Hub, press **Export potion predictions to CSV** and wait for completion.
       5. Run `python sync_potion_predictions.py` -> syncs to `potions-predicted-apafa.csv.zst`.
-      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv` on disk.
+      6. **Next Command**: Exit Skyrim and run `python pat-ordinator-changed.py` on disk.
 
-8. **Verify & Archive Changed Predictions**:
+8. **Ordinator Mode (Changed Settings)**:
+   - **Modified Settings**: Ordinator enabled; other overhauls disabled. Skill 75, Fortify 50 (Peerless gear), Alchemy Mastery rank 1, Physician Health, Poisoner, Advanced Lab type 2 with proc active, That Which Does Not Kill You… completion gate 1, permanent AlchemyPowerMod +25, `InitMult=4.0`, `SkillFactor=1.5`.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-ordinator-changed.py`.
+      2. Run `python reset_saves_and_start_skyrim.py`.
+      3. In Skyrim console, run `pat ordinator changed`.
+      4. In the Developer Test Hub press **Export potion predictions to CSV** and wait for completion.
+      5. Run `python sync_potion_predictions.py` -> `potions-predicted-ordinator.csv.zst`.
+      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline`.
+
+9. **Verify & Archive Changed Predictions**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv`.
       2. Run `python save_predicted_changed_settings.py` on disk to archive changed setting CSV fixtures to:
@@ -2246,6 +2274,7 @@ This optional phase verifies the full in-game potion value prediction exports (`
           - `potions-predicted-requiem.changed.settings.csv.zst`
           - `potions-predicted-apothecary.changed.settings.csv.zst`
           - `potions-predicted-apafa.changed.settings.csv.zst`
+          - `potions-predicted-ordinator.changed.settings.csv.zst`
       3. **Next Step**: Suite Complete! Run `python verify_test_suite_alignment.py` to confirm 100% test suite alignment.
 
 ---
@@ -2296,8 +2325,8 @@ Once the user completes the in-game test suite execution, the AI agent must perf
 361. **Row-by-Row Confirmation Audit**:
    - Open `alchemist.potions-confirmed.csv` in `SKSE\Plugins\`.
    - Perform an explicit row-by-row comparison against the requested test plan, confirming:
-     - All 70 requested observed-craft setting blocks across all 7 modes are present (10 AP, 10 Vanilla, 10 CACO, 10 CACO+AP, 10 Requiem, 10 Apothecary, 10 APAFA blocks).
-     - Mode flags (`caco_enabled`, `alchemy_plus_enabled`, Requiem mode, Apothecary mode, APAFA mode) match the block specification.
+     - All 184 requested setting blocks across eight modes are present (13 AP, 18 Vanilla, 27 CACO, 23 CACO+AP, 18 Requiem, 57 Apothecary, 10 APAFA, 18 Ordinator).
+     - Mode flags (`caco_enabled`, `alchemy_plus_enabled`, Requiem, Apothecary, APAFA, and Ordinator) match the block specification.
      - In-game parameters (`player_alchemy_level`, `player_fortify_alchemy`, `player_perks`, `game_settings`, `mod_settings`) match the block specification.
      - Each requested ingredient recipe and click selection order is recorded exactly as requested.
 
@@ -2477,6 +2506,26 @@ This section contains the comprehensive technical breakdown of all test phases, 
 | **APAFA-8** | `APAFA-8` | `pat-apafa.py` | `pat apafa 8` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, Poisoner | Abecean Longfin+Deathbell |
 | **APAFA-9** | `APAFA-9` | `pat-apafa.py` | `pat apafa 9` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, Purity | Bittergreen Petals+Coda Flower |
 | **APAFA-10** | `APAFA-10` | `pat-apafa.py` | `pat apafa 10` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 5.0, SkillFactor 2.0 | N/A (CACO disabled) | Skill 75, Fortify 0, Alchemist 3, no type perks | Blister Pod Cap+Bog Beacon |
+| **Ordinator-1** | `Ordinator-1` | `pat-ordinator.py` | `pat ordinator` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0 | Abecean Longfin->Small Antlers (ingredient order); Bear Claws+Bee; Canis Root+Imp Stool; Small Antlers->Abecean Longfin (ingredient order) |
+| **Ordinator-2** | `Ordinator-2` | `pat-ordinator.py` | `pat ordinator 2` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 1; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0 | Bear Claws+Bee; Canis Root+Imp Stool |
+| **Ordinator-3** | `Ordinator-3` | `pat-ordinator.py` | `pat ordinator 3` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 2; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0 | Bear Claws+Bee; Canis Root+Imp Stool |
+| **Ordinator-4** | `Ordinator-4` | `pat-ordinator.py` | `pat ordinator 4` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Health; AlchemyPowerMod 0 | Blisterwort+Wheat; Garlic+Juniper Berries; Giant's Toe+Glowing Mushroom; Mora Tapinella+Red Mountain Flower |
+| **Ordinator-5** | `Ordinator-5` | `pat-ordinator.py` | `pat ordinator 5` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Magicka; AlchemyPowerMod 0 | Bear Claws+Bee; Dwarven Oil+Garlic; Jazbay Grapes+Red Mountain Flower; Mora Tapinella+Red Mountain Flower |
+| **Ordinator-6** | `Ordinator-6` | `pat-ordinator.py` | `pat ordinator 6` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Stamina; AlchemyPowerMod 0 | Bear Claws+Bee; Bee+Scaly Pholiota; Blisterwort+Wheat; Lavender+Slaughterfish Egg |
+| **Ordinator-7** | `Ordinator-7` | `pat-ordinator.py` | `pat ordinator 7` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 50; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Poisoner; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool; Imp Stool+Orange Dartwing; Imp Stool+River Betty |
+| **Ordinator-8** | `Ordinator-8` | `pat-ordinator.py` | `pat ordinator 8` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Poisoner; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool; Imp Stool+Orange Dartwing; Imp Stool+River Betty |
+| **Ordinator-9** | `Ordinator-9` | `pat-ordinator.py` | `pat ordinator 9` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 1 with proc active; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-10** | `Ordinator-10` | `pat-ordinator.py` | `pat ordinator 10` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 2 with proc active; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-11** | `Ordinator-11` | `pat-ordinator.py` | `pat ordinator 11` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 25; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: That Which Does Not Kill You… (completion gate 1); AlchemyPowerMod 25 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-12** | `Ordinator-12` | `pat-ordinator.py` | `pat ordinator 12` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Pure Mixture; AlchemyPowerMod 0 | Abecean Longfin->Small Antlers (ingredient order); Blisterwort+Wheat; Canis Root+Imp Stool; Small Antlers->Abecean Longfin (ingredient order) |
+| **Ordinator-13** | `Ordinator-13` | `pat-ordinator.py` | `pat ordinator 13` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 2 with proc inactive; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-14** | `Ordinator-14` | `pat-ordinator.py` | `pat ordinator 14` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 50; Alchemy Mastery rank 2; Perks: Physician Health, Poisoner, Advanced Lab type 2 with proc active, That Which Does Not Kill You… (completion gate 1), Seeker of Shadows; AlchemyPowerMod 25; Peerless Alchemy circlet and necklace equipped (+50); Fortify telemetry currently reads 50 while the separate permanent power modifier is 25 | Abecean Longfin->Small Antlers (ingredient order); Blisterwort+Wheat; Canis Root+Imp Stool; Small Antlers->Abecean Longfin (ingredient order) |
+| **Ordinator-15** | `Ordinator-15` | `pat-ordinator.py` | `pat ordinator 15` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 50; Alchemy Mastery rank 2; Perks: Physician Health, Poisoner, Pure Mixture, Advanced Lab type 2 with proc active, That Which Does Not Kill You… (completion gate 1), Seeker of Shadows; AlchemyPowerMod 25; Peerless Alchemy circlet and necklace equipped (+50); Fortify telemetry currently reads 50 while the separate permanent power modifier is 25 | Abecean Longfin->Small Antlers (ingredient order); Blisterwort+Wheat; Canis Root+Imp Stool; Small Antlers->Abecean Longfin (ingredient order) |
+| **Ordinator-16** | `Ordinator-16` | `pat-ordinator.py` | `pat ordinator 16` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 5.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-17** | `Ordinator-17` | `pat-ordinator.py` | `pat ordinator 17` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 2.0 | N/A | Skill 50; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Ordinator-18** | `Ordinator-18` | `pat-ordinator.py` | `pat ordinator 18` | Ordinator enabled; all other overhauls disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100; Fortify 25; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 25; completion gate 1 | Blisterwort+Wheat; Canis Root+Imp Stool |
+| **Pred-Default-Ordinator** | `Ordinator-Default` | `pat-default-ordinator.py` | `pat default ordinator` | Ordinator enabled; all other overhauls disabled | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, no perks, Advanced Lab type 0 | Full Potion Prediction Export |
+| **Pred-Changed-Ordinator** | `Ordinator-Changed` | `pat-ordinator-changed.py` | `pat ordinator changed` | Ordinator enabled; all other overhauls disabled | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 75, Fortify 50 (Peerless gear), Alchemy Mastery rank 1, Physician Health, Poisoner, Advanced Lab type 2 with proc active, That Which Does Not Kill You… completion gate 1, AlchemyPowerMod 25 | Full Potion Prediction Export |
 | **Pred-Default-Vanilla** | `Vanilla-Default` | `pat-default-vanilla.py` | `pat default vanilla` | N/A (AP Disabled) | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-AP** | `AP-Default` | `pat-default-ap.py` | `pat default ap` | mag 25/5, dur 15/5, impureFix=True | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-CACO** | `CACO-Default` | `pat-default-caco.py` | `pat default caco` | N/A (AP Disabled) | InitMult 3.9, SkillFactor 1.0 | All 0s (Index 0), DisableHandling=1, ImpureProc=0 | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
@@ -2494,14 +2543,196 @@ This section contains the comprehensive technical breakdown of all test phases, 
 
 ---
 
+## Ordinator Compatibility Blocks
+
+Ordinator is a standalone mode. The installed ESP and its script source were audited against the [author’s perk list](https://www.nexusmods.com/skyrimspecialedition/mods/1137). Eighteen blocks cover distinct value-affecting branches without an exhaustive perk Cartesian product. Each block contains at most four crafts. Physician includes the installed perk’s Restore, Fortify, **and Regenerate** keyword families for each attribute. All isolated probes share exactly one effect in both Ordinator and Vanilla; mixed-order probes deliberately share two.
+
+The suite covers both Mastery ranks; every Physician attribute and an unmatched control; Poisoner at 50/100 with magnitude-only, duration-only, and combined effects; both active Advanced Lab types and an upgraded-but-inactive control; Pure Mixture in both selection orders; permanent capstone power with and without perk ownership; combined perk/gear/Seeker bonuses with purity off/on; each engine GameSetting independently; with no redundant consumption-only cases. Inactive lab types 1/2 are equivalent for prediction because only the proc enables the multiplier, so one inactive type is sufficient. Other Alchemy perks change consumption, harvesting, identification, combat, or output count and require no additional value cases. Cosmetic lab-model and sneak-detector globals do not change value independently of the captured proc state. Deprecated Benefactor, Alchemist ranks 3–5, Magnum Opus, Doctor Death, and Field Alchemy are outside the current supported tree and excluded from the minimal release suite. This suite does not certify those obsolete legacy-save mechanics.
+
+**Release audit caveat:** existing captures did not exercise Physician regeneration, and the old capstone setup left `AlchemyPowerMod=0`. The corrected cases must be captured in-game. The present C++/Python Physician paths omit regeneration keywords; these new tests intentionally expose that discrepancy. Do not certify the release from the earlier passing captures. See [the release audit](docs/ordinator-release-audit.md).
+
+The capstone setup pre-sets its completion gate to suppress the lethal toxin, then applies the permanent +25 actor-value modifier verified in `ORD_PurifyTheFlesh_Script` and the ESP’s `ORD_Alc` property. Removing the perk does not clear this modifier; every command explicitly resets it before provisioning. All state changes occur in the running test session: do not save this test state or modify save files.
+
+Papyrus needs numeric local FormIDs and plugin filenames. Test provisioning IDs are verified against the installed binary and ingredient snapshot, with originating-plugin/name comments. The capstone’s fixed 25 comes from the installed script property; it is hardcoded only in the test harness to emulate survival without its toxin.
+
+### Ordinator Observed-Craft Session
+
+1. Optionally back up the confirmed CSVs; retain the existing capture rows when extending coverage.
+2. Exit Skyrim and run `python pat-ordinator.py`. Launch Skyrim yourself through MO2’s **Default** profile at `E:\Projects\games\skyrim\1.6.1170\profiles\Default`. Ordinator is enabled; AP/CACO/Requiem/Apothecary/APAFA are disabled. No Ordinator disk settings change.
+3. Run `pat ordinator`, then `pat ordinator 2` through `pat ordinator 18` sequentially in the same session. Craft each block’s recipes. Press **F** with the lab UI focused after each setup.
+4. After all crafts, use Developer Test Hub → **Export confirmed-potion predictions to CSV** in this same Ordinator session. This regenerates `alchemist.potions-predicted.ordinator.csv`.
+5. Return for verification with `python potion_prediction_test.py --check-confirmed-csv --check-baseline`. After the new rows pass, record the baseline with `python potion_prediction_test.py --check-confirmed-csv --record-baseline`. Full default/changed prediction exports remain optional Phase 9.
+
+- **Block 1 (`pat ordinator`)
+  - **Modified Settings**: All settings are defaults.
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0.
+  - **Target**: Unperked potion/poison and both mixed selection-order baselines.
+  - `Abecean Longfin -> Small Antlers` (select in listed order)
+  - `Bear Claws + Bee` (Restore Stamina)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Small Antlers -> Abecean Longfin` (select in listed order)
+  - **Next Command**: `pat ordinator 2`
+
+- **Block 2 (`pat ordinator 2`)
+  - **Modified Settings**: Alchemy Mastery rank 1
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 1; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0.
+  - **Target**: Mastery rank 1 magnitude and duration.
+  - `Bear Claws + Bee` (Restore Stamina)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 3`
+
+- **Block 3 (`pat ordinator 3`)
+  - **Modified Settings**: Alchemy Mastery rank 2
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 2; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0.
+  - **Target**: Mastery rank 2 magnitude and duration.
+  - `Bear Claws + Bee` (Restore Stamina)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 4`
+
+- **Block 4 (`pat ordinator 4`)
+  - **Modified Settings**: Physician Health
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Health; AlchemyPowerMod 0.
+  - **Target**: Health Restore/Fortify/Regenerate, plus nonmatching Magicka control.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Garlic + Juniper Berries` (Regenerate Health)
+  - `Giant's Toe + Glowing Mushroom` (Fortify Health)
+  - `Mora Tapinella + Red Mountain Flower` (Restore Magicka)
+  - **Next Command**: `pat ordinator 5`
+
+- **Block 5 (`pat ordinator 5`)
+  - **Modified Settings**: Physician Magicka
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Magicka; AlchemyPowerMod 0.
+  - **Target**: Magicka Restore/Fortify/Regenerate, plus nonmatching Stamina control.
+  - `Bear Claws + Bee` (Restore Stamina)
+  - `Dwarven Oil + Garlic` (Regenerate Magicka)
+  - `Jazbay Grapes + Red Mountain Flower` (Fortify Magicka)
+  - `Mora Tapinella + Red Mountain Flower` (Restore Magicka)
+  - **Next Command**: `pat ordinator 6`
+
+- **Block 6 (`pat ordinator 6`)
+  - **Modified Settings**: Physician Stamina
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Physician Stamina; AlchemyPowerMod 0.
+  - **Target**: Stamina Restore/Fortify/Regenerate, plus nonmatching Health control.
+  - `Bear Claws + Bee` (Restore Stamina)
+  - `Bee + Scaly Pholiota` (Regenerate Stamina)
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Lavender + Slaughterfish Egg` (Fortify Stamina)
+  - **Next Command**: `pat ordinator 7`
+
+- **Block 7 (`pat ordinator 7`)
+  - **Modified Settings**: Alchemy 50; Poisoner
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 50; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Poisoner; AlchemyPowerMod 0.
+  - **Target**: Poisoner skill 50: magnitude-only, duration-only, magnitude-and-duration, and unaffected potion.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Imp Stool + Orange Dartwing` (Lingering Damage Health)
+  - `Imp Stool + River Betty` (Damage Health)
+  - **Next Command**: `pat ordinator 8`
+
+- **Block 8 (`pat ordinator 8`)
+  - **Modified Settings**: Poisoner
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Poisoner; AlchemyPowerMod 0.
+  - **Target**: Poisoner skill 100: magnitude-only, duration-only, magnitude-and-duration, and unaffected potion.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Imp Stool + Orange Dartwing` (Lingering Damage Health)
+  - `Imp Stool + River Betty` (Damage Health)
+  - **Next Command**: `pat ordinator 9`
+
+- **Block 9 (`pat ordinator 9`)
+  - **Modified Settings**: Advanced Lab type 1, proc active
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 1 with proc active; AlchemyPowerMod 0.
+  - **Target**: Active table-lab proc: potion and poison.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 10`
+
+- **Block 10 (`pat ordinator 10`)
+  - **Modified Settings**: Advanced Lab type 2, proc active
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 2 with proc active; AlchemyPowerMod 0.
+  - **Target**: Active tabletop-lab proc: potion and poison.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 11`
+
+- **Block 11 (`pat ordinator 11`)
+  - **Modified Settings**: That Which Does Not Kill You… completion gate 1; permanent AlchemyPowerMod +25; capstone completion gate 1
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 25; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: That Which Does Not Kill You… (completion gate 1); AlchemyPowerMod 25.
+  - **Target**: Actual permanent post-survival power modifier; potion and poison.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 12`
+
+- **Block 12 (`pat ordinator 12`)
+  - **Modified Settings**: Pure Mixture
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: Pure Mixture; AlchemyPowerMod 0.
+  - **Target**: Isolated Pure Mixture, both mixed orders and pure controls.
+  - `Abecean Longfin -> Small Antlers` (select in listed order)
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Small Antlers -> Abecean Longfin` (select in listed order)
+  - **Next Command**: `pat ordinator 13`
+
+- **Block 13 (`pat ordinator 13`)
+  - **Modified Settings**: Advanced Lab type 2, proc inactive
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Perks: Advanced Lab type 2 with proc inactive; AlchemyPowerMod 0.
+  - **Target**: Upgraded lab elsewhere: global type 2 without an active proc must grant no value bonus.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 14`
+
+- **Block 14 (`pat ordinator 14`)
+  - **Modified Settings**: Alchemy Mastery rank 2; Physician Health; Poisoner; Advanced Lab type 2, proc active; That Which Does Not Kill You… completion gate 1; permanent AlchemyPowerMod +25; Peerless Alchemy gear +50; Seeker of Shadows
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 50; Alchemy Mastery rank 2; Perks: Physician Health, Poisoner, Advanced Lab type 2 with proc active, That Which Does Not Kill You… (completion gate 1), Seeker of Shadows; AlchemyPowerMod 25; Peerless Alchemy circlet and necklace equipped (+50); Fortify telemetry currently reads 50 while the separate permanent power modifier is 25.
+  - **Target**: Combined Mastery/Physician/Poisoner/lab/capstone/gear/Seeker; both mixed orders with impurities retained.
+  - `Abecean Longfin -> Small Antlers` (select in listed order)
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Small Antlers -> Abecean Longfin` (select in listed order)
+  - **Next Command**: `pat ordinator 15`
+
+- **Block 15 (`pat ordinator 15`)
+  - **Modified Settings**: Alchemy Mastery rank 2; Physician Health; Poisoner; Pure Mixture; Advanced Lab type 2, proc active; That Which Does Not Kill You… completion gate 1; permanent AlchemyPowerMod +25; Peerless Alchemy gear +50; Seeker of Shadows
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 50; Alchemy Mastery rank 2; Perks: Physician Health, Poisoner, Pure Mixture, Advanced Lab type 2 with proc active, That Which Does Not Kill You… (completion gate 1), Seeker of Shadows; AlchemyPowerMod 25; Peerless Alchemy circlet and necklace equipped (+50); Fortify telemetry currently reads 50 while the separate permanent power modifier is 25.
+  - **Target**: Combined modifiers with Pure Mixture: both mixed orders and pure controls.
+  - `Abecean Longfin -> Small Antlers` (select in listed order)
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - `Small Antlers -> Abecean Longfin` (select in listed order)
+  - **Next Command**: `pat ordinator 16`
+
+- **Block 16 (`pat ordinator 16`)
+  - **Modified Settings**: InitMult=5.0
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=5.0; SkillFactor=1.5; Skill 100; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0.
+  - **Target**: Isolate changed ingredient-init GameSetting.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 17`
+
+- **Block 17 (`pat ordinator 17`)
+  - **Modified Settings**: Alchemy 50; SkillFactor=2.0
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=2.0; Skill 50; Fortify 0; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 0.
+  - **Target**: Isolate changed skill-factor GameSetting at non-100 skill.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `pat ordinator 18`
+
+- **Block 18 (`pat ordinator 18`)
+  - **Modified Settings**: permanent AlchemyPowerMod +25; capstone completion gate 1
+  - **Runtime State**: MO2 Default; Ordinator only; no disk JSON changes; InitMult=4.0; SkillFactor=1.5; Skill 100; Fortify 25; Alchemy Mastery rank 0; Advanced Lab type 0; Perks: None; AlchemyPowerMod 25; completion gate 1.
+  - **Target**: Permanent capstone modifier retained after perk removal; completion gate 1; potion and poison.
+  - `Blisterwort + Wheat` (Restore Health)
+  - `Canis Root + Imp Stool` (Paralysis)
+  - **Next Command**: `python potion_prediction_test.py --check-confirmed-csv --check-baseline` after the in-game confirmed prediction export.
+
 ## AI Agent Reset Procedure
 
 If other test tasks or agents modify `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc`, `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml`, or root `pat-*.py` scripts, an AI agent can restore the full minimal test suite by following these exact steps:
 
 1. **Verify Console Definition (`pa-tests.yaml`)**:
-   Ensure `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml` contains subcommands for `default`, `vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, `apothecary`, and `apafa` with optional `variant` string parameters. The help strings for `vanilla` (2-18), `caco` (2-27), `ap` (2-13), `caco-ap` (2-23), `requiem` (2-18), `apothecary` (2-57), and `apafa` (2-10, changed) must cover all mode variants.
+   Ensure `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml` contains subcommands for `default`, `vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, `apothecary`, `apafa`, and `ordinator` with optional `variant` string parameters. The help strings for `vanilla` (2-18), `caco` (2-27), `ap` (2-13), `caco-ap` (2-23), `requiem` (2-18), `apothecary` (2-57), and `apafa` (2-10, changed), and `ordinator` (2-18, changed) must cover all mode variants.
 2. **Verify Papyrus Test Script (`ProsperousAlchemistTests.psc`)**:
-   Ensure `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc` implements all 166 in-game test block handlers in `ProvisionAndPrintTests` as specified in the technical matrix.
+   Ensure `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc` implements all 184 in-game test block handlers in `ProvisionAndPrintTests` as specified in the technical matrix.
 3. **Recompile Papyrus Script**:
    Execute the PowerShell build script:
    ```powershell
@@ -2509,8 +2740,8 @@ If other test tasks or agents modify `pa-console-tests/Source/Scripts/Prosperous
    .\compile.ps1
    ```
 4. **Verify Root Python Mode Scripts**:
-   Ensure all 27 pre-launch mode scripts include `pat-apafa.py`, `pat-default-apafa.py`, and `pat-apafa-changed.py`; each uses `apply_mode_config` to enable APAFA and disable the inactive overhauls.
+   Ensure all 30 pre-launch mode scripts include the observed, default-export, and changed-export Ordinator scripts; each uses `apply_mode_config` to enable its intended mode and disable inactive overhauls.
 5. **Rebuild & Deploy SKSE Plugin**:
-   Run `python build.py` from repository root and verify that the built and deployed DLL timestamps match.
+   Only if C++ plugin source changed, run `python build.py` from repository root and verify that the built and deployed DLL timestamps match; test-script-only edits need only Papyrus compilation. After a prediction build, request fresh in-game exports before diagnostic verification.
 6. **Final Verification Check**:
    Run `python verify_test_suite_alignment.py` and ensure output reports 100% PASS across all verification modules before completing work.

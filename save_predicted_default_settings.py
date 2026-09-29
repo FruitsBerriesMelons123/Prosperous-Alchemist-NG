@@ -13,6 +13,7 @@ FILES = [
     ("potions-predicted-caco", "potions-predicted-caco.default.settings"),
     ("potions-predicted-requiem", "potions-predicted-requiem.default.settings"),
     ("potions-predicted-apothecary", "potions-predicted-apothecary.default.settings"),
+    ("potions-predicted-ordinator", "potions-predicted-ordinator.default.settings"),
 ]
 
 def main() -> None:

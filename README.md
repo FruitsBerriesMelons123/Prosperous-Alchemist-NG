@@ -253,14 +253,16 @@ Set `developer = 1` in the active profile's section of the deployed `alchemist.i
 
 ## Test workflow
 
-[test-suite.md](test-suite.md) is the full test plan, with 156 in-game blocks across all modes plus a prediction-export phase. It has two tiers:
+[test-suite.md](test-suite.md) is the full test plan, with 184 in-game blocks across all modes plus a prediction-export phase. It has two tiers:
 
 1. **Pre-launch disk setup (Skyrim closed).** Run the mode's script, for example `python pat-vanilla.py`, `python pat-ap-2.py`, or `python pat-caco-ap.py`. It enables only that mode's mods in the MO2 profile, syncs `plugins.txt`, and writes `AlchemyPlus.json`. Modes with no settings on disk use a single script; AP and CACO+AP use one script per JSON configuration.
 2. **In-game blocks (one Skyrim session).** Launch SKSE through MO2 (or run `python reset_saves_and_start_skyrim.py`), open the console, and run `pat <mode> [n]`, for example `pat vanilla`, `pat caco 3`, or `pat requiem 5`. Each command clears ingredients, perks, Fortify Alchemy gear, GameSettings, and mod globals, applies the block's state, gives 99 of each required ingredient, and prints the recipes to craft and the next command. If the alchemy menu is already open, press **F** to refresh the ingredient list.
 
-The supported modes are `vanilla`, `ap`, `caco`, `caco-ap`, `requiem`, `apothecary`, and `apafa`. Optional Phase 9 uses `pat-default-<mode>.py` and `pat-<mode>-changed.py` to export full prediction files (`potions-predicted-*.csv.zst`). If you run it, `sync_potion_predictions.py`, `save_predicted_default_settings.py`, `save_predicted_changed_settings.py`, and `toggle-predicted-settings.py` copy those exports into the repository fixtures and switch between them.
+The supported modes are `vanilla`, `ap`, `caco`, `caco-ap`, `requiem`, `apothecary`, `apafa`, and standalone `ordinator`. Optional Phase 9 uses `pat-default-<mode>.py` and `pat-<mode>-changed.py` to export full prediction files (`potions-predicted-*.csv.zst`). If you run it, `sync_potion_predictions.py`, `save_predicted_default_settings.py`, `save_predicted_changed_settings.py`, and `toggle-predicted-settings.py` copy those exports into the repository fixtures and switch between them.
 
 Before designing new test recipes, check them with `validate_ingredient_combination` in `pat_config_helper.py` against both the target mode's snapshot and `ingredients-vanilla.csv`. Resolve every FormID from the real plugins or snapshots, and use `Game.GetFormFromFile` in Papyrus. [potion-prediction-default-settings.md](potion-prediction-default-settings.md) lists the baseline settings for each mode.
+
+Papyrus form references use hardcoded plugin-local FormIDs because `Game.GetFormFromFile` requires a local numeric ID plus its source plugin filename and Papyrus cannot look forms up by editor ID. Keep each reference commented with its record name and verify it against the installed plugin.
 
 Files the game produces (`alchemist.potions-confirmed*.csv`, `alchemist.potion-observations.csv`, `potions-predicted-*`) count as evidence. You can back them up or move them, but never edit or rewrite them; regenerate them in game instead.
 
@@ -343,6 +345,7 @@ Restart Skyrim after editing the INI by hand.
 | kryptopyr's Patch Hub | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/19518) | CACO and Rare Curios patches. |
 | Requiem | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/60888) · [GitHub](https://github.com/ProbablyManuel/requiem) | Supported overhaul. |
 | Apothecary – An Alchemy Overhaul | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/52130) | Supported overhaul. |
+| Ordinator - Perks of Skyrim | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/1137) | Perk overhaul. |
 | Alchemy Potions and Food Adjustments | APAFA mode; detected by `AlchemyAdjustments.esp`. |
 | Quest Tracker NG | [GitHub](https://github.com/wtarking-cell/QuestTrackerNG) | Reference for quest-related code. |
 

@@ -1,10 +1,10 @@
 """Master verification script to ensure 100% alignment between scripts, compiled commands, and test-suite.md.
 
 This script comprehensively verifies:
-1. All 22 pre-launch Python scripts (pat-*.py) execute cleanly and configure MO2 modlist,
+1. All 30 pre-launch Python scripts (pat-*.py) execute cleanly and configure MO2 modlist,
    plugins.txt, and AlchemyPlus.json matching test-suite.md specs.
 2. pa-tests.yaml contains all required subcommands, aliases, functions, and arguments matching test-suite.md.
-3. ProsperousAlchemistTests.psc implements all 108 observed-craft test blocks and 12 prediction-export blocks,
+3. ProsperousAlchemistTests.psc implements all 184 observed-craft test blocks and 16 prediction-export blocks,
    verifying skill levels, perks, GameSettings, CACO globals, ingredient FormIDs, and console printouts.
 4. Every single ProvisionForm and ProvisionFormFallback FormID in ProsperousAlchemistTests.psc is validated
    against actual binary plugin files (.esp, .esm, .esl) on disk to guarantee zero missing ingredients in Skyrim.
@@ -86,6 +86,7 @@ OVERHAUL_MODS = {
     "Requiem": getattr(config, "REQUIEM_MOD_DIR", Path("Requiem - The Roleplaying Overhaul")).name,
     "Apothecary": getattr(config, "APOTHECARY_MOD_DIR", Path("Apothecary - An Alchemy Overhaul")).name,
     "APAFA": getattr(config, "APAFA_MOD_DIR", Path("Alchemy Potions and Food Adjustments")).name,
+    "Ordinator": config.ORDINATOR_MOD_DIR.name,
 }
 
 PLUGINS_MAP = {
@@ -93,6 +94,7 @@ PLUGINS_MAP = {
     "Requiem": ["requiem.esp"],
     "Apothecary": ["apothecary.esp"],
     "APAFA": ["alchemyadjustments.esp", "alchemyadjustments - rarecurios patch.esp", "alchemyadjustments - distinctiverareingredients addon.esp"],
+    "Ordinator": ["ordinator - perks of skyrim.esp"],
 }
 
 EXPECTED_MODS = {
@@ -103,6 +105,7 @@ EXPECTED_MODS = {
     "requiem": {"Requiem"},
     "apothecary": {"Apothecary"},
     "apafa": {"APAFA"},
+    "ordinator": {"Ordinator"},
 }
 
 EXPECTED_PLUGINS = {
@@ -113,6 +116,7 @@ EXPECTED_PLUGINS = {
     "requiem": {"Requiem"},
     "apothecary": {"Apothecary"},
     "apafa": {"APAFA"},
+    "ordinator": {"Ordinator"},
 }
 
 
@@ -130,6 +134,8 @@ def get_mode_category(script_name: str) -> str:
         return "ap"
     elif name.startswith("vanilla"):
         return "vanilla"
+    elif name.startswith("ordinator"):
+        return "ordinator"
     elif name.startswith("requiem"):
         return "requiem"
     else:
@@ -234,8 +240,8 @@ def verify_pat_python_scripts() -> tuple[int, int, List[str]]:
     failed = 0
     log_details = []
 
-    if len(pat_scripts) != 27:
-        log_details.append(f"Expected 27 pat-*.py scripts, found {len(pat_scripts)}")
+    if len(pat_scripts) != 30:
+        log_details.append(f"Expected 30 pat-*.py scripts, found {len(pat_scripts)}")
 
     for script in pat_scripts:
         category = get_mode_category(script.name)
@@ -272,7 +278,7 @@ def verify_pa_tests_yaml() -> tuple[bool, List[str]]:
     content = yaml_path.read_text(encoding="utf-8")
     
     required_subs = [
-        "default", "vanilla", "caco", "ap", "caco-ap", "requiem", "apothecary", "apafa", "clear"
+        "default", "vanilla", "caco", "ap", "caco-ap", "requiem", "apothecary", "apafa", "ordinator", "clear"
     ]
 
     for sub in required_subs:
@@ -311,6 +317,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
         'cc-rarecurios_caco_patch.esp': config.KRYPTOPYR_PATCHES_MOD_DIR / 'cc-rarecurios_caco_patch.esp',
         'Requiem.esp': config.REQUIEM_MOD_DIR / 'Requiem.esp',
         'Apothecary.esp': config.APOTHECARY_MOD_DIR / 'Apothecary.esp',
+        'Ordinator - Perks of Skyrim.esp': config.ORDINATOR_MOD_DIR / 'Ordinator - Perks of Skyrim.esp',
     }
 
     db_dir = REPO_ROOT / "db"
@@ -457,6 +464,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
         "requiem": ("SetupRequiem", 18),
         "apothecary": ("SetupApothecary", 57),
         "apafa": ("SetupAPAFA", 10),
+        "ordinator": ("SetupOrdinator", 18),
     }
 
     for mode, (func_name, max_v) in setup_funcs.items():
@@ -546,6 +554,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
         requiem_enabled = "requiem" in tag
         apothecary_enabled = "apothecary" in tag
         apafa_enabled = "apafa" in tag
+        ordinator_enabled = "ordinator" in tag
 
         block_ok = True
         for craft in craft_lines:
@@ -563,8 +572,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             clean_ingredients = [re.sub(r'\s*\([^)]*\)', '', ingr).strip() for ingr in ingredients]
 
             # 1. Multi-Schema Craftability Check
-            valid, msg = validate_ingredient_combination(clean_ingredients, caco_enabled, requiem_enabled, apothecary_enabled, apafa_enabled)
-            if valid and apafa_enabled:
+            valid, msg = validate_ingredient_combination(clean_ingredients, caco_enabled, requiem_enabled, apothecary_enabled, apafa_enabled, ordinator_enabled)
+            if valid and (apafa_enabled or ordinator_enabled):
                 vanilla_valid, vanilla_msg = validate_ingredient_combination(clean_ingredients)
                 if not vanilla_valid:
                     valid, msg = False, f"Fails Vanilla cross-validation: {vanilla_msg}"
@@ -623,6 +632,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             func_name, var = "SetupApothecary", "changed"
         elif tag_clean == "pred-changed-apafa":
             func_name, var = "SetupAPAFA", "changed"
+        elif tag_clean == "pred-changed-ordinator":
+            func_name, var = "SetupOrdinator", "changed"
         else:
             parts = tag_clean.split("-")
             if len(parts) == 2:
@@ -636,7 +647,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
                 "cacoap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP",
                 "requiem": "SetupRequiem",
                 "apothecary": "SetupApothecary",
-                "apafa": "SetupAPAFA"
+                "apafa": "SetupAPAFA",
+                "ordinator": "SetupOrdinator"
             }
             func_name = mode_map[m]
             var = num
@@ -648,7 +660,15 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             continue
         fbody = fmatch.group(2)
 
-        if var == "default":
+        if func_name == "SetupOrdinator":
+            if var == "1":
+                alch_set = ["100"]
+            else:
+                branch_match = re.search(rf'variant == "{var}"\s*(.*?)\s*(?:elseif|else)', fbody, re.DOTALL)
+                alch_set = re.findall(r"\bskill\s*=\s*(\d+)", branch_match.group(1)) if branch_match else []
+                if not alch_set:
+                    alch_set = ["100"]
+        elif var == "default":
             alch_set = re.findall(r'SetActorValue\("Alchemy",\s*(\d+)\)', fbody)
         elif var == "1":
             branch_match = re.search(r'else\s+(?!if)(.*?)\s*endif', fbody, re.DOTALL)
@@ -704,7 +724,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             print(f"    - {err}")
         errors.extend(recipe_mismatches)
     else:
-        print(f"  [PASS] All 166 block craft recipes and counts in test-suite.md match ProsperousAlchemistTests.psc 100%.")
+        print(f"  [PASS] All 180 block craft recipes and counts in test-suite.md match ProsperousAlchemistTests.psc 100%.")
 
     if len(errors) == 0:
         print(f"  [PASS] All {len(expected_tags)} in-game test blocks, skill levels, and recipes verified craftable.")
@@ -732,7 +752,7 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
     print("\n--- 5. Verifying Next Command / Next Step Alignment Across Markdown, Papyrus & Python Scripts ---")
     errors = []
 
-    # 1. Python Pre-Launch Scripts (27 total)
+    # 1. Python Pre-Launch Scripts (30 total)
     pat_python_next = {
         "pat-ap.py": "pat ap",
         "pat-ap-2.py": "pat ap 4",
@@ -747,6 +767,7 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "pat-requiem.py": "pat requiem",
         "pat-apothecary.py": "pat apothecary",
         "pat-apafa.py": None,
+        "pat-ordinator.py": "pat ordinator",
         "pat-default-vanilla.py": "pat default vanilla",
         "pat-default-ap.py": "pat default ap",
         "pat-default-caco.py": "pat default caco",
@@ -754,6 +775,7 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "pat-default-requiem.py": "pat default requiem",
         "pat-default-apothecary.py": "pat default apothecary",
         "pat-default-apafa.py": None,
+        "pat-default-ordinator.py": "pat default ordinator",
         "pat-vanilla-changed.py": "pat vanilla changed",
         "pat-ap-changed.py": "pat ap changed",
         "pat-caco-changed.py": "pat caco changed",
@@ -761,6 +783,7 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "pat-requiem-changed.py": "pat requiem changed",
         "pat-apothecary-changed.py": "pat apothecary changed",
         "pat-apafa-changed.py": None,
+        "pat-ordinator-changed.py": "pat ordinator changed",
     }
 
     py_ok_count = 0
@@ -839,7 +862,16 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "apafa-1": "pat apafa 2", "apafa-2": "pat apafa 3", "apafa-3": "pat apafa 4",
         "apafa-4": "pat apafa 5", "apafa-5": "pat apafa 6", "apafa-6": "pat apafa 7",
         "apafa-7": "pat apafa 8", "apafa-8": "pat apafa 9", "apafa-9": "pat apafa 10",
-        "apafa-10": "Exit Skyrim and run", "apafa-changed": "python potion_prediction_test.py --check-confirmed-csv",
+        "apafa-10": "Exit Skyrim and run", "apafa-changed": "Exit Skyrim and run",
+        "ordinator-1": "pat ordinator 2", "ordinator-2": "pat ordinator 3",
+        "ordinator-3": "pat ordinator 4", "ordinator-4": "pat ordinator 5",
+        "ordinator-5": "pat ordinator 6", "ordinator-6": "pat ordinator 7",
+        "ordinator-7": "pat ordinator 8", "ordinator-8": "pat ordinator 9",
+        "ordinator-9": "pat ordinator 10", "ordinator-10": "pat ordinator 11",
+        "ordinator-11": "pat ordinator 12",
+        **{f"ordinator-{i}": f"pat ordinator {i+1}" for i in range(12, 18)},
+        "ordinator-18": "python potion_prediction_test.py --check-confirmed-csv",
+        "ordinator-changed": "python potion_prediction_test.py --check-confirmed-csv",
 
     }
 
@@ -900,6 +932,7 @@ SETUP_FUNCTIONS = {
     "requiem": "SetupRequiem",
     "apothecary": "SetupApothecary",
     "apafa": "SetupAPAFA",
+    "ordinator": "SetupOrdinator",
 }
 
 # Plugins active in each mode, in load order (later plugins win for record data).
@@ -924,13 +957,14 @@ MODE_STACKS = {
         "AlchemyAdjustments.esp", "AlchemyAdjustments - RareCurios Patch.esp",
         "AlchemyAdjustments - DistinctiveRareIngredients Addon.esp",
     ],
+    "ordinator": BASE_STACK + ["Ordinator - Perks of Skyrim.esp"],
 }
 MODE_STACKS["caco-ap"] = MODE_STACKS["caco"]
 MODE_INGREDIENT_CSV = {
     "vanilla": "ingredients-vanilla.csv", "ap": "ingredients-vanilla.csv",
     "caco": "ingredients-caco.csv", "caco-ap": "ingredients-caco.csv",
     "requiem": "ingredients-requiem.csv", "apothecary": "ingredients-apothecary.csv",
-    "apafa": "ingredients-apafa.csv",
+    "apafa": "ingredients-apafa.csv", "ordinator": "ingredients-ordinator.csv",
 }
 
 CACO_FAMILIES = ["RestH", "RestM", "RestS", "DmgH", "DmgM", "DmgS"]
@@ -948,12 +982,17 @@ SECONDS_TO_INDEX = {0: 0, 1: 0, 5: 1, 10: 2}
 PERK_EDID_TOKENS = {
     "physician": "physician", "benefactor": "benefactor", "poisoner": "poisoner", "purity": "purity",
     "greenthumb": "green thumb", "snakeblood": "snakeblood",
+    "ord_alc20_physician_perk_20_proc_health": "physician health",
+    "ord_alc20_physician_perk_20_proc_magicka": "physician magicka",
+    "ord_alc20_physician_perk_20_proc_stamina": "physician stamina",
+    "ord_alc30_advancedlab_perk_00": "advanced lab",
+    "ord_alc70_puremixture_perk_00": "purity",
     "experimenter50": "experimenter", "experimenter70": "experimenter", "experimenter90": "experimenter",
 }
 ALCHEMIST_RANK_EDIDS = ["alchemist00", "alchemist20", "alchemist40", "alchemist60", "alchemist80"]
 SPEC_PERK_TOKENS = [
-    "physician", "benefactor", "poisoner", "purity", "green thumb", "snakeblood",
-    "experimenter", "seeker of shadows", "improved elixirs", "improved poisons", "purification process",
+    "physician", "physician health", "physician magicka", "physician stamina", "benefactor", "poisoner", "purity", "advanced lab", "green thumb", "snakeblood",
+    "experimenter", "seeker of shadows", "improved elixirs", "improved poisons", "purification process", "that which does not kill you",
 ]
 
 
@@ -1034,23 +1073,57 @@ def _load_mode_ingredient_names(records: PluginRecords) -> Dict[str, Dict[tuple,
 
 
 def _split_branches(body: str) -> Dict[str, str]:
-    """Split a Setup* function body into {variant: branch text}; key '' is the shared preamble."""
+    """Split a Setup* function at its top-level variant chain, preserving nested conditionals."""
     branches: Dict[str, str] = {}
-    current, lines = [""], []
+    preamble: List[str] = []
+    active: List[str] = []
+    remainder: List[str] = []
+    current: List[str] = []
+    chain_started = False
+    chain_ended = False
+    nested = 0
     for line in body.splitlines():
-        m = re.match(r'^ {4}(?:if|elseif) (variant == "[^"]+"(?:\s*\|\|\s*variant == "[^"]+")*)\s*$', line)
-        if m or re.match(r"^ {4}else\s*$", line) or re.match(r"^ {4}endif\s*$", line):
-            for key in current:
-                branches[key] = "\n".join(lines)
-            lines = []
-            if m:
-                current = re.findall(r'variant == "([^"]+)"', m.group(1))
-            else:
-                current = ["1"] if re.match(r"^ {4}else\s*$", line) else ["__after__"]
+        if chain_ended:
+            remainder.append(line)
             continue
-        lines.append(line)
-    for key in current:
-        branches[key] = "\n".join(lines)
+        m = re.match(r'^ {4}(?:if|elseif) (variant == "[^"]+"(?:\s*\|\|\s*variant == "[^"]+")*)\s*$', line)
+        is_else = re.match(r"^ {4}else\s*$", line)
+        if m and (not chain_started or nested == 0):
+            if chain_started:
+                for key in current:
+                    branches[key] = "\n".join(active)
+            else:
+                branches[""] = "\n".join(preamble)
+                chain_started = True
+            active = []
+            current = re.findall(r'variant == "([^"]+)"', m.group(1))
+            continue
+        if is_else and chain_started and nested == 0:
+            for key in current:
+                branches[key] = "\n".join(active)
+            active = []
+            current = ["1"]
+            continue
+        if not chain_started:
+            preamble.append(line)
+            continue
+        if re.match(r"^ {4}endif\s*$", line):
+            if nested == 0:
+                for key in current:
+                    branches[key] = "\n".join(active)
+                chain_ended = True
+                continue
+            nested -= 1
+        elif re.match(r"^ {4}if\s+", line):
+            nested += 1
+        active.append(line)
+    if not chain_started:
+        branches[""] = "\n".join(preamble)
+    if chain_ended:
+        branches["__after__"] = "\n".join(remainder)
+    else:
+        for key in current or [""]:
+            branches[key] = "\n".join(active)
     return branches
 
 
@@ -1078,17 +1151,49 @@ def _perk_token(records: PluginRecords, form_id: int, plugin: str, mode: str) ->
 def _psc_block_state(records: PluginRecords, text: str, mode: str, errors: List[str], tag: str) -> Dict[str, Any]:
     state: Dict[str, Any] = {
         "skill": 100, "fortify": 0, "rank": 0, "perks": set(), "init_mult": None, "skill_factor": None,
-        "caco": None,
+        "caco": None, "ordinator_lab": 0, "ordinator_power": 0, "ordinator_lab_active": False,
     }
     perk_vars: Dict[str, tuple] = {}
     for line in text.splitlines():
         code = line.split(";")[0]
+        if mode == "ordinator" and re.search(r'SetActorValue\("Alchemy",\s*skill\)', code):
+            skill_values = re.findall(r"\bskill\s*=\s*(\d+)", text)
+            if skill_values:
+                state["skill"] = int(skill_values[-1])
         if m := re.search(r'SetActorValue\("Alchemy",\s*(\d+)\)', code):
             state["skill"] = int(m.group(1))
         if "ApplyFortifyAlchemyGear(" in code:
             state["fortify"] = 50
         if m := re.search(r"(?:SetAlchemistRank|SetRequiemLoreRank)\(player,\s*(\d)\)", code):
             state["rank"] = int(m.group(1))
+        if m := re.search(r"SetOrdinatorMastery\(player,\s*mastery\)", code):
+            ranks = re.findall(r"\bmastery\s*=\s*(\d+)", text)
+            state["rank"] = int(ranks[-1]) if ranks else 0
+            choices = {
+                "physician": int(re.findall(r"\bphysician\s*=\s*(\d+)", text)[-1]) if re.findall(r"\bphysician\s*=\s*(\d+)", text) else 0,
+                "poisoner": int(re.findall(r"\bpoisoner\s*=\s*(\d+)", text)[-1]) if re.findall(r"\bpoisoner\s*=\s*(\d+)", text) else 0,
+                "purity": int(re.findall(r"\bpurity\s*=\s*(\d+)", text)[-1]) if re.findall(r"\bpurity\s*=\s*(\d+)", text) else 0,
+                "lab": int(re.findall(r"\blab\s*=\s*(\d+)", text)[-1]) if re.findall(r"\blab\s*=\s*(\d+)", text) else 0,
+                "magnum": int(re.findall(r"\bmagnumOpus\s*=\s*(\d+)", text)[-1]) if re.findall(r"\bmagnumOpus\s*=\s*(\d+)", text) else 0,
+            }
+            for key in ("power", "labActive"):
+                values = re.findall(rf"\b{key}\s*=\s*(\d+)", text)
+                choices[key] = int(values[-1]) if values else (1 if key == "labActive" else 0)
+            state["ordinator_power"] = choices["power"]
+            state["fortify"] = max(state["fortify"], choices["power"])
+            state["ordinator_lab_active"] = bool(choices["lab"] and choices["labActive"])
+            if choices["physician"]:
+                state["perks"].add("physician")
+                state["perks"].add({1: "physician health", 2: "physician magicka", 3: "physician stamina"}.get(choices["physician"], "physician"))
+            if choices["poisoner"]:
+                state["perks"].add("poisoner")
+            if choices["purity"]:
+                state["perks"].add("purity")
+            if choices["lab"]:
+                state["perks"].add("advanced lab")
+            if choices["magnum"]:
+                state["perks"].add("that which does not kill you")
+            state["ordinator_lab"] = choices["lab"]
         if "ApplySeekerOfShadows(" in code:
             state["perks"].add("seeker of shadows")
         if m := re.search(r"setgs fAlchemyIngredientInitMult ([\d.]+)", code):
@@ -1110,7 +1215,7 @@ def _psc_block_state(records: PluginRecords, text: str, mode: str, errors: List[
             perk_ref = (int(m.group(1), 16), m.group(2))
         elif (m := re.search(r"AddPerk\((\w+)\)", code)) and m.group(1) in perk_vars:
             perk_ref = perk_vars[m.group(1)]
-        if perk_ref:
+        if perk_ref and mode != "ordinator":
             token, err = _perk_token(records, perk_ref[0], perk_ref[1], mode)
             if err:
                 errors.append(f"[{tag}] {err}")
@@ -1143,13 +1248,32 @@ def _spec_state(text: str, mode: str, tag: str, source: str, errors: List[str]) 
     perk_text = perk_text.replace("spid perk present", "").replace("all perks 0", "")
     ambiguous = re.search(r"full (?:perk )?tree|all requiem perks|all perks", perk_text)
     rank = 0
-    if m := re.search(r"(?:alchemical )?lore\s*1\s*\+\s*2", perk_text):
+    if m := re.search(r"alchemy mastery rank\s*(\d)", low if mode == "ordinator" else perk_text):
+        rank = int(m.group(1))
+    elif m := re.search(r"(?:alchemical )?lore\s*1\s*\+\s*2", perk_text):
         rank = 2
     elif m := re.search(r"(?:alchemical )?lore(?: rank)?\s*(\d)", perk_text):
         rank = int(m.group(1))
     if m := re.search(r"alchemist(?: rank)?\s*(\d)", perk_text):
         rank = int(m.group(1))
     spec["rank"] = rank
+    if mode == "ordinator":
+        perk_text = re.sub(r"pure mixture", "purity", perk_text)
+        if m := re.search(r"advanced lab\s*(?:global\s*)?(?:type\s*)?(\d)", low):
+            spec["ordinator_lab"] = int(m.group(1))
+            if int(m.group(1)) == 0:
+                low = re.sub(r"advanced lab\s*(?:global\s*)?(?:type\s*)?0", "", low)
+                perk_text = low
+                if m2 := re.search(r"perks?\s*:(.*)", low):
+                    perk_text = m2.group(1)
+                perk_text = re.sub(r"pure mixture", "purity", perk_text)
+    if mode == "ordinator":
+        if m := re.search(r"alchemypowermod\s*(\d+)", low):
+            spec["ordinator_power"] = int(m.group(1))
+        if "proc active" in low:
+            spec["ordinator_lab_active"] = True
+        elif "proc inactive" in low or spec.get("ordinator_lab") == 0:
+            spec["ordinator_lab_active"] = False
     perks = set()
     for token in SPEC_PERK_TOKENS:
         pattern = r"seeker(?: of shadows)?" if token == "seeker of shadows" else re.escape(token)
@@ -1216,7 +1340,7 @@ def _parse_md(md_text: str) -> tuple[Dict[str, dict], Dict[str, dict], List[str]
             body.append(lines[i])
             i += 1
         text = "\n".join(body)
-        settings = re.search(r"\*\*Modified Settings\*\*:\s*(.*)", text)
+        settings = re.search(r"\*\*Runtime State\*\*:\s*(.*)", text) or re.search(r"\*\*Modified Settings\*\*:\s*(.*)", text)
         crafts = [c for c in re.findall(r"^\s+- `([^`]+)`", text, re.M) if _parse_recipe(c)]
         next_m = re.search(r"\*\*Next Command\*\*:\s*(.*)", text)
         if tag in sections:
@@ -1255,6 +1379,8 @@ def _norm_next(text: str) -> str:
     low = text.lower()
     if m := re.search(r"(pat-[\w-]+\.py)", low):
         return m.group(1)
+    if m := re.search(r"python potion_prediction_test\.py(?: --[\w-]+)*", low):
+        return m.group(0)
     if "exit skyrim" in low:
         return "exit skyrim (no pre-launch script named)"
     if m := re.search(r"pat ([\w-]+(?: [\w-]+)?)", low):
@@ -1283,10 +1409,10 @@ def verify_block_spec_alignment() -> tuple[bool, List[str]]:
             continue
         branches = _split_branches(fm.group(0))
         preamble = branches.pop("", "")
-        branches.pop("__after__", None)
+        postamble = branches.pop("__after__", "")
         for variant, text in branches.items():
             tag = f"{mode}-{variant}"
-            psc_states[tag] = _psc_block_state(records, preamble + "\n" + text, mode, errors, tag)
+            psc_states[tag] = _psc_block_state(records, preamble + "\n" + text + "\n" + postamble, mode, errors, tag)
 
     # Papyrus provisioning/print chunks.
     chunks: Dict[str, str] = {}
@@ -1332,6 +1458,12 @@ def verify_block_spec_alignment() -> tuple[bool, List[str]]:
                     errors.append(f"[{tag}] PSC never sets {key}; it would inherit the previous block's value")
             if spec["rank"] != state["rank"]:
                 errors.append(f"[{tag}] alchemist/lore rank: {source} says {spec['rank']}, PSC grants {state['rank']}")
+            if spec.get("ordinator_lab", state["ordinator_lab"]) != state["ordinator_lab"]:
+                errors.append(f"[{tag}] Advanced Lab type: {source} says {spec.get('ordinator_lab')}, PSC sets {state['ordinator_lab']}")
+            if mode == "ordinator":
+                for key in ("ordinator_power", "ordinator_lab_active"):
+                    if key in spec and spec[key] != state[key]:
+                        errors.append(f"[{tag}] {key}: {source} says {spec[key]}, PSC sets {state[key]}")
             if spec["perks"] != state["perks"]:
                 errors.append(f"[{tag}] perks: {source} says {sorted(spec['perks']) or 'none'}, PSC grants {sorted(state['perks']) or 'none'}")
             if mode in ("caco", "caco-ap"):
@@ -1453,9 +1585,9 @@ def main():
 
     print("\n=================================================================")
     print("MASTER VERIFICATION SUMMARY:")
-    print(f"  - Pre-Launch Python Scripts (27 total): {p_scripts} PASSED, {f_scripts} FAILED")
+    print(f"  - Pre-Launch Python Scripts (30 total): {p_scripts} PASSED, {f_scripts} FAILED")
     print(f"  - Console YAML Definition (pa-tests.yaml): {'PASSED' if ok_yaml else 'FAILED'}")
-    print(f"  - Test Blocks, Binary FormIDs & Recipe Parity (166 total): {p_psc} PASSED, {f_psc} FAILED")
+    print(f"  - Test Blocks, Binary FormIDs & Recipe Parity (184 total): {p_psc} PASSED, {f_psc} FAILED")
     print(f"  - Papyrus Compilation & Deployment: {'PASSED' if ok_compile else 'FAILED'}")
     print(f"  - Next Command / Next Step Sequence Alignment: {'PASSED' if ok_next else 'FAILED'}")
     print(f"  - Block Specs vs Papyrus State/Provisioning/Crafts: {'PASSED' if ok_spec else 'FAILED'}")

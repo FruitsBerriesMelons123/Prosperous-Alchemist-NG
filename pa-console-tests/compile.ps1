@@ -18,6 +18,9 @@ Write-Host "Compiling ProsperousAlchemistTests.psc with Caprica..."
 Push-Location "Source\Scripts"
 try {
     & $caprica --game skyrim --flags $flags -i "." -i ".." -i $importSKSE -i $import2 -i $import3 -i $import4 "ProsperousAlchemistTests.psc" -o $output
+    if ($LASTEXITCODE -ne 0) {
+        throw "Caprica compilation failed (exit code $LASTEXITCODE)."
+    }
 } finally {
     Pop-Location
 }

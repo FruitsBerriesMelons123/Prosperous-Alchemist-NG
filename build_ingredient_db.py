@@ -47,6 +47,9 @@ PLUGIN_FILES = {
     # Requiem
     'Requiem.esp': config.REQUIEM_MOD_DIR / 'Requiem.esp',
 
+    # Ordinator
+    'Ordinator - Perks of Skyrim.esp': config.ORDINATOR_MOD_DIR / 'Ordinator - Perks of Skyrim.esp',
+
     # Apothecary & Patches
     'Apothecary.esp': config.APOTHECARY_MOD_DIR / 'Apothecary.esp',
     'Apothecary - Fishing Patch.esp': config.APOTHECARY_MOD_DIR / 'Apothecary - Fishing Patch.esp',
@@ -134,7 +137,7 @@ def build_master_db() -> None:
     # 1. Parse binary plugin files -> db/plugin_ingr_records.csv
     plugin_records_csv = DB_DIR / "plugin_ingr_records.csv"
     all_plugin_records = []
-    
+
     for p_name, p_path in PLUGIN_FILES.items():
         if p_path.exists():
             records = parse_plugin_ingrs(p_path)

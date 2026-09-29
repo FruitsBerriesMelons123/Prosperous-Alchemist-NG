@@ -589,6 +589,7 @@ namespace alchemist {
 			player = Player();
 			player.alchemyLevel = 15.0f;
 			player.fortifyAlchemyLevel = 0.0f;
+			vanilla::Adapter::TryGetGameSettings(player.alchemyIngredientInitMultiplier, player.alchemySkillFactor);
 			player.alchemistPerkLevel = 0;
 			player.alchemistPerkMultiplier = 1.0f;
 			player.hasPerkPurity = false;

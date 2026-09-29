@@ -175,6 +175,7 @@ namespace alchemist::devhub {
 			if (a_mode == "Requiem") return "requiem";
 			if (a_mode == "Apothecary") return "apothecary";
 			if (a_mode == "APAFA") return "apafa";
+			if (a_mode == "Ordinator") return "ordinator";
 			return "vanilla";
 		}
 
@@ -1872,11 +1873,14 @@ namespace alchemist::devhub {
 
 			const bool reqActive = requiem::Adapter::IsActive();
 			const bool apafaActive = apafa::Adapter::IsActive();
+			const bool ordinatorActive = ordinator::Adapter::IsActive();
 			const bool apotActive = apothecary::Adapter::IsActive();
 			const bool cacoActive = caco::Adapter::IsActive();
 			const bool apActive = alchemyplus::Adapter::IsActive();
 			std::string modeStr = "Vanilla";
-			if (reqActive) {
+			if (ordinatorActive) {
+				modeStr = "Ordinator";
+			} else if (reqActive) {
 				modeStr = "Requiem";
 			} else if (apafaActive) {
 				modeStr = "APAFA";
@@ -2164,17 +2168,32 @@ namespace alchemist::devhub {
 				return;
 			}
 
-			csv << "mode,ingredients,actual_value,predicted_value,difference,match,"
-				   "alchemy_level,fortify_alchemy_level,alchemist_rank,physician,benefactor,poisoner,"
-				   "purity,seeker_of_shadows,alchemist_perk_multiplier,"
-				   "ingredient_details,potion_form_id,potion_cost_override,crafted_effects,"
-				   "predicted_effects,ingredient_selection_order,resolution_status\n";
+			// Keep all 18 confirmed-craft columns in the same order, then append
+			// fields that describe the prediction comparison. This lets readers
+			// treat the confirmed columns as a stable projection of this report.
+			csv << "mode,ingredients,actual_value,alchemy_level,fortify_alchemy_level,alchemist_rank,"
+				   "physician,benefactor,poisoner,purity,seeker_of_shadows,mod_settings,"
+				   "alchemist_perk_multiplier,ingredient_details,potion_form_id,potion_cost_override,"
+				   "crafted_effects,ingredient_selection_order,predicted_value,difference,match,"
+				   "predicted_effects,resolution_status\n";
 
 			struct ExportCleanupGuard {
 				caco::SavedStateSnapshot cacoSnapshot;
+				const float vanillaInit = vanilla::Adapter::GetAlchemyIngredientInitMultiplier();
+				const float vanillaSkill = vanilla::Adapter::GetAlchemySkillFactor();
+				const float requiemInit = requiem::Adapter::GetAlchemyIngredientInitMultiplier();
+				const float requiemSkill = requiem::Adapter::GetAlchemySkillFactor();
+				const float apothecaryInit = apothecary::Adapter::GetAlchemyIngredientInitMultiplier();
+				const float apothecarySkill = apothecary::Adapter::GetAlchemySkillFactor();
+				const float apafaInit = apafa::Adapter::GetAlchemyIngredientInitMultiplier();
+				const float apafaSkill = apafa::Adapter::GetAlchemySkillFactor();
 				~ExportCleanupGuard() {
 					caco::Adapter::RestoreStateSnapshot(cacoSnapshot);
 					alchemyplus::Adapter::RestoreConfiguration();
+					vanilla::Adapter::SetGameSettings(vanillaInit, vanillaSkill);
+					requiem::Adapter::SetGameSettings(requiemInit, requiemSkill);
+					apothecary::Adapter::SetGameSettings(apothecaryInit, apothecarySkill);
+					apafa::Adapter::SetGameSettings(apafaInit, apafaSkill);
 				}
 			};
 			ExportCleanupGuard cleanupGuard{ caco::Adapter::SaveStateSnapshot() };
@@ -2219,9 +2238,9 @@ namespace alchemist::devhub {
 				context = {};
 				context.alchemistPerkRank = static_cast<int>(evaluatedPlayer.alchemistPerkLevel);
 				context.fortifyAlchemyLevel = evaluatedPlayer.fortifyAlchemyLevel;
-				context.hasPhysician = evaluatedPlayer.hasPerkPhysician;
+				context.hasPhysician = activeMode != "Ordinator" && evaluatedPlayer.hasPerkPhysician;
 				context.hasBenefactor = evaluatedPlayer.hasPerkBenefactor;
-				context.hasPoisoner = evaluatedPlayer.hasPerkPoisoner;
+				context.hasPoisoner = activeMode != "Ordinator" && evaluatedPlayer.hasPerkPoisoner;
 				context.hasPurity = evaluatedPlayer.hasPerkPurity;
 				context.hasSeekerOfShadows = evaluatedPlayer.hasSeekerOfShadows;
 				// So CACO's real entry-point path (not just the fallback multiplier) sees these.
@@ -2234,9 +2253,9 @@ namespace alchemist::devhub {
 						context.activePerks.push_back(p);
 					}
 				}
-				if (context.hasPhysician) { if (auto* p = LookupPerkByFormID(0x00058215)) context.activePerks.push_back(p); }
+				if (context.hasPhysician && activeMode != "Ordinator") { if (auto* p = LookupPerkByFormID(0x00058215)) context.activePerks.push_back(p); }
 				if (context.hasBenefactor) { if (auto* p = LookupPerkByFormID(0x00058216)) context.activePerks.push_back(p); }
-				if (context.hasPoisoner) { if (auto* p = LookupPerkByFormID(0x00058217)) context.activePerks.push_back(p); }
+				if (context.hasPoisoner && activeMode != "Ordinator") { if (auto* p = LookupPerkByFormID(0x00058217)) context.activePerks.push_back(p); }
 				if (context.hasPurity) { if (auto* p = LookupPerkByFormID(0x0005821D)) context.activePerks.push_back(p); }
 				context.seeker.perk = seeker::GetPerk();
 				context.seeker.nativeContract = context.hasSeekerOfShadows;
@@ -2248,6 +2267,26 @@ namespace alchemist::devhub {
 						parsedModSettings = nlohmann::json::parse(row[kConfirmedColModSettings]);
 					}
 				} catch (...) {}
+				if (activeMode == "Ordinator") {
+					const auto& ord = (parsedModSettings.contains("ordinator") && parsedModSettings["ordinator"].is_object()) ?
+						parsedModSettings["ordinator"] : parsedModSettings;
+					if (ord.is_object()) {
+						evaluatedPlayer.ordinatorAdvancedLabActive = ord.value("AdvancedLabActive", false);
+						auto setAttribute = [&](const std::string& attribute) {
+							if (attribute == "Health") evaluatedPlayer.ordinatorPhysicianAttributes[0] = true;
+							if (attribute == "Magicka") evaluatedPlayer.ordinatorPhysicianAttributes[1] = true;
+							if (attribute == "Stamina") evaluatedPlayer.ordinatorPhysicianAttributes[2] = true;
+						};
+						const auto attributes = ord.find("PhysicianAttributes");
+						if (attributes != ord.end() && attributes->is_array()) {
+							for (const auto& attribute : *attributes) {
+								if (attribute.is_string()) setAttribute(attribute.get<std::string>());
+							}
+						} else if (const auto attribute = ord.find("PhysicianAttribute"); attribute != ord.end() && attribute->is_string()) {
+							setAttribute(attribute->get<std::string>());
+						}
+					}
+				}
 
 				auto parseJsonFloat = [](const nlohmann::json& obj, const char* key, float defaultVal) -> float {
 					if (obj.is_object()) {
@@ -2264,10 +2303,20 @@ namespace alchemist::devhub {
 
 				float initMult = parseJsonFloat(parsedModSettings, "AlchemyIngredientInitMultiplier", 4.0f);
 				float skillFactor = parseJsonFloat(parsedModSettings, "AlchemySkillFactor", 1.5f);
+				// New captures keep independent actor values and GMSTs in one engine
+				// snapshot. Legacy captures keep their original recorded/default state.
+				if (const auto engine = parsedModSettings.find("engine"); engine != parsedModSettings.end() && engine->is_object()) {
+					initMult = parseJsonFloat(*engine, "AlchemyIngredientInitMultiplier", initMult);
+					skillFactor = parseJsonFloat(*engine, "AlchemySkillFactor", skillFactor);
+					evaluatedPlayer.alchemyPowerModifier = parseJsonFloat(*engine, "AlchemyPowerModifier", 0.0f);
+				}
+				evaluatedPlayer.alchemyIngredientInitMultiplier = initMult;
+				evaluatedPlayer.alchemySkillFactor = skillFactor;
 
 				vanilla::Adapter::SetGameSettings(initMult, skillFactor);
 				requiem::Adapter::SetGameSettings(initMult, skillFactor);
 				apothecary::Adapter::SetGameSettings(initMult, skillFactor);
+				apafa::Adapter::SetGameSettings(initMult, skillFactor);
 
 				evaluatedPlayer.requiemContext = {};
 				if (activeMode == "Requiem") {
@@ -2381,9 +2430,6 @@ namespace alchemist::devhub {
 				csv << CsvEscapeSingleLine(row[kConfirmedColMode]) << ","
 					<< CsvEscapeSingleLine(row[kConfirmedColIngredients]) << ","
 					<< row[kConfirmedColActualValue] << ","
-					<< (haveResult ? std::to_string(static_cast<long long>(predictedValue)) : std::string("unavailable")) << ","
-					<< (haveResult ? std::to_string(static_cast<long long>(difference)) : std::string("unavailable")) << ","
-					<< (haveResult ? (match ? "1" : "0") : "unavailable") << ","
 					<< row[kConfirmedColAlchemyLevel] << ","
 					<< row[kConfirmedColFortifyAlchemyLevel] << ","
 					<< row[kConfirmedColAlchemistRank] << ","
@@ -2392,13 +2438,17 @@ namespace alchemist::devhub {
 					<< row[kConfirmedColPoisoner] << ","
 					<< row[kConfirmedColPurity] << ","
 					<< row[kConfirmedColSeekerOfShadows] << ","
+					<< CsvEscapeSingleLine(row[kConfirmedColModSettings]) << ","
 					<< row[kConfirmedColAlchemistPerkMultiplier] << ","
 					<< CsvEscapeSingleLine(row[kConfirmedColIngredientDetails]) << ","
 					<< row[kConfirmedColPotionFormID] << ","
 					<< row[kConfirmedColPotionCostOverride] << ","
 					<< CsvEscapeSingleLine(row[kConfirmedColCraftedEffects]) << ","
-					<< CsvEscapeSingleLine(predictedEffects) << ","
 					<< CsvEscapeSingleLine(row[kConfirmedColIngredientSelectionOrder]) << ","
+					<< (haveResult ? std::to_string(static_cast<long long>(predictedValue)) : std::string("unavailable")) << ","
+					<< (haveResult ? std::to_string(static_cast<long long>(difference)) : std::string("unavailable")) << ","
+					<< (haveResult ? (match ? "1" : "0") : "unavailable") << ","
+					<< CsvEscapeSingleLine(predictedEffects) << ","
 					<< resolutionStatus << "\n";
 			}
 

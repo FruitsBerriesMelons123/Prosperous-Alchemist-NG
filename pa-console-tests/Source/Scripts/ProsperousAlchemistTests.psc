@@ -18,6 +18,74 @@ Function ClearAllAlchemyPerks(Actor player) global
     player.RemovePerk(Game.GetFormFromFile(0x0005821D, "Skyrim.esm") as Perk) ; Purity / Purification Process
     
     ClearSeekerOfShadows(player)
+    ClearOrdinatorAlchemyPerks(player)
+EndFunction
+
+Function ClearOrdinatorAlchemyPerks(Actor player) global
+    string plugin = "Ordinator - Perks of Skyrim.esp"
+    ; The verified survival script adds a permanent AV modifier; perk removal does not clear it.
+    player.ForceActorValue("AlchemyPowerMod", 0.0)
+    ; Verified capstone ability and toxin records; avoid inherited effects between blocks.
+    player.RemoveSpell(Game.GetFormFromFile(0x0003D673, plugin) as Spell)
+    player.RemoveSpell(Game.GetFormFromFile(0x000525EE, plugin) as Spell)
+    GlobalVariable capstoneCompleted = Game.GetFormFromFile(0x0003D66E, plugin) as GlobalVariable
+    if capstoneCompleted
+        capstoneCompleted.SetValue(0.0)
+    endif
+    ; Skyrim master perks overridden by Ordinator; remove via their originating master.
+    player.RemovePerk(Game.GetFormFromFile(0x000BE127, "Skyrim.esm") as Perk) ; Alchemy Mastery 1
+    player.RemovePerk(Game.GetFormFromFile(0x000C07CA, "Skyrim.esm") as Perk) ; Alchemy Mastery 2
+    player.RemovePerk(Game.GetFormFromFile(0x000C07CB, "Skyrim.esm") as Perk)
+    player.RemovePerk(Game.GetFormFromFile(0x000C07CC, "Skyrim.esm") as Perk)
+    player.RemovePerk(Game.GetFormFromFile(0x000C07CD, "Skyrim.esm") as Perk)
+    player.RemovePerk(Game.GetFormFromFile(0x00058215, "Skyrim.esm") as Perk) ; Physician
+    ; Verified SPEL records in the installed Ordinator ESP. Its Physician script
+    ; adds persistent specialization abilities; removing only the proc perks
+    ; leaves these abilities able to grant the old choice again.
+    player.DispelSpell(Game.GetFormFromFile(0x0003F7AA, plugin) as Spell) ; Physician choice-dialog ability
+    player.RemoveSpell(Game.GetFormFromFile(0x0003F7A3, plugin) as Spell) ; Physician Health ability
+    player.RemoveSpell(Game.GetFormFromFile(0x0003F7A5, plugin) as Spell) ; Physician Magicka ability
+    player.RemoveSpell(Game.GetFormFromFile(0x0003F7A7, plugin) as Spell) ; Physician Stamina ability
+    player.RemovePerk(Game.GetFormFromFile(0x00058216, "Skyrim.esm") as Perk) ; Benefactor
+    player.RemovePerk(Game.GetFormFromFile(0x00058217, "Skyrim.esm") as Perk) ; Poisoner
+    player.RemovePerk(Game.GetFormFromFile(0x0005821D, "Skyrim.esm") as Perk) ; Pure Mixture replaces Purity
+    player.RemovePerk(Game.GetFormFromFile(0x000105F2E, "Skyrim.esm") as Perk) ; Green Thumb
+    player.RemovePerk(Game.GetFormFromFile(0x0003F79D, plugin) as Perk) ; Physician: Health
+    player.RemovePerk(Game.GetFormFromFile(0x0003F79E, plugin) as Perk) ; Physician: Magicka
+    player.RemovePerk(Game.GetFormFromFile(0x0003F79F, plugin) as Perk) ; Physician: Stamina
+    player.RemovePerk(Game.GetFormFromFile(0x0003D68B, plugin) as Perk) ; Advanced Lab
+    player.RemovePerk(Game.GetFormFromFile(0x0003D676, plugin) as Perk) ; That Which Does Not Kill You
+    player.RemovePerk(Game.GetFormFromFile(0x0003D686, plugin) as Perk) ; Double Toil and Trouble
+    player.RemovePerk(Game.GetFormFromFile(0x0003E173, plugin) as Perk) ; Lab Skeever
+    player.DispelSpell(Game.GetFormFromFile(0x0003D68C, plugin) as Spell) ; Advanced Lab proc spell, verified from installed Ordinator plugin
+    GlobalVariable labType = Game.GetFormFromFile(0x0003D68A, plugin) as GlobalVariable
+    if labType
+        labType.SetValue(0.0)
+    endif
+EndFunction
+
+Function SetOrdinatorMastery(Actor player, int rank) global
+    player.RemovePerk(Game.GetFormFromFile(0x000BE127, "Skyrim.esm") as Perk)
+    player.RemovePerk(Game.GetFormFromFile(0x000C07CA, "Skyrim.esm") as Perk)
+    if rank >= 1
+        player.AddPerk(Game.GetFormFromFile(0x000BE127, "Skyrim.esm") as Perk)
+    endif
+    if rank >= 2
+        player.AddPerk(Game.GetFormFromFile(0x000C07CA, "Skyrim.esm") as Perk)
+    endif
+EndFunction
+
+Function SetOrdinatorLab(int labType, Actor player) global
+    GlobalVariable lab = Game.GetFormFromFile(0x0003D68A, "Ordinator - Perks of Skyrim.esp") as GlobalVariable ; ORD_Alc_AdvancedLab_Global_Type, verified in the installed plugin
+    if lab
+        lab.SetValue(labType as float)
+    endif
+    if labType > 0
+        Spell advancedLabProc = Game.GetFormFromFile(0x0003D68C, "Ordinator - Perks of Skyrim.esp") as Spell ; ORD_Alc_AdvancedLab_Spell_Proc, verified in the installed plugin
+        if advancedLabProc
+            advancedLabProc.Cast(player, None)
+        endif
+    endif
 EndFunction
 
 Function SetAlchemistRank(Actor player, int rank) global
@@ -1734,6 +1802,155 @@ string Function SetupAPAFA(string variant = "1") global
     return "APAFA test state applied successfully."
 EndFunction
 
+string Function SetupOrdinator(string variant = "1") global
+    Actor player = Game.GetPlayer()
+    ResetPlayerState(player)
+    string modeTag = "ordinator-1"
+    int skill = 100
+    int mastery = 0
+    int physician = 0
+    int poisoner = 0
+    int lab = 0
+    int labActive = 1
+    int purity = 0
+    int magnumOpus = 0
+    int power = 0
+    ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+    ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    if variant == "1"
+        modeTag = "ordinator-1"
+    elseif variant == "2"
+        modeTag = "ordinator-2"
+        mastery = 1
+    elseif variant == "3"
+        modeTag = "ordinator-3"
+        mastery = 2
+    elseif variant == "4"
+        modeTag = "ordinator-4"
+        physician = 1
+    elseif variant == "5"
+        modeTag = "ordinator-5"
+        physician = 2
+    elseif variant == "6"
+        modeTag = "ordinator-6"
+        physician = 3
+    elseif variant == "7"
+        modeTag = "ordinator-7"
+        skill = 50
+        poisoner = 1
+    elseif variant == "8"
+        modeTag = "ordinator-8"
+        poisoner = 1
+    elseif variant == "9"
+        modeTag = "ordinator-9"
+        lab = 1
+    elseif variant == "10"
+        modeTag = "ordinator-10"
+        lab = 2
+    elseif variant == "11"
+        modeTag = "ordinator-11"
+        magnumOpus = 1
+        power = 25
+    elseif variant == "12"
+        modeTag = "ordinator-12"
+        purity = 1
+    elseif variant == "13"
+        modeTag = "ordinator-13"
+        lab = 2
+        labActive = 0
+    elseif variant == "14"
+        modeTag = "ordinator-14"
+        mastery = 2
+        physician = 1
+        poisoner = 1
+        lab = 2
+        magnumOpus = 1
+        power = 25
+        ApplyFortifyAlchemyGear(player)
+        ApplySeekerOfShadows(player)
+    elseif variant == "15"
+        modeTag = "ordinator-15"
+        mastery = 2
+        physician = 1
+        poisoner = 1
+        lab = 2
+        magnumOpus = 1
+        power = 25
+        ApplyFortifyAlchemyGear(player)
+        ApplySeekerOfShadows(player)
+        purity = 1
+    elseif variant == "16"
+        modeTag = "ordinator-16"
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 5.0")
+    elseif variant == "17"
+        modeTag = "ordinator-17"
+        skill = 50
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 2.0")
+    elseif variant == "18"
+        modeTag = "ordinator-18"
+        power = 25
+    elseif variant == "changed"
+        modeTag = "ordinator-changed"
+        skill = 75
+        mastery = 1
+        physician = 1
+        poisoner = 1
+        lab = 2
+        magnumOpus = 1
+        power = 25
+        ApplyFortifyAlchemyGear(player)
+    endif
+    player.SetActorValue("Alchemy", skill)
+    player.ForceActorValue("Alchemy", skill)
+    SetOrdinatorMastery(player, mastery)
+    if physician > 0
+        ; Verified choice perks avoid the parent dialog and lingering specialization abilities.
+        if physician == 1
+            player.AddPerk(Game.GetFormFromFile(0x0003F79D, "Ordinator - Perks of Skyrim.esp") as Perk)
+        elseif physician == 2
+            player.AddPerk(Game.GetFormFromFile(0x0003F79E, "Ordinator - Perks of Skyrim.esp") as Perk)
+        else
+            player.AddPerk(Game.GetFormFromFile(0x0003F79F, "Ordinator - Perks of Skyrim.esp") as Perk)
+        endif
+    endif
+    if poisoner > 0
+        player.AddPerk(Game.GetFormFromFile(0x00058217, "Skyrim.esm") as Perk)
+    endif
+    if purity > 0
+        player.AddPerk(Game.GetFormFromFile(0x0005821D, "Skyrim.esm") as Perk)
+    endif
+    if magnumOpus > 0 || power > 0
+        ; Verified completion gate suppresses the lethal toxin. The survival script
+        ; separately grants AlchemyPowerMod +25; owning this perk alone grants no bonus.
+        GlobalVariable capstoneCompleted = Game.GetFormFromFile(0x0003D66E, "Ordinator - Perks of Skyrim.esp") as GlobalVariable
+        if capstoneCompleted
+            capstoneCompleted.SetValue(1.0)
+        endif
+        if magnumOpus > 0
+            player.AddPerk(Game.GetFormFromFile(0x0003D676, "Ordinator - Perks of Skyrim.esp") as Perk)
+        endif
+    endif
+    if power > 0
+        ; 25 is verified from ORD_PurifyTheFlesh_Script and its installed VMAD ORD_Alc property.
+        player.ForceActorValue("AlchemyPowerMod", 25.0)
+    endif
+    if lab > 0
+        player.AddPerk(Game.GetFormFromFile(0x0003D68B, "Ordinator - Perks of Skyrim.esp") as Perk)
+        if labActive > 0
+            SetOrdinatorLab(lab, player)
+        else
+            ; Upgraded elsewhere: set the global but leave the actual lab proc absent.
+            GlobalVariable labType = Game.GetFormFromFile(0x0003D68A, "Ordinator - Perks of Skyrim.esp") as GlobalVariable
+            if labType
+                labType.SetValue(lab as float)
+            endif
+        endif
+    endif
+    ConsoleUtil.PrintMessage("--- [PAT] Ordinator: skill=" + skill + ", mastery=" + mastery + ", physician=" + physician + ", poisoner=" + poisoner + ", lab=" + lab + ", proc=" + labActive + ", pure mixture=" + purity + ", power=" + power + " ---")
+    ProvisionAndPrintTests(player, modeTag, variant)
+    return "Ordinator test state applied successfully."
+EndFunction
+
 string Function SetupDefault(string mode = "vanilla") global
     Actor player = Game.GetPlayer()
     ResetPlayerState(player)
@@ -1768,10 +1985,12 @@ string Function SetupDefault(string mode = "vanilla") global
     elseif mode == "apothecary"
         nextStep = "python pat-default-apafa.py"
     elseif mode == "apafa"
+        nextStep = "python pat-default-ordinator.py"
+    elseif mode == "ordinator"
         nextStep = "python pat-vanilla-changed.py"
     endif
     ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
-    if mode == "apothecary" || mode == "apafa"
+    if mode == "apothecary" || mode == "apafa" || mode == "ordinator"
         ConsoleUtil.PrintMessage("Then: " + nextStep + ", then 'python save_predicted_default_settings.py', then exit Skyrim and run python pat-vanilla-changed.py")
     else
         ConsoleUtil.PrintMessage("Then: Exit Skyrim and run " + nextStep)
@@ -3278,15 +3497,203 @@ Function ProvisionAndPrintTests(Actor player, string modeTag, string variant) gl
 		ProvisionForm(player, 0x00000D6A, "ccbgssse037-curios.esl") ; Blister Pod Cap
 		ProvisionForm(player, 0x00000D6C, "ccbgssse037-curios.esl") ; Bog Beacon
 		ConsoleUtil.PrintMessage("1. Craft: Blister Pod Cap + Bog Beacon")
-		ConsoleUtil.PrintMessage("Next: Exit Skyrim and run python pat-default-apafa.py")
+		ConsoleUtil.PrintMessage("Next: Exit Skyrim and run python pat-ordinator.py")
 	elseif modeTag == "apothecary-changed"
 		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
 		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
 		ConsoleUtil.PrintMessage("Then: Exit Skyrim and run python pat-apafa-changed.py")
+	elseif modeTag == "ordinator-1"
+		ProvisionForm(player, 0x00106E1B, "Skyrim.esm") ; Abecean Longfin
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ProvisionForm(player, 0x000A9195, "Skyrim.esm") ; Bee
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0006BC0B, "Skyrim.esm") ; Small Antlers
+		ConsoleUtil.PrintMessage("1. Craft: Abecean Longfin -> Small Antlers (select in listed order)")
+		ConsoleUtil.PrintMessage("2. Craft: Bear Claws + Bee")
+		ConsoleUtil.PrintMessage("3. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("4. Craft: Small Antlers -> Abecean Longfin (select in listed order)")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 2")
+	elseif modeTag == "ordinator-2"
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ProvisionForm(player, 0x000A9195, "Skyrim.esm") ; Bee
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ConsoleUtil.PrintMessage("1. Craft: Bear Claws + Bee")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 3")
+	elseif modeTag == "ordinator-3"
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ProvisionForm(player, 0x000A9195, "Skyrim.esm") ; Bee
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ConsoleUtil.PrintMessage("1. Craft: Bear Claws + Bee")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 4")
+	elseif modeTag == "ordinator-4"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x00034D22, "Skyrim.esm") ; Garlic
+		ProvisionForm(player, 0x0003AD64, "Skyrim.esm") ; Giant's Toe
+		ProvisionForm(player, 0x0007EE01, "Skyrim.esm") ; Glowing Mushroom
+		ProvisionForm(player, 0x0005076E, "Skyrim.esm") ; Juniper Berries
+		ProvisionForm(player, 0x000EC870, "Skyrim.esm") ; Mora Tapinella
+		ProvisionForm(player, 0x00077E1D, "Skyrim.esm") ; Red Mountain Flower
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Garlic + Juniper Berries")
+		ConsoleUtil.PrintMessage("3. Craft: Giant's Toe + Glowing Mushroom")
+		ConsoleUtil.PrintMessage("4. Craft: Mora Tapinella + Red Mountain Flower")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 5")
+	elseif modeTag == "ordinator-5"
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ProvisionForm(player, 0x000A9195, "Skyrim.esm") ; Bee
+		ProvisionForm(player, 0x000F11C0, "Skyrim.esm") ; Dwarven Oil
+		ProvisionForm(player, 0x00034D22, "Skyrim.esm") ; Garlic
+		ProvisionForm(player, 0x0006AC4A, "Skyrim.esm") ; Jazbay Grapes
+		ProvisionForm(player, 0x000EC870, "Skyrim.esm") ; Mora Tapinella
+		ProvisionForm(player, 0x00077E1D, "Skyrim.esm") ; Red Mountain Flower
+		ConsoleUtil.PrintMessage("1. Craft: Bear Claws + Bee")
+		ConsoleUtil.PrintMessage("2. Craft: Dwarven Oil + Garlic")
+		ConsoleUtil.PrintMessage("3. Craft: Jazbay Grapes + Red Mountain Flower")
+		ConsoleUtil.PrintMessage("4. Craft: Mora Tapinella + Red Mountain Flower")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 6")
+	elseif modeTag == "ordinator-6"
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ProvisionForm(player, 0x000A9195, "Skyrim.esm") ; Bee
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x00045C28, "Skyrim.esm") ; Lavender
+		ProvisionForm(player, 0x0006F950, "Skyrim.esm") ; Scaly Pholiota
+		ProvisionForm(player, 0x0007E8C5, "Skyrim.esm") ; Slaughterfish Egg
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Bear Claws + Bee")
+		ConsoleUtil.PrintMessage("2. Craft: Bee + Scaly Pholiota")
+		ConsoleUtil.PrintMessage("3. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("4. Craft: Lavender + Slaughterfish Egg")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 7")
+	elseif modeTag == "ordinator-7"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x000BB956, "Skyrim.esm") ; Orange Dartwing
+		ProvisionForm(player, 0x00106E1A, "Skyrim.esm") ; River Betty
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("3. Craft: Imp Stool + Orange Dartwing")
+		ConsoleUtil.PrintMessage("4. Craft: Imp Stool + River Betty")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 8")
+	elseif modeTag == "ordinator-8"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x000BB956, "Skyrim.esm") ; Orange Dartwing
+		ProvisionForm(player, 0x00106E1A, "Skyrim.esm") ; River Betty
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("3. Craft: Imp Stool + Orange Dartwing")
+		ConsoleUtil.PrintMessage("4. Craft: Imp Stool + River Betty")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 9")
+	elseif modeTag == "ordinator-9"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 10")
+	elseif modeTag == "ordinator-10"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 11")
+	elseif modeTag == "ordinator-11"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 12")
+	elseif modeTag == "ordinator-12"
+		ProvisionForm(player, 0x00106E1B, "Skyrim.esm") ; Abecean Longfin
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0006BC0B, "Skyrim.esm") ; Small Antlers
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Abecean Longfin -> Small Antlers (select in listed order)")
+		ConsoleUtil.PrintMessage("2. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("3. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("4. Craft: Small Antlers -> Abecean Longfin (select in listed order)")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 13")
+	elseif modeTag == "ordinator-13"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 14")
+	elseif modeTag == "ordinator-14"
+		ProvisionForm(player, 0x00106E1B, "Skyrim.esm") ; Abecean Longfin
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0006BC0B, "Skyrim.esm") ; Small Antlers
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Abecean Longfin -> Small Antlers (select in listed order)")
+		ConsoleUtil.PrintMessage("2. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("3. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("4. Craft: Small Antlers -> Abecean Longfin (select in listed order)")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 15")
+	elseif modeTag == "ordinator-15"
+		ProvisionForm(player, 0x00106E1B, "Skyrim.esm") ; Abecean Longfin
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0006BC0B, "Skyrim.esm") ; Small Antlers
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Abecean Longfin -> Small Antlers (select in listed order)")
+		ConsoleUtil.PrintMessage("2. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("3. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("4. Craft: Small Antlers -> Abecean Longfin (select in listed order)")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 16")
+	elseif modeTag == "ordinator-16"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 17")
+	elseif modeTag == "ordinator-17"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: pat ordinator 18")
+	elseif modeTag == "ordinator-18"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0006ABCB, "Skyrim.esm") ; Canis Root
+		ProvisionForm(player, 0x0004DA23, "Skyrim.esm") ; Imp Stool
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("2. Craft: Canis Root + Imp Stool")
+		ConsoleUtil.PrintMessage("Next: python potion_prediction_test.py --check-confirmed-csv --check-baseline")
+	elseif modeTag == "ordinator-changed"
+		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
+		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
+		ConsoleUtil.PrintMessage("Then: python potion_prediction_test.py --check-confirmed-csv --check-baseline, then python save_predicted_changed_settings.py")
 	elseif modeTag == "apafa-changed"
 		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
 		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
-		ConsoleUtil.PrintMessage("Then: python potion_prediction_test.py --check-confirmed-csv, then python save_predicted_changed_settings.py")
+		ConsoleUtil.PrintMessage("Then: Exit Skyrim and run python pat-ordinator-changed.py")
 	else
 		ConsoleUtil.PrintMessage("Unknown mode tag: " + modeTag)
 	endif

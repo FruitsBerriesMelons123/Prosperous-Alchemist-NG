@@ -37,10 +37,12 @@ def _load_ingredient_effects(path: Path) -> Dict[str, set]:
     return effects_by_ing
 
 
-def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool = False, requiem_enabled: bool = False, apothecary_enabled: bool = False, apafa_enabled: bool = False) -> tuple[bool, str]:
+def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool = False, requiem_enabled: bool = False, apothecary_enabled: bool = False, apafa_enabled: bool = False, ordinator_enabled: bool = False, require_single_shared_effect: bool = False) -> tuple[bool, str]:
     """Validate whether the active ingredient schema can craft a potion."""
     repo_root = Path(__file__).resolve().parent
-    if apafa_enabled:
+    if ordinator_enabled:
+        csv_file = repo_root / "ingredients-ordinator.csv"
+    elif apafa_enabled:
         csv_file = repo_root / "ingredients-apafa.csv"
     elif apothecary_enabled:
         csv_file = repo_root / "ingredients-apothecary.csv"
@@ -57,15 +59,24 @@ def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool =
         for ing in ingredients:
             if ing not in effects_by_ing:
                 return (False, f"Ingredient '{ing}' not found in {path.name}")
+        valid_pairs = []
         for i in range(len(ingredients)):
             for j in range(i + 1, len(ingredients)):
                 ing1, ing2 = ingredients[i], ingredients[j]
                 shared = effects_by_ing[ing1] & effects_by_ing[ing2]
                 if shared:
-                    return (True, f"Valid craftable recipe: '{ing1}' + '{ing2}' share {sorted(shared)}")
+                    if not require_single_shared_effect or len(shared) == 1:
+                        valid_pairs.append((ing1, ing2, sorted(shared)))
+        if valid_pairs:
+            return (True, f"Valid craftable recipe in {path.name}: {valid_pairs}")
+        if require_single_shared_effect:
+            return (False, f"No ingredient pair shares exactly one effect in {path.name}")
         return (False, f"Invalid recipe: ingredients {ingredients} share 0 effects in {path.name}")
 
-    return validate_schema(csv_file)
+    target_valid, target_message = validate_schema(csv_file)
+    if not target_valid:
+        return target_valid, target_message
+    return True, target_message
 
 EXEMPLARS_LIST = [
     "Skyrim.esm|E3E9A",
@@ -159,6 +170,7 @@ def update_mo2_modlist(
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
     apafa_enabled: bool = False,
+    ordinator_enabled: bool = False,
 ) -> None:
     modlist_path = config.MO2_DEFAULT_PROFILE_DIR / "modlist.txt"
     if not modlist_path.exists():
@@ -168,19 +180,22 @@ def update_mo2_modlist(
     requiem_mod_name = getattr(config, "REQUIEM_MOD_DIR", Path("Requiem - The Roleplaying Overhaul")).name
     apothecary_mod_name = getattr(config, "APOTHECARY_MOD_DIR", Path("Apothecary - An Alchemy Overhaul")).name
     apafa_mod_name = getattr(config, "APAFA_MOD_DIR", Path("Alchemy Potions and Food Adjustments")).name
+    ordinator_mod_name = getattr(config, "ORDINATOR_MOD_DIR", Path("Ordinator - Perks of Skyrim")).name
 
     target_states = {
-        config.CACO_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
-        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
-        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
-        requiem_mod_name: (requiem_enabled, "disabled"),
-        "Requiem": (requiem_enabled, "disabled"),
-        "Requiem - The Roleplaying Overhaul": (requiem_enabled, "disabled"),
-        apothecary_mod_name: (apothecary_enabled, "disabled"),
-        "Apothecary": (apothecary_enabled, "disabled"),
-        "Apothecary - An Alchemy Overhaul": (apothecary_enabled, "disabled"),
-        apafa_mod_name: (apafa_enabled, "disabled"),
-        "Alchemy Potions and Food Adjustments": (apafa_enabled, "disabled"),
+        config.CACO_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled and not ordinator_enabled, "disabled"),
+        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled and not ordinator_enabled, "disabled"),
+        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled and not ordinator_enabled, "disabled"),
+        requiem_mod_name: (requiem_enabled and not ordinator_enabled, "disabled"),
+        "Requiem": (requiem_enabled and not ordinator_enabled, "disabled"),
+        "Requiem - The Roleplaying Overhaul": (requiem_enabled and not ordinator_enabled, "disabled"),
+        apothecary_mod_name: (apothecary_enabled and not ordinator_enabled, "disabled"),
+        "Apothecary": (apothecary_enabled and not ordinator_enabled, "disabled"),
+        "Apothecary - An Alchemy Overhaul": (apothecary_enabled and not ordinator_enabled, "disabled"),
+        apafa_mod_name: (apafa_enabled and not ordinator_enabled, "disabled"),
+        "Alchemy Potions and Food Adjustments": (apafa_enabled and not ordinator_enabled, "disabled"),
+        ordinator_mod_name: (ordinator_enabled, "disabled"),
+        "Ordinator - Perks of Skyrim": (ordinator_enabled, "disabled"),
         pa_ng_mod_name: (True, "enabled"),
     }
 
@@ -242,6 +257,7 @@ def sync_mo2_plugins_txt(
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
     apafa_enabled: bool = False,
+    ordinator_enabled: bool = False,
 ) -> None:
     plugins_path = config.MO2_DEFAULT_PROFILE_DIR / "plugins.txt"
     if not plugins_path.exists():
@@ -267,6 +283,7 @@ def sync_mo2_plugins_txt(
         "alchemyadjustments - rarecurios patch.esp",
         "alchemyadjustments - distinctiverareingredients addon.esp",
     ]
+    ordinator_plugins = ["ordinator - perks of skyrim.esp"]
     lines = plugins_path.read_text(encoding="utf-8").splitlines()
     new_lines = []
     modified = False
@@ -292,8 +309,16 @@ def sync_mo2_plugins_txt(
             if new_line != line:
                 modified = True
             new_lines.append(new_line)
+        elif raw in ordinator_plugins:
+            new_line = f"*{line.lstrip('*')}" if ordinator_enabled else line.lstrip("*")
+            if new_line != line:
+                modified = True
+            new_lines.append(new_line)
         else:
             new_lines.append(line)
+    if ordinator_enabled and not any(line.lstrip("*").casefold() == "ordinator - perks of skyrim.esp" for line in new_lines):
+        new_lines.append("*Ordinator - Perks of Skyrim.esp")
+        modified = True
     if modified:
         plugins_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
@@ -313,21 +338,24 @@ def apply_mode_config(
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
     apafa_enabled: bool = False,
+    ordinator_enabled: bool = False,
 ) -> None:
     # 1. Update MO2 modlist, restore load order, and sync plugins.txt
     update_mo2_modlist(
         caco_enabled=caco_enabled,
         ap_enabled=ap_enabled,
-        requiem_enabled=requiem_enabled,
-        apothecary_enabled=apothecary_enabled,
-        apafa_enabled=apafa_enabled,
+        requiem_enabled=requiem_enabled and not ordinator_enabled,
+        apothecary_enabled=apothecary_enabled and not ordinator_enabled,
+        apafa_enabled=apafa_enabled and not ordinator_enabled,
+        ordinator_enabled=ordinator_enabled,
     )
     restore_mo2_loadorder()
     sync_mo2_plugins_txt(
-        caco_enabled=caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled,
+        caco_enabled=caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled and not ordinator_enabled,
         requiem_enabled=requiem_enabled,
         apothecary_enabled=apothecary_enabled,
         apafa_enabled=apafa_enabled,
+        ordinator_enabled=ordinator_enabled,
     )
     refresh_mo2_if_running()
 

@@ -2,7 +2,7 @@
 
 ## Verify and Fix
 
-Run `python potion_prediction_test.py --check-confirmed-csv --diagnose` to audit confirmed craft rows, identify any failing rows in the Python harness or C++ plugin source (`alchemist/`), and update the code so both Python and C++ achieve 100% PASS and parity against empirical in-game crafts.
+Run `python potion_prediction_test.py --check-confirmed-csv --diagnose` to audit confirmed craft rows, identify any failing rows in the Python harness or C++ plugin source (`alchemist/`), and update the code so both Python and C++ achieve 100% PASS and parity against empirical in-game crafts. If you detect anything that would be appropriate to fix, go ahead and fix it appropriately.
 
 ## Prompt
 

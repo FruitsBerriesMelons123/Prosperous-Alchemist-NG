@@ -18,17 +18,19 @@ SOURCE_CSV_PLAIN = SCRIPT_ROOT / "links" / "alchemist.potion-predictions.csv"
 SOURCE_CSV = SOURCE_CSV_ZST if SOURCE_CSV_ZST.is_file() else (SOURCE_CSV_PLAIN if SOURCE_CSV_PLAIN.is_file() else SOURCE_CSV_ZST)
 
 DESTINATION_BY_STATE = {
-	(False, False, False, False): SCRIPT_ROOT / "potions-predicted-vanilla.csv.zst",
-	(True, False, False, False): SCRIPT_ROOT / "potions-predicted-caco.csv.zst",
-	(False, True, False, False): SCRIPT_ROOT / "potions-predicted-ap.csv.zst",
-	(True, True, False, False): SCRIPT_ROOT / "potions-predicted-caco-ap.csv.zst",
-	(False, False, True, False): SCRIPT_ROOT / "potions-predicted-requiem.csv.zst",
-	(False, False, False, True): SCRIPT_ROOT / "potions-predicted-apothecary.csv.zst",
+	(False, False, False, False, False): SCRIPT_ROOT / "potions-predicted-vanilla.csv.zst",
+	(True, False, False, False, False): SCRIPT_ROOT / "potions-predicted-caco.csv.zst",
+	(False, True, False, False, False): SCRIPT_ROOT / "potions-predicted-ap.csv.zst",
+	(True, True, False, False, False): SCRIPT_ROOT / "potions-predicted-caco-ap.csv.zst",
+	(False, False, True, False, False): SCRIPT_ROOT / "potions-predicted-requiem.csv.zst",
+	(False, False, False, True, False): SCRIPT_ROOT / "potions-predicted-apothecary.csv.zst",
+	(False, False, False, False, True): SCRIPT_ROOT / "potions-predicted-ordinator.csv.zst",
 }
 CACO_NAMES = frozenset({"caco", "completealchemycookingoverhaul"})
 ALCHEMY_PLUS_NAMES = frozenset({"alchemyplus"})
 REQUIEM_NAMES = frozenset({"requiem", "requiemtheroleplayingoverhaul"})
 APOTHECARY_NAMES = frozenset({"apothecary", "apothecaryanalchemyoverhaul"})
+ORDINATOR_NAMES = frozenset({"ordinatorperksofskyrim"})
 
 
 class ProfileResolutionError(RuntimeError):
@@ -78,14 +80,15 @@ def enabled_mod_names(modlist_path: Path) -> tuple[str, ...]:
 	return tuple(enabled_names)
 
 
-def detect_integrations(mod_names: Iterable[str]) -> tuple[bool, bool, bool, bool]:
-	"""Return (caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled) for enabled mod names."""
+def detect_integrations(mod_names: Iterable[str]) -> tuple[bool, bool, bool, bool, bool]:
+	"""Return enabled CACO, AP, Requiem, Apothecary, and Ordinator flags."""
 	normalized_names = {normalize_mod_name(name) for name in mod_names}
 	return (
 		bool(normalized_names & CACO_NAMES),
 		bool(normalized_names & ALCHEMY_PLUS_NAMES),
 		bool(normalized_names & REQUIEM_NAMES),
 		bool(normalized_names & APOTHECARY_NAMES),
+		bool(normalized_names & ORDINATOR_NAMES),
 	)
 
 
@@ -94,33 +97,34 @@ def destination_for(
 	alchemy_plus_enabled: bool,
 	requiem_enabled: bool,
 	apothecary_enabled: bool = False,
+	ordinator_enabled: bool = False,
 ) -> Path:
 	"""Return the fixture path for the detected integration combination."""
-	return DESTINATION_BY_STATE[(caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled)]
+	return DESTINATION_BY_STATE[(caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, ordinator_enabled)]
 
 
 def synchronize(
 	mo2_path: Path = MO2_PROFILE,
 	source_csv: Path = SOURCE_CSV,
-) -> tuple[Path, Path, bool, bool, bool, bool]:
+	) -> tuple[Path, Path, bool, bool, bool, bool, bool]:
 	"""Copy the generated prediction export into the matching fixture."""
 	modlist_path = resolve_modlist(mo2_path)
-	caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled = detect_integrations(
+	caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, ordinator_enabled = detect_integrations(
 		enabled_mod_names(modlist_path)
 	)
-	destination_csv = destination_for(caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled)
+	destination_csv = destination_for(caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, ordinator_enabled)
 
 	if not source_csv.is_file():
 		raise FileNotFoundError(f"Prediction source does not exist: {source_csv}")
 
 	shutil.copyfile(source_csv, destination_csv)
-	return modlist_path, destination_csv, caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled
+	return modlist_path, destination_csv, caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, ordinator_enabled
 
 
 def build_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(
 		description=(
-			"Detect enabled CACO, Alchemy Plus, Requiem, and Apothecary mods in MO2 and copy "
+			"Detect enabled alchemy integrations in MO2 and copy "
 			"the generated potion predictions into the matching fixture."
 		)
 	)
@@ -139,7 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
 	args = build_parser().parse_args()
 	try:
-		modlist_path, destination_csv, caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled = synchronize(
+		modlist_path, destination_csv, caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, ordinator_enabled = synchronize(
 			args.mo2_path
 		)
 	except (OSError, ProfileResolutionError) as error:
@@ -151,6 +155,7 @@ def main() -> int:
 	print(f"Alchemy Plus enabled: {'yes' if alchemy_plus_enabled else 'no'}")
 	print(f"Requiem enabled: {'yes' if requiem_enabled else 'no'}")
 	print(f"Apothecary enabled: {'yes' if apothecary_enabled else 'no'}")
+	print(f"Ordinator enabled: {'yes' if ordinator_enabled else 'no'}")
 	print(f"Copied {SOURCE_CSV} to {destination_csv}")
 	return 0
 

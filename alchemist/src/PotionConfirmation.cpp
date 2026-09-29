@@ -242,6 +242,9 @@ namespace alchemist::confirmations
 
 		std::string mode()
 		{
+			if (ordinator::Adapter::IsActive()) {
+				return "Ordinator";
+			}
 			if (requiem::Adapter::IsActive()) {
 				return "Requiem";
 			}
@@ -949,7 +952,7 @@ namespace alchemist::confirmations
 			}
 			const auto ingredientSelectionOrder = formatIngredientSelectionOrder(menu::GetSelectedIngredientFormIDsInSelectionOrder());
 
-			const auto settings = modsettings::GetConfirmationSettings();
+			const auto settings = modsettings::GetConfirmationSettings(a_player);
 			std::vector<std::vector<std::string>> rows;
 			if (static_cast<std::uint64_t>(craftCount) > (std::numeric_limits<std::size_t>::max)()) {
 				commitInventoryBaseline(after);

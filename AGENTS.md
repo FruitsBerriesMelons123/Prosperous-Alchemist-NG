@@ -32,6 +32,7 @@ See **user-paths.md** for paths for all filesystem locations relevant to the pro
   - **The deployed `alchemist.dll` named by `DLL_DEPLOY` in the local `user-paths.md`/`config.py` settings**: redeploy the freshly built DLL after an authorized build; the path files contain machine-specific destinations, not version values.
   - **`dist/Prosperous-Alchemist-NG-v<target-public-version>.zip`**: generate a new archive with `python build.py --package`; do not rename or edit an existing archive in place.
 - After an explicitly authorized bump, keep the direct locations consistent, reconfigure/build to regenerate the dependent locations, package and deploy as required, and verify the resulting version metadata. Do not perform any of those version changes for an audit-only request.
+- Don't update `docs/changelog.md` unless asked to do so.
 
 ## Mod Settings & CSV Schema Rules for Mod Compatibility Additions
 When adding compatibility for new mods or updating existing mod integrations, follow these mandatory schema guidelines for `alchemist.potions-confirmed.csv` and `alchemist.potion-predictions.csv.zst`:
@@ -39,13 +40,16 @@ When adding compatibility for new mods or updating existing mod integrations, fo
   - Use a single unified column `mod_settings` at index 11 in `alchemist.potions-confirmed.csv` (`mode,ingredients,actual_value,alchemy_level,fortify_alchemy_level,alchemist_rank,physician,benefactor,poisoner,purity,seeker_of_shadows,mod_settings,alchemist_perk_multiplier,ingredient_details,potion_form_id,potion_cost_override,crafted_effects,ingredient_selection_order`).
   - Do NOT create separate per-mod settings columns (e.g. `caco_settings`, `alchemy_plus_settings`, `requiem_settings`, `apothecary_settings`).
 - **Single Active Mod Population & Zero Cross-Mod Leaking:**
-  - Only the active overhaul mod populates `mod_settings`.
-  - If a mode has no configurable mod settings or MCM options (such as Vanilla or Apothecary), `mod_settings` MUST be `{}`.
+  - Only active mods populate their mod-specific settings in `mod_settings`. The reserved `engine` object may also capture runtime prediction inputs with no dedicated CSV column.
+  - If a mode has no configurable mod settings or MCM options (such as Vanilla or Apothecary), omit mod-specific options. Its `mod_settings` may contain the reserved `engine` telemetry object; without such telemetry it is `{}`.
   - For combined active modes (e.g. `CACO+AP`), serialize settings into a single combined JSON object with top-level keys for each active mod (e.g. `{"caco": {...}, "alchemyPlus": {...}}`).
-- **No Engine GMST Duplication in Mod Settings:**
-  - Standard base Skyrim game settings (`fAlchemyIngredientInitMult` = 4.0, `fAlchemySkillFactor` = 1.5) are base engine GMSTs and player state, NOT mod-specific settings.
-  - Do NOT serialize `AlchemyIngredientInitMultiplier` or `AlchemySkillFactor` into `mod_settings` for mods that do not introduce custom MCM settings for them (e.g. Apothecary, Requiem, Vanilla). Serializing base GMSTs into mod settings creates ghost data and duplicate data chains.
-  - Only serialize true mod-specific MCM/JSON options or mechanics (e.g., CACO's duration index settings or Requiem's perk/keyword states `AlchemicalLoreRank`, `HasImprovedElixirs`, `HasImprovedPoisons`, `HasPurificationProcess`, `HasUnperkedCraftingKeyword`).
+- **Prefer Existing Columns; Capture Missing Runtime Inputs Once:**
+  - Always use existing dedicated columns for their exact meanings; never duplicate skill, perks, Fortify Alchemy, or other existing columns inside `mod_settings`.
+  - Mod-controlled mechanics or runtime settings needed for analytical prediction may be captured in `mod_settings` when no dedicated column represents them, even if the engine defines the underlying setting or actor value.
+  - Capture the actual pre-craft `fAlchemyIngredientInitMult`, `fAlchemySkillFactor`, and `AlchemyPowerMod` once in a reserved `engine` object using keys `AlchemyIngredientInitMultiplier`, `AlchemySkillFactor`, and `AlchemyPowerModifier`. These values can change through mods or test blocks and must not be assumed constant. Do not duplicate them at the root or inside each active mod's options.
+  - `AlchemyPowerMod` is an independent multiplier and must not be merged into the existing `fortify_alchemy_level` column. Prefer that existing column for Fortify Alchemy itself.
+  - Preserve the 18-column schema and `mod_settings` index 11. Keep all overhaul-specific options limited to active mods; shared engine telemetry is not cross-mod leakage.
+  - Maintain read compatibility with older captures, but never invent missing telemetry, rewrite game-generated files, or infer engine settings from crafted effects, expected values, recipe identities, or row positions.
 - **Mandatory Inactive Overhaul Disabling in Pre-Launch Scripts (`pat-*.py`):**
   - Whenever adding compatibility for a new overhaul mod (e.g. Apothecary, Requiem, CACO, Alchemy Plus, etc.) or updating existing integrations, developers and AI agents MUST update `config.py` / `config.example.py` with the mod directory constant and update `pat_config_helper.py` (`update_mo2_modlist` `target_states` dict, `sync_mo2_plugins_txt` plugin list, and `apply_mode_config` signature) to explicitly track and manage the new mod.
   - Never allow an inactive overhaul mod to remain enabled when switching test modes in `pat-*.py` scripts. Always run an automated audit across all `pat-*.py` scripts to verify zero cross-mod state leakage before presenting test instructions to the user.
@@ -146,6 +150,7 @@ When adding compatibility for new mods or updating existing mod integrations, fo
 ## MANDATORY: Read and update `failed-commands.md`
 - Read `failed-commands.md` to see commands that didn't work either because they were structured incorrectly or they didn't work in the current environment.
 - At the end of each session and **ONLY** if there were failed commands during the session: update `failed-commands.md` to prevent future agents from making the same mistakes again. **DO NOT** report specific python script filenames. **DO NOT** report a script if it ran successfully.
+- Keep `failed-commands` well organized by failure type and appropriately de-deduplicated and generalized for efficient future use.
 
 ## Debugging
 - When errors are found after running Skyrim, check logs in location listed in **user-paths.md**.
@@ -161,6 +166,9 @@ When adding compatibility for new mods or updating existing mod integrations, fo
 - If deployment is blocked because Skyrim is running, terminating SkyrimSE.exe is authorized so the built plugin DLL can be deployed and verified.
 - Only build when it is appropriate to do so. If you haven't modified any files that would require a build of alchemist.dll do not run **build.py**.
 - **Prompt for In-Game Re-Export After Plugin Rebuilds:** After modifying C++ source code in `alchemist/` and building/deploying `alchemist.dll`, if updated in-game exports are required to verify the fixes, the agent MUST STOP immediately and present explicit re-export instructions to the user instead of automatically proceeding to audit stale export files.
+
+## Temporary Python Scripts
+If temporary python scripts are created they should be placed in **temp** or **scratch**.
 
 ## Markdown formatting
 Do not use LaTeX, KaTeX, or math delimiters (`$` or `$$`) unless explicitly requested by the user or strictly required for complex, advanced mathematical equations that cannot be expressed clearly in plain text.
@@ -228,6 +236,9 @@ Always use reference files and tools appropriately. Read **user-paths.md**. You 
 ### Alchemy Potions and Food Adjustments
 - Source code location listed in **user-paths.md**.
 
+### Ordinator - Perks of Skyrim
+- Source code location listed in **user-paths.md**.
+
 ### Ingredients
 - See **ingredients-vanilla.csv** for the full ingredient list used in vanilla skyrim.
 - See **ingredients-caco.csv** for the single canonical ingredient list used in CACO.
@@ -250,8 +261,8 @@ Before planning or requesting a potion-prediction capture, read **potion-predict
 - **ALWAYS resolve global variables via `Game.GetFormFromFile(FormID, "Plugin.esp") as GlobalVariable`** (checking both `.esp` and `.esm` variants if applicable) and call `.SetValue(val)` to avoid `Unknown variable` console errors and ensure safe no-ops if the mod is absent.
 - **Engine GameSettings (`GMST`):** Because Skyrim Papyrus has no native `SetGameSettingFloat` function, mutate engine GameSettings (`fAlchemyIngredientInitMult`, `fAlchemySkillFactor`) in Papyrus scripts via `ConsoleUtil.ExecuteCommand("setgs <Setting> <val>")`. Do NOT use non-existent native functions like `Utility.SetGameSettingFloat` which cause Caprica compilation errors.
 
-## User README
-The user readme **docs/USER_README.md** should not contain references to developer tools or developer workflow or detail about the code implementation. Only end user information should be presented there. It probably needs to updated to remove these things. Make sure it stays end user focused.
+## docs/USER_README.md
+The user readme **docs/USER_README.md** should not contain references to developer tools or developer workflow or details about the code implementation.
 
 ## Example Files
 Should be kept up-to-date with their base file.

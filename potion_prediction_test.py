@@ -63,6 +63,7 @@ import signal
 import struct
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
@@ -75,6 +76,7 @@ CACO_CSV = SCRIPT_ROOT / "ingredients-caco.csv"
 REQUIEM_CSV = SCRIPT_ROOT / "ingredients-requiem.csv"
 APOTHECARY_CSV = SCRIPT_ROOT / "ingredients-apothecary.csv"
 APAFA_CSV = SCRIPT_ROOT / "ingredients-apafa.csv"
+ORDINATOR_CSV = SCRIPT_ROOT / "ingredients-ordinator.csv"
 ALCHEMIST_INI_NAME = "alchemist.ini"
 CONFIRMED_CSV = SCRIPT_ROOT / "links" / "alchemist.potions-confirmed.csv"
 CONFIRMED_LOG = SCRIPT_ROOT / "potion_prediction_confirmed.log"
@@ -844,6 +846,7 @@ class PlayerSettings:
 
 	alchemy_level: float = 15.0
 	fortify_alchemy_level: float = 0.0
+	alchemy_power_modifier: float = 0.0
 	alchemist_perk_rank: int = 0
 	alchemist_perk_multiplier: float | None = None
 	purity: bool = False
@@ -860,6 +863,11 @@ class PlayerSettings:
 	requiem_improved_poisons: bool = False
 	requiem_purification_process: bool = False
 	requiem_unperked_crafting: bool = False
+	ordinator_enabled: bool = False
+	ordinator_physician_attribute: str = ""
+	ordinator_physician_attributes: tuple[str, ...] = ()
+	ordinator_advanced_lab_type: int = 0
+	ordinator_advanced_lab_active: bool = False
 
 	@property
 	def effective_requiem_lore_rank(self) -> int:
@@ -884,11 +892,15 @@ class PlayerSettings:
 	def fortify_alchemy_multiplier(self) -> float:
 		return f32(1.0 + float(self.fortify_alchemy_level) / 100.0)
 
+	def alchemy_power_multiplier(self) -> float:
+		return f32(1.0 + f32(self.alchemy_power_modifier) * f32(0.01))
+
 	@classmethod
 	def from_ini(cls, values: Mapping[str, str]) -> "PlayerSettings":
 		return cls(
 			alchemy_level=_snapshot_float(values, "AlchemyLevel", 0.0),
 			fortify_alchemy_level=_snapshot_float(values, "FortifyAlchemyLevel", 0.0),
+			alchemy_power_modifier=_snapshot_float(values, "AlchemyPowerModifier", 0.0),
 			alchemist_perk_rank=_snapshot_int(values, "AlchemistPerkRank", 0, 0, 5),
 			alchemist_perk_multiplier=_snapshot_float(
 				values, "AlchemistPerkMultiplier", 1.0, 0.0
@@ -1223,8 +1235,27 @@ def effect_power_factors(
 			# duration.  The exported duration-family records retain the source
 			# magnitude, so apply the inverse duration to the effectiveness factor.
 			magnitude = f32(magnitude / caco_duration)
-	if player.physician and not caco_enabled and is_physician_effect(effect):
-		perk_multiplier = 1.25
+	physician_applies = is_physician_effect(effect)
+	ordinator_physician_attribute = ""
+	if player.ordinator_enabled:
+		keywords = {kw.casefold() for kw in (effect.keyword_editor_ids + effect.resolved_keyword_editor_ids)}
+		physician_keywords = {
+			"health": {"magicalchrestorehealth", "magicalchfortifyhealth", "magicalchfortifyhealrate"},
+			"magicka": {"magicalchrestoremagicka", "magicalchfortifymagicka", "magicalchfortifymagickarate"},
+			"stamina": {"magicalchrestorestamina", "magicalchfortifystamina", "magicalchfortifystaminarate"},
+		}
+		attributes = player.ordinator_physician_attributes or (player.ordinator_physician_attribute,)
+		if any(attributes):
+			physician_applies = any(
+				bool(keywords & physician_keywords.get(attribute.casefold(), set()))
+				for attribute in attributes
+			)
+		else:
+			# Ordinator replaces vanilla Physician with a selected-attribute perk.
+			# Missing selection telemetry must not silently become vanilla's 25% bonus.
+			physician_applies = False
+	if player.physician and not caco_enabled and physician_applies:
+		perk_multiplier = 1.5 if player.ordinator_enabled else 1.25
 		magnitude = f32(magnitude * perk_multiplier)
 		duration = f32(duration * perk_multiplier)
 	if include_type_perks:
@@ -1246,11 +1277,15 @@ def effect_power_factors(
 			magnitude = f32(magnitude * perk_multiplier)
 			duration = f32(duration * perk_multiplier)
 		elif not potion and player.poisoner and not effect.beneficial:
-			perk_multiplier = (
-				player.caco_perk_multiplier("caco_poisoner_multiplier", 1.25)
-				if caco_enabled
-				else 1.25
-			)
+			if player.ordinator_enabled:
+				# Ordinator Poisoner scales poisons by 1% per Alchemy level.
+				perk_multiplier = f32(1.0 + player.alchemy_level * 0.01)
+			else:
+				perk_multiplier = (
+					player.caco_perk_multiplier("caco_poisoner_multiplier", 1.25)
+					if caco_enabled
+					else 1.25
+				)
 			magnitude = f32(magnitude * perk_multiplier)
 			duration = f32(duration * perk_multiplier)
 	if player.seeker_of_shadows:
@@ -1261,6 +1296,9 @@ def effect_power_factors(
 		)
 		magnitude = f32(magnitude * perk_multiplier)
 		duration = f32(duration * perk_multiplier)
+	if player.ordinator_enabled and player.ordinator_advanced_lab_active:
+		magnitude = f32(magnitude * 1.25)
+		duration = f32(duration * 1.25)
 
 	duration_factor = f32(base * duration)
 	if caco_enabled and effect.duration_based:
@@ -1498,7 +1536,7 @@ def calculate_legacy_component(
 	player_factor = f32(1.0 + f32(player.fortify_alchemy_level) * f32(0.01))
 	power_factor = magnitude_factor if magnitude else duration_factor
 	return cxx_round_positive(
-		f32(f32(f32(value) * power_factor) * player_factor)
+		f32(f32(f32(f32(value) * power_factor) * player_factor) * player.alchemy_power_multiplier())
 	)
 
 
@@ -1538,6 +1576,7 @@ class PredictionSettings:
 	requiem_enabled: bool = False
 	apothecary_enabled: bool = False
 	apafa_enabled: bool = False
+	ordinator_enabled: bool = False
 	player: PlayerSettings = field(default_factory=PlayerSettings)
 	caco_ingredient_init_multiplier: float = 3.9
 	caco_skill_factor: float = 1.0
@@ -1561,6 +1600,8 @@ class PredictionSettings:
 
 	@property
 	def mode(self) -> str:
+		if self.ordinator_enabled:
+			return "ordinator"
 		if self.apafa_enabled:
 			return "apafa"
 		if self.apothecary_enabled:
@@ -1988,6 +2029,9 @@ class PotionPredictor:
 			)
 			magnitude_factor = f32(magnitude_factor * player_factor)
 			duration_factor = f32(duration_factor * player_factor)
+			power_factor = self.settings.player.alchemy_power_multiplier()
+			magnitude_factor = f32(magnitude_factor * power_factor)
+			duration_factor = f32(duration_factor * power_factor)
 		magnitude, duration = calculate_effect_input(
 			effect, magnitude_factor, duration_factor
 		)
@@ -2471,11 +2515,17 @@ def confirmed_mode_flags(mode: str) -> tuple[bool, bool, bool, bool, bool]:
 			"requiem": (False, False, True, False, False),
 			"apothecary": (False, False, False, True, False),
 			"apafa": (False, False, False, False, True),
+			"ordinator": (False, False, False, False, False),
+			"ordinator-perks": (False, False, False, False, False),
 			"alchemy-adjustments": (False, False, False, False, True),
 			"alchemyadjustments": (False, False, False, False, True),
 		}[normalized]
 	except KeyError as error:
 		raise ValueError(f"unknown confirmed potion mode {mode!r}") from error
+
+
+def is_ordinator_mode(mode: str) -> bool:
+	return mode.strip().casefold().replace(" ", "") in {"ordinator", "ordinator-perks"}
 
 
 def parse_confirmed_json(
@@ -2495,7 +2545,7 @@ def parse_confirmed_json(
 	return value
 
 
-def confirmed_settings(
+def _confirmed_mode_settings(
 	row: Mapping[str, str], path: Path, line_number: int
 ) -> PredictionSettings:
 	caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(row["mode"])
@@ -2512,6 +2562,32 @@ def confirmed_settings(
 	)
 
 	mod_settings = parse_confirmed_json(row, "mod_settings", path, line_number) if "mod_settings" in row else {}
+	ordinator_enabled = is_ordinator_mode(row["mode"])
+	if ordinator_enabled:
+		ordinator_values = mod_settings.get("ordinator", {})
+		if not isinstance(ordinator_values, dict):
+			ordinator_values = {}
+		attributes_value = ordinator_values.get("PhysicianAttributes")
+		if isinstance(attributes_value, list):
+			attributes = tuple(value for value in attributes_value if isinstance(value, str))
+		else:
+			attributes = ()
+		player = replace(
+			player,
+			ordinator_enabled=True,
+			ordinator_physician_attribute=str(ordinator_values.get("PhysicianAttribute", "")),
+			ordinator_physician_attributes=attributes,
+			ordinator_advanced_lab_type=int(ordinator_values.get("AdvancedLabType", 0)),
+			ordinator_advanced_lab_active=bool(ordinator_values.get("AdvancedLabActive", False)),
+		)
+		return PredictionSettings(
+			caco_enabled=False,
+			alchemy_plus_enabled=False,
+			ordinator_enabled=True,
+			player=player,
+			caco_ingredient_init_multiplier=4.0,
+			caco_skill_factor=1.5,
+		)
 
 	if apafa_enabled:
 		init_mult = float(mod_settings.get("AlchemyIngredientInitMultiplier", 4.0))
@@ -2643,6 +2719,36 @@ def confirmed_settings(
 		caco_impure_processing=False,
 		caco_settings=caco_settings,
 		alchemy_plus=alchemy_plus,
+	)
+
+
+def confirmed_settings(
+	row: Mapping[str, str], path: Path, line_number: int
+) -> PredictionSettings:
+	settings = _confirmed_mode_settings(row, path, line_number)
+	payload = parse_confirmed_json(row, "mod_settings", path, line_number) if "mod_settings" in row else {}
+	engine = payload.get("engine")
+	if engine is None:
+		# Older captures retain their historical defaults; never infer missing
+		# engine state from recipe names, row positions, or crafted effects.
+		return settings
+	if not isinstance(engine, dict):
+		raise ValueError(f"{path} row {line_number} mod_settings.engine must be an object")
+	values = {}
+	for key in ("AlchemyIngredientInitMultiplier", "AlchemySkillFactor", "AlchemyPowerModifier"):
+		if key not in engine:
+			raise ValueError(f"{path} row {line_number} is missing engine.{key}")
+		value = f32(float(engine[key]))
+		if not finite(value) or (value <= -100.0 if key == "AlchemyPowerModifier" else value <= 0.0):
+			raise ValueError(f"{path} row {line_number} has invalid engine.{key}")
+		values[key] = value
+	return replace(
+		settings,
+		player=replace(settings.player, alchemy_power_modifier=values["AlchemyPowerModifier"]),
+		caco_ingredient_init_multiplier=values["AlchemyIngredientInitMultiplier"],
+		caco_skill_factor=values["AlchemySkillFactor"],
+		requiem_ingredient_init_multiplier=values["AlchemyIngredientInitMultiplier"],
+		requiem_skill_factor=values["AlchemySkillFactor"],
 	)
 
 
@@ -2843,10 +2949,6 @@ def run_confirmed_fixture_check(
 	cpp_predictions_map: dict[
 		tuple[str, str, float, float, int, int, int, int, int, int, str, str], int
 	] = {}
-	cpp_predictions_base_map: dict[
-		tuple[str, str, float, float, int, int, int, int, int, int], int
-	] = {}
-	pred_rows_by_mode: dict[str, list[dict[str, str]]] = {}
 	try:
 		pred_files = resolve_predicted_csv_files(None)
 		for pfile in pred_files:
@@ -2855,23 +2957,15 @@ def run_confirmed_fixture_check(
 			try:
 				with open(pfile, encoding="utf-8-sig", newline="") as fh:
 					prows = list(csv.DictReader(fh))
-					if prows:
-						pmode = prows[0].get("mode", "").strip()
-						if pmode:
-							pred_rows_by_mode[pmode] = prows
-						for prow in prows:
-							pval_str = (
-								prow.get("predicted_value") or prow.get("actual_value") or ""
-							).strip()
-							if pval_str and pval_str.lower() != "unavailable":
-								try:
-									val = int(pval_str)
-									skey_p = player_state_setting_key(prow)
-									base_key_p = skey_p[:10]
-									cpp_predictions_map[skey_p] = val
-									cpp_predictions_base_map[base_key_p] = val
-								except ValueError:
-									pass
+					for prow in prows:
+						pval_str = (
+							prow.get("predicted_value") or prow.get("cpp_predicted_value") or ""
+						).strip()
+						if pval_str and pval_str.lower() != "unavailable":
+							try:
+								cpp_predictions_map[player_state_setting_key(prow)] = int(pval_str)
+							except ValueError:
+								pass
 			except Exception:
 				pass
 	except Exception:
@@ -2887,20 +2981,16 @@ def run_confirmed_fixture_check(
 	divergence_records: list[
 		tuple[int, str, tuple[str, ...], int, object, object, str]
 	] = []
-	mode_row_counts: dict[str, int] = {}
 
 	try:
 		for line_number, row, recipe, expected in iter_confirmed_fixture(confirmed_csv):
 			mode = row["mode"].strip()
-			mode_idx = mode_row_counts.get(mode, 0)
-			mode_row_counts[mode] = mode_idx + 1
 
 			caco_enabled, _, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(
 				mode
 			)
 
 			skey = player_state_setting_key(row)
-			bkey = skey[:10]
 			cpp_pred_raw = (
 				row.get("predicted_value")
 				or row.get("cpp_predicted_value")
@@ -2912,37 +3002,16 @@ def run_confirmed_fixture_check(
 					cpp_pred: object = int(cpp_pred_raw)
 				except ValueError:
 					cpp_pred = cpp_pred_raw
-			elif (
-				mode in pred_rows_by_mode
-				and 0 <= mode_idx < len(pred_rows_by_mode[mode])
-				and pred_rows_by_mode[mode][mode_idx].get("ingredients", "").strip()
-				== row.get("ingredients", "").strip()
-			):
-				prow = pred_rows_by_mode[mode][mode_idx]
-				pv_str = (
-					prow.get("predicted_value")
-					or prow.get("cpp_predicted_value")
-					or prow.get("predicted_cpp_value")
-					or prow.get("actual_value")
-					or ""
-				).strip()
-				if pv_str and pv_str.lower() != "unavailable":
-					try:
-						cpp_pred = int(pv_str)
-					except ValueError:
-						cpp_pred = pv_str
-				else:
-					cpp_pred = "N/A"
 			elif skey in cpp_predictions_map:
 				cpp_pred = cpp_predictions_map[skey]
-			elif bkey in cpp_predictions_base_map:
-				cpp_pred = cpp_predictions_base_map[bkey]
 			else:
 				cpp_pred = "N/A"
 
 			try:
 				settings = confirmed_settings(row, confirmed_csv, line_number)
-				if apafa_enabled:
+				if is_ordinator_mode(row["mode"]):
+					db_key = "ordinator"
+				elif apafa_enabled:
 					db_key = "apafa"
 				elif apothecary_enabled:
 					db_key = "apothecary"
@@ -2953,7 +3022,9 @@ def run_confirmed_fixture_check(
 				else:
 					db_key = "vanilla"
 				if db_key not in databases:
-					if db_key == "apafa":
+					if db_key == "ordinator":
+						databases[db_key] = IngredientDatabase.load(ORDINATOR_CSV)
+					elif db_key == "apafa":
 						databases[db_key] = IngredientDatabase.load(APAFA_CSV)
 					elif db_key == "apothecary":
 						databases[db_key] = IngredientDatabase.load(APOTHECARY_CSV)
@@ -3003,8 +3074,8 @@ def run_confirmed_fixture_check(
 				cpp_eval_count += 1
 				if is_prediction_within_tolerance(
 					expected, cpp_pred, TOLERATED_PREDICTION_PERCENTAGE
-				) or (result is not None and is_engine_rounding_boundary_match(
-					result, cpp_pred, TOLERATED_PREDICTION_PERCENTAGE
+				) or (is_boundary and is_prediction_within_tolerance(
+					actual, cpp_pred, TOLERATED_PREDICTION_PERCENTAGE
 				)):
 					cpp_pass_count += 1
 
@@ -3096,7 +3167,7 @@ def run_confirmed_fixture_check(
 		f"cpp_matches={cpp_matches} cpp_divergences={cpp_divergences} cpp_na={cpp_na}",
 		flush=True,
 	)
-	if not verbose and not diagnose_accuracy:
+	if not verbose:
 		for line_number, mode, recipe, expected, actual, cpp_pred, details in (
 			boundary_matches
 		):
@@ -3151,13 +3222,14 @@ def run_confirmed_fixture_check(
 	action_required = []
 	if python_status == "NEEDS FIX":
 		action_required.append(
-			f"PYTHON HARNESS REQUIRES FIXING: Python predictor in potion_prediction_test.py "
-			f"has {len(mismatches)} failing row(s) against empirical in-game crafts."
+			f"PYTHON PREDICTIONS FAIL: {len(mismatches)} confirmed row(s) disagree with "
+			f"the captured settings; inspect the model and capture telemetry."
 		)
 	if cpp_status == "NEEDS FIX":
 		action_required.append(
-			f"C++ PLUGIN REQUIRES FIXING: C++ plugin predictions in alchemist.dll "
-			f"have {cpp_failed_count} failing row(s) against empirical in-game crafts ({cpp_divergences} model divergences)."
+			f"C++ EXPORT PREDICTIONS FAIL: {cpp_failed_count} setting-matched export row(s) "
+			f"disagree with in-game crafts ({cpp_divergences} model divergences); "
+			f"inspect the source, export, and captured settings."
 		)
 	if not action_required:
 		if cpp_status == "NO DATA":
@@ -3229,8 +3301,10 @@ def run_confirmed_fixture_check(
 		except Exception as error:
 			print(f"\nFailed to record baseline: {error}", file=sys.stderr)
 
+	baseline_failed = False
 	if check_baseline:
 		if not baseline_json.is_file():
+			baseline_failed = True
 			print(
 				f"\nBASELINE CHECK FAILED: Baseline file {baseline_json} does not exist. Run with --record-baseline first.",
 				file=sys.stderr,
@@ -3239,21 +3313,24 @@ def run_confirmed_fixture_check(
 			try:
 				with open(baseline_json, "r", encoding="utf-8") as bf:
 					bdata = json.load(bf)
-				brows = {r["line_number"]: r for r in bdata.get("rows", [])}
+				brows = bdata.get("rows", [])
 				regressions = []
-				current_by_line = {r["line_number"]: r for r in passing_records}
-				for bline, brow in brows.items():
-					if bline not in current_by_line:
-						regressions.append(
-							f"Line {bline} ({brow.get('mode')} - {brow.get('ingredients')}): Previously passed in baseline but now missing/failing."
-						)
+				current_counts = Counter(
+					(json.dumps(r["setting_key"], sort_keys=True), r["python_predicted"])
+					for r in passing_records
+				)
+				for brow in brows:
+					key = (json.dumps(brow["setting_key"], sort_keys=True), brow["python_predicted"])
+					if current_counts[key]:
+						current_counts[key] -= 1
 					else:
-						crow = current_by_line[bline]
-						if crow["python_predicted"] != brow["python_predicted"]:
-							regressions.append(
-								f"Line {bline} ({brow.get('mode')} - {brow.get('ingredients')}): Python prediction changed from {brow['python_predicted']} to {crow['python_predicted']}."
-							)
+						regressions.append(
+							f"Previously passing {brow.get('mode')} - {brow.get('ingredients')} "
+							f"with predicted value {brow['python_predicted']} is missing or failing "
+							f"(baseline line {brow.get('line_number')} for display only)."
+						)
 				if regressions:
+					baseline_failed = True
 					print(
 						f"\n=== BASELINE CHECK FAILED: {len(regressions)} REGRESSION(S) DETECTED ===",
 						flush=True,
@@ -3266,9 +3343,10 @@ def run_confirmed_fixture_check(
 						flush=True,
 					)
 			except Exception as error:
+				baseline_failed = True
 				print(f"\nFailed to check baseline: {error}", file=sys.stderr)
 
-	return 1 if (mismatches or cpp_failed_count > 0) else 0
+	return 1 if (mismatches or cpp_failed_count > 0 or baseline_failed) else 0
 
 
 def resolve_predicted_csv_files(predicted_path: Path | None = None) -> list[Path]:
@@ -3372,13 +3450,17 @@ def _parse_predicted_rows(
 ) -> Iterable[tuple[int, dict[str, str], tuple[str, ...], int]]:
 	if reader.fieldnames is None:
 		raise ValueError(f"{path} has no CSV header")
-	required_columns = {"mode", "ingredients", "actual_value"}
+	required_columns = {"mode", "ingredients", "actual_value", "mod_settings"}
 	missing = required_columns - set(reader.fieldnames)
 	if missing:
 		raise ValueError(
 			f"{path} is missing required columns: {', '.join(sorted(missing))}"
 		)
 	for line_number, row in enumerate(reader, start=2):
+		if not (row.get("mod_settings") or "").strip():
+			raise ValueError(
+				f"{path} row {line_number} is missing mod_settings; predicted exports must carry their own settings"
+			)
 		recipe = recipe_from_confirmed_row(row, path, line_number)
 		try:
 			expected = int(row["actual_value"])
@@ -3391,7 +3473,6 @@ def _parse_predicted_rows(
 
 def run_predicted_fixture_check(
 	predicted_path: Path | None = None,
-	confirmed_csv: Path = CONFIRMED_CSV,
 	vanilla_csv: Path = VANILLA_CSV,
 	caco_csv: Path | None = None,
 ) -> int:
@@ -3401,20 +3482,6 @@ def run_predicted_fixture_check(
 		target_desc = str(predicted_path) if predicted_path else "default search paths"
 		print(f"Error: No predicted potion CSV files found in {target_desc}.", file=sys.stderr)
 		return 2
-
-	confirmed_by_mode: dict[str, list[dict[str, str]]] = {}
-	confirmed_by_key: dict[tuple[str, str], dict[str, str]] = {}
-	if confirmed_csv.is_file():
-		try:
-			with open(confirmed_csv, encoding="utf-8-sig", newline="") as fh:
-				for conf_row in csv.DictReader(fh):
-					m = conf_row.get("mode", "").strip()
-					ing = conf_row.get("ingredients", "").strip()
-					confirmed_by_mode.setdefault(m, []).append(conf_row)
-					if m and ing:
-						confirmed_by_key[(m, ing)] = conf_row
-		except OSError:
-			pass
 
 	databases: dict[str, IngredientDatabase] = {}
 	active_caco_csv = Path(caco_csv) if caco_csv is not None else CACO_CSV
@@ -3444,24 +3511,15 @@ def run_predicted_fixture_check(
 			total_failed += 1
 			continue
 
-		for row_idx, (line_number, row, recipe, expected) in enumerate(pred_rows):
+		for line_number, row, recipe, expected in pred_rows:
 			mode = row["mode"].strip()
 			caco_enabled, ap_enabled, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(mode)
 
 			merged_row = dict(row)
-			if "mod_settings" not in merged_row or not merged_row["mod_settings"]:
-				conf_rows = confirmed_by_mode.get(mode, [])
-				matching_conf = None
-				if row_idx < len(conf_rows) and conf_rows[row_idx].get("ingredients", "").strip() == row.get("ingredients", "").strip():
-					matching_conf = conf_rows[row_idx]
-				else:
-					matching_conf = confirmed_by_key.get((mode, row.get("ingredients", "").strip()))
 
-				if matching_conf:
-					if matching_conf.get("mod_settings"):
-						merged_row["mod_settings"] = matching_conf["mod_settings"]
-
-			if apafa_enabled:
+			if is_ordinator_mode(mode):
+				db_key = "ordinator"
+			elif apafa_enabled:
 				db_key = "apafa"
 			elif apothecary_enabled:
 				db_key = "apothecary"
@@ -3473,7 +3531,9 @@ def run_predicted_fixture_check(
 				db_key = "vanilla"
 
 			if db_key not in databases:
-				if db_key == "apafa":
+				if db_key == "ordinator":
+					databases[db_key] = IngredientDatabase.load(ORDINATOR_CSV)
+				elif db_key == "apafa":
 					databases[db_key] = IngredientDatabase.load(APAFA_CSV)
 				elif db_key == "apothecary":
 					databases[db_key] = IngredientDatabase.load(APOTHECARY_CSV)
@@ -3599,6 +3659,17 @@ def format_confirmed_row_settings(
 		f"    seeker_of_shadows: {player.seeker_of_shadows}",
 	]
 
+	if settings.ordinator_enabled:
+		lines.extend(
+			[
+				"  Ordinator Settings:",
+				f"    physician_attribute: {player.ordinator_physician_attribute!r}",
+				f"    physician_attributes: {player.ordinator_physician_attributes!r}",
+				f"    advanced_lab_type: {player.ordinator_advanced_lab_type}",
+				f"    advanced_lab_active: {player.ordinator_advanced_lab_active}",
+			]
+		)
+
 	if caco_enabled:
 		caco = settings.caco_settings
 		lines.extend(
@@ -3685,7 +3756,9 @@ def run_confirmed_row(
 		row, confirmed_csv, line_number, recipe
 	)
 
-	if apafa_enabled:
+	if is_ordinator_mode(mode):
+		database = IngredientDatabase.load(ORDINATOR_CSV)
+	elif apafa_enabled:
 		database = IngredientDatabase.load(APAFA_CSV)
 	elif apothecary_enabled:
 		database = IngredientDatabase.load(APOTHECARY_CSV)
@@ -4179,7 +4252,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 	if arguments.check_predicted_csv:
 		return run_predicted_fixture_check(
 			predicted_path=arguments.predicted_csv,
-			confirmed_csv=arguments.confirmed_csv,
 			vanilla_csv=arguments.vanilla_csv,
 			caco_csv=None if arguments.caco_csv == CACO_CSV else arguments.caco_csv,
 		)

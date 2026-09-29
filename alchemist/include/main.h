@@ -9,6 +9,7 @@
 #include "AlchemyMath.h"
 #include "CACO/CACO.h"
 #include "Vanilla/Vanilla.h"
+#include "Ordinator/Ordinator.h"
 #include "Requiem/Requiem.h"
 #include "Apothecary/Apothecary.h"
 #include "APAFA/APAFA.h"
@@ -336,6 +337,11 @@ namespace alchemist {
 	public:
 		float alchemyLevel;
 		float fortifyAlchemyLevel;
+		float alchemyPowerModifier = 0.0f;
+		// Vanilla defaults only initialize an uncaptured player; live snapshots replace
+		// both GMSTs before crafting, and legacy CSVs retain their recorded defaults.
+		float alchemyIngredientInitMultiplier = 4.0f;
+		float alchemySkillFactor = 1.5f;
 		float alchemistPerkLevel;
 		float alchemistPerkMultiplier;
 		bool hasPerkPurity;
@@ -343,6 +349,8 @@ namespace alchemist {
 		bool hasPerkBenefactor;
 		bool hasPerkPoisoner;
 		bool hasSeekerOfShadows;
+		std::array<bool, 3> ordinatorPhysicianAttributes{};
+		bool ordinatorAdvancedLabActive = false;
 		vanilla::EvaluationContext alchemyEvaluationContext;
 		requiem::EvaluationContext requiemContext;
 		apothecary::EvaluationContext apothecaryContext;
@@ -363,7 +371,7 @@ namespace alchemist {
 					formId == 0x000C07CC || formId == 0x000C07CD) {
 					return true;
 				}
-				if (edid && (_strnicmp(edid, "Alchemist", 9) == 0 || _strnicmp(edid, "ORD_Alc_AlchemyMastery", 22) == 0 ||
+				if (edid && (_strnicmp(edid, "Alchemist", 9) == 0 ||
 					strstr(edid, "AlchemicalLore") != nullptr || strstr(edid, "alchemicallore") != nullptr)) {
 					return true;
 				}
@@ -608,23 +616,29 @@ namespace alchemist {
 
 			set<const RE::BGSPerk*> activePerks;
 			const auto& runtimeData = playerCharacter->GetPlayerRuntimeData();
+			const bool ordinatorActive = ordinator::Adapter::IsActive();
 			for (const auto* entry : runtimeData.addedPerks) {
-				if (entry && entry->perk && entry->currentRank > 0) {
+				if (entry && entry->perk && entry->currentRank > 0 &&
+					!(ordinatorActive && ordinator::Adapter::IsHandledEffectivenessPerk(entry->perk))) {
 					activePerks.insert(entry->perk);
 				}
 			}
 			for (const auto* perk : runtimeData.perks) {
-				if (perk) {
+				if (perk && !(ordinatorActive && ordinator::Adapter::IsHandledEffectivenessPerk(perk))) {
 					activePerks.insert(perk);
 				}
 			}
 			alchemyEvaluationContext.activePerks.assign(activePerks.begin(), activePerks.end());
-			alchemyEvaluationContext.alchemistPerkRank = getPerkRank("Alchemist");
+			alchemyEvaluationContext.alchemistPerkRank = ordinatorActive ?
+				ordinator::Adapter::GetAlchemyMasteryRank(playerCharacter) : getPerkRank("Alchemist");
 			alchemyEvaluationContext.fortifyAlchemyLevel = fortifyAlchemyLevel;
-			alchemyEvaluationContext.hasPhysician = getPerkRank("Physician") > 0;
+			// Ordinator's own entry points apply its selected Physician and level-scaled Poisoner
+			// bonuses. Keep the vanilla fallback flags off so the generic evaluator cannot double-apply them.
+			alchemyEvaluationContext.hasPhysician = !ordinatorActive && getPerkRank("Physician") > 0;
 			alchemyEvaluationContext.hasBenefactor = getPerkRank("Benefactor") > 0;
-			alchemyEvaluationContext.hasPoisoner = getPerkRank("Poisoner") > 0;
-			alchemyEvaluationContext.hasPurity = getPerkRank("Purity") > 0;
+			alchemyEvaluationContext.hasPoisoner = !ordinatorActive && getPerkRank("Poisoner") > 0;
+			alchemyEvaluationContext.hasPurity = ordinatorActive ?
+				ordinator::Adapter::HasPureMixture(playerCharacter) : getPerkRank("Purity") > 0;
 
 			auto& seekerState = alchemyEvaluationContext.seeker;
 			seekerState.spell = seeker::GetSpell();
@@ -684,6 +698,12 @@ namespace alchemist {
 				} else {
 					return 0.0f;
 				}
+			}
+			if (ordinator::Adapter::IsActive()) {
+				const auto rank = ordinator::Adapter::GetAlchemyMasteryRank(RE::PlayerCharacter::GetSingleton());
+				const float masteryMultiplier = 1.0f + static_cast<float>(rank) * 0.2f;
+				// The survival reward is AlchemyPowerMod, not a Mastery perk multiplier.
+				return masteryMultiplier;
 			}
 
 			float maxMultiplier = 1.0f + alchemistPerkLevel * 0.2f;
@@ -748,12 +768,19 @@ namespace alchemist {
 		void init() {
 			setAlchemyLevel();
 			fortifyAlchemyLevel = calculateFortifyAlchemyLevel();
-			alchemistPerkLevel = getPerkRank("Alchemist");
-			hasPerkPurity = getPerkRank("Purity");
-			hasPerkPhysician = getPerkRank("Physician");
+			auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
+			alchemyPowerModifier = playerCharacter ? playerCharacter->AsActorValueOwner()->GetActorValue(RE::ActorValue::kAlchemyPowerModifier) : 0.0f;
+			vanilla::Adapter::TryGetGameSettings(alchemyIngredientInitMultiplier, alchemySkillFactor);
+			const bool ordinatorActive = ordinator::Adapter::IsActive();
+			alchemistPerkLevel = ordinatorActive ?
+				static_cast<float>(ordinator::Adapter::GetAlchemyMasteryRank(playerCharacter)) : getPerkRank("Alchemist");
+			hasPerkPurity = ordinatorActive ? ordinator::Adapter::HasPureMixture(playerCharacter) : getPerkRank("Purity");
+			hasPerkPhysician = ordinatorActive ? ordinator::Adapter::HasPhysician(playerCharacter) : getPerkRank("Physician");
 			hasPerkBenefactor = getPerkRank("Benefactor");
-			hasPerkPoisoner = getPerkRank("Poisoner");
+			hasPerkPoisoner = ordinatorActive ? ordinator::Adapter::HasPoisoner(playerCharacter) : getPerkRank("Poisoner");
 			hasSeekerOfShadows = hasSeekerRewardState();
+			ordinatorPhysicianAttributes = ordinatorActive ? ordinator::Adapter::GetPhysicianAttributes(playerCharacter) : std::array<bool, 3>{};
+			ordinatorAdvancedLabActive = ordinatorActive && ordinator::Adapter::IsAdvancedLabActive(playerCharacter);
 
 			// Capture context BEFORE computing effectiveness multiplier so the
 			// Requiem-aware branch in getAlchemyEffectivenessMultiplier() can read
@@ -765,22 +792,29 @@ namespace alchemist {
 		}
 
 		void setMiniState() {
-			miniState = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + str::fromInt(alchemistPerkLevel) + "," +
+			miniState = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + std::to_string(alchemyPowerModifier) + "," + str::fromInt(alchemistPerkLevel) + "," +
 				str::fromInt(static_cast<int>(alchemistPerkMultiplier * 1000.0f)) + "," +
 				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," +
-				str::fromInt(hasSeekerOfShadows);
+				str::fromInt(hasSeekerOfShadows) + "," + std::to_string(alchemyIngredientInitMultiplier) + "," +
+				std::to_string(alchemySkillFactor) + "," + std::to_string(ordinatorAdvancedLabActive) + "," +
+				std::to_string(ordinatorPhysicianAttributes[0]) + std::to_string(ordinatorPhysicianAttributes[1]) +
+				std::to_string(ordinatorPhysicianAttributes[2]);
 		}
 
 		void setState() {
-			state = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + str::fromInt(alchemistPerkLevel) + "," +
+			state = str::fromInt(alchemyLevel) + "," + str::fromInt(fortifyAlchemyLevel) + "," + std::to_string(alchemyPowerModifier) + "," + str::fromInt(alchemistPerkLevel) + "," +
 				str::fromInt(static_cast<int>(alchemistPerkMultiplier * 1000.0f)) + "," + str::fromInt(hasPerkPurity) + "," +
 				str::fromInt(hasPerkPhysician) + "," + str::fromInt(hasPerkBenefactor) + "," + str::fromInt(hasPerkPoisoner) + "," +
-				str::fromInt(hasSeekerOfShadows);
+				str::fromInt(hasSeekerOfShadows) + "," + std::to_string(alchemyIngredientInitMultiplier) + "," +
+				std::to_string(alchemySkillFactor) + "," + std::to_string(ordinatorAdvancedLabActive) + "," +
+				std::to_string(ordinatorPhysicianAttributes[0]) + std::to_string(ordinatorPhysicianAttributes[1]) +
+				std::to_string(ordinatorPhysicianAttributes[2]);
 		}
 
 		Player() {
 			alchemyLevel = 0;
 			fortifyAlchemyLevel = 0;
+			alchemyPowerModifier = 0.0f;
 			alchemistPerkLevel = 0;
 			alchemistPerkMultiplier = 1.0f;
 			hasPerkPurity = false;
@@ -879,6 +913,9 @@ namespace alchemist {
 			if (!enchantment) return;
 			for (auto* effect : enchantment->effects) {
 				if (effect::isFortifyAlchemy(effect)) {
+					// AlchemyPowerMod is a separate multiplier, captured from the actor value.
+					if (effect->baseEffect && (effect->baseEffect->data.primaryAV == RE::ActorValue::kAlchemyPowerModifier ||
+						effect->baseEffect->data.secondaryAV == RE::ActorValue::kAlchemyPowerModifier)) continue;
 					float mag = effect::getMagnitude(effect);
 					if (mag <= 0.0f && effect) {
 						mag = effect->effectItem.magnitude;
@@ -916,7 +953,9 @@ namespace alchemist {
 					if (!baseEffect && activeEffect->effect) {
 						baseEffect = activeEffect->effect->baseEffect;
 					}
-					if (effect::isFortifyAlchemy(baseEffect)) {
+					if (effect::isFortifyAlchemy(baseEffect) &&
+						baseEffect->data.primaryAV != RE::ActorValue::kAlchemyPowerModifier &&
+						baseEffect->data.secondaryAV != RE::ActorValue::kAlchemyPowerModifier) {
 						float mag = activeEffect->GetMagnitude();
 						if (mag <= 0.0f) {
 							mag = activeEffect->magnitude;
@@ -937,10 +976,9 @@ namespace alchemist {
 				const float avDamage = playerCharacter->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kDamage, av);
 				return (std::max)({ avVal, avBase + avPerm + avTemp + avDamage, avPerm + avTemp, avPerm, avTemp });
 			};
-			const float powerMod = checkAV(RE::ActorValue::kAlchemyPowerModifier);
 			const float alchMod = checkAV(RE::ActorValue::kAlchemyModifier);
 			const float alchVal = checkAV(RE::ActorValue::kAlchemy);
-			avModifierSum = (std::max)({ powerMod, alchMod, alchVal > alchemyLevel ? alchVal - alchemyLevel : 0.0f });
+			avModifierSum = (std::max)({ alchMod, alchVal > alchemyLevel ? alchVal - alchemyLevel : 0.0f });
 		}
 
 		return (std::max)({ avModifierSum, activeEffectsSum, wornEnchantmentsSum });
@@ -982,6 +1020,37 @@ namespace alchemist {
 				evaluatedPlayer.alchemistPerkMultiplier : (1.0f + evaluatedPlayer.alchemistPerkLevel * 0.2f);
 		}
 
+		inline void applyOrdinatorAlchemyBonuses(
+			const Effect& effect,
+			bool potion,
+			bool includeTypePerks,
+			const Player& evaluatedPlayer,
+			float& magnitudePowerFactor,
+			float& durationPowerFactor) {
+			if (!includeTypePerks || !ordinator::Adapter::IsActive()) {
+				return;
+			}
+			if (potion && evaluatedPlayer.hasPerkPhysician && ordinator::Adapter::IsPhysicianEffect(
+					effect.baseEffect, evaluatedPlayer.ordinatorPhysicianAttributes)) {
+				// Installed Physician conditions include restore, fortify and regeneration keywords.
+				magnitudePowerFactor *= 1.5f;
+				durationPowerFactor *= 1.5f;
+			}
+			if (!potion) {
+				// Ordinator scales the poison as a whole; do not depend on an
+				// individual effect's harmful classification. Use the captured perk
+				// state so evaluation stays aligned with the player snapshot.
+				const float poisonerMultiplier = evaluatedPlayer.hasPerkPoisoner ?
+					(std::max)(1.0f, 1.0f + evaluatedPlayer.alchemyLevel * 0.01f) : 1.0f;
+				magnitudePowerFactor *= poisonerMultiplier;
+				durationPowerFactor *= poisonerMultiplier;
+			}
+			// Advanced Lab strengthens every crafted alchemical item, including poisons.
+			const float labMultiplier = evaluatedPlayer.ordinatorAdvancedLabActive ? 1.25f : 1.0f;
+			magnitudePowerFactor *= labMultiplier;
+			durationPowerFactor *= labMultiplier;
+		}
+
 		inline bool calculateVanillaPowerFactors(
 			const Effect& effect,
 			bool potion,
@@ -1009,7 +1078,7 @@ namespace alchemist {
 				evaluatedPlayer.alchemyLevel, getFallbackAlchemistMultiplier(evaluatedPlayer), 1.0f, initMult, skillFactor);
 			magnitudePowerFactor = effectiveness;
 			durationPowerFactor = effectiveness;
-			if (evaluatedPlayer.hasPerkPhysician && isPhysicianEffect(effect)) {
+			if (!ordinator::Adapter::IsActive() && evaluatedPlayer.hasPerkPhysician && isPhysicianEffect(effect)) {
 				magnitudePowerFactor *= 1.25f;
 				durationPowerFactor *= 1.25f;
 			}
@@ -1049,13 +1118,16 @@ namespace alchemist {
 				effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, mixedPotion)) {
 				return value;
 			}
+			applyOrdinatorAlchemyBonuses(effect, potion, includeTypePerks, evaluatedPlayer,
+				magnitudePowerFactor, durationPowerFactor);
 			const float playerFactor = algorithm::CalculateAlchemyActorValueMultiplier(
 				evaluatedPlayer.fortifyAlchemyLevel);
 			if (!std::isfinite(playerFactor) || playerFactor <= 0.0f) {
 				return value;
 			}
 			const float powerFactor = magnitude ? magnitudePowerFactor : durationPowerFactor;
-			const float calculatedValue = value * powerFactor * playerFactor;
+			const float actorPowerFactor = algorithm::CalculateAlchemyActorValueMultiplier(evaluatedPlayer.alchemyPowerModifier);
+			const float calculatedValue = value * powerFactor * playerFactor * actorPowerFactor;
 			if (!std::isfinite(calculatedValue)) {
 				return value;
 			}
@@ -1171,6 +1243,8 @@ namespace alchemist {
 					return false;
 				}
 			}
+			applyOrdinatorAlchemyBonuses(effect, potion, includeTypePerks, evaluatedPlayer,
+				magnitudePowerFactor, durationPowerFactor);
 
 			if (!effect.powerAffectsMagnitude && !effect.powerAffectsDuration) {
 				magnitudePowerFactor = 1.0f;
@@ -1184,6 +1258,10 @@ namespace alchemist {
 			}
 			magnitudePowerFactor *= playerFactor;
 			durationPowerFactor *= playerFactor;
+			const float powerFactor = algorithm::CalculateAlchemyActorValueMultiplier(evaluatedPlayer.alchemyPowerModifier);
+			if (!std::isfinite(powerFactor) || powerFactor <= 0.0f) return false;
+			magnitudePowerFactor *= powerFactor;
+			durationPowerFactor *= powerFactor;
 			return std::isfinite(magnitudePowerFactor) && magnitudePowerFactor >= 0.0f &&
 				std::isfinite(durationPowerFactor) && durationPowerFactor >= 0.0f;
 		}

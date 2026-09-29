@@ -5,6 +5,7 @@
 #include "Apothecary/Apothecary.h"
 #include "CACO/CACO.h"
 #include "Requiem/Requiem.h"
+#include "Ordinator/Ordinator.h"
 #include "ProfileManager.h"
 #include "main.h"
 
@@ -36,59 +37,12 @@ namespace alchemist::modsettings
 			return a_value ? "1" : "0";
 		}
 
-		float GetActiveIngredientInitMultiplier() noexcept
-		{
-			if (caco::Adapter::IsActive()) {
-				return vanilla::Adapter::GetAlchemyIngredientInitMultiplier();
-			}
-			if (requiem::Adapter::IsActive()) {
-				return requiem::Adapter::GetAlchemyIngredientInitMultiplier();
-			}
-			if (apafa::Adapter::IsActive()) {
-				return apafa::Adapter::GetAlchemyIngredientInitMultiplier();
-			}
-			if (apothecary::Adapter::IsActive()) {
-				return apothecary::Adapter::GetAlchemyIngredientInitMultiplier();
-			}
-			auto* collection = RE::GameSettingCollection::GetSingleton();
-			if (collection) {
-				auto* setting = collection->GetSetting("fAlchemyIngredientInitMult");
-				if (setting && setting->GetType() == RE::Setting::Type::kFloat) {
-					return setting->GetFloat();
-				}
-			}
-			return 4.0f;
-		}
-
-		float GetActiveSkillFactor() noexcept
-		{
-			if (caco::Adapter::IsActive()) {
-				return vanilla::Adapter::GetAlchemySkillFactor();
-			}
-			if (requiem::Adapter::IsActive()) {
-				return requiem::Adapter::GetAlchemySkillFactor();
-			}
-			if (apafa::Adapter::IsActive()) {
-				return apafa::Adapter::GetAlchemySkillFactor();
-			}
-			if (apothecary::Adapter::IsActive()) {
-				return apothecary::Adapter::GetAlchemySkillFactor();
-			}
-			auto* collection = RE::GameSettingCollection::GetSingleton();
-			if (collection) {
-				auto* setting = collection->GetSetting("fAlchemySkillFactor");
-				if (setting && setting->GetType() == RE::Setting::Type::kFloat) {
-					return setting->GetFloat();
-				}
-			}
-			return 1.5f;
-		}
-
 		SectionValues BuildPlayerValues(const Player& a_player)
 		{
 			return {
 				{ "AlchemyLevel", FormatFloat(a_player.alchemyLevel) },
 				{ "FortifyAlchemyLevel", FormatFloat(a_player.fortifyAlchemyLevel) },
+				{ "AlchemyPowerModifier", FormatFloat(a_player.alchemyPowerModifier) },
 				{ "AlchemistPerkRank", std::to_string(static_cast<int>(a_player.alchemistPerkLevel)) },
 				{ "AlchemistPerkMultiplier", FormatFloat(a_player.alchemistPerkMultiplier) },
 				{ "Purity", FormatBool(a_player.hasPerkPurity) },
@@ -152,23 +106,28 @@ namespace alchemist::modsettings
 	{
 		ConfirmationSettings settings;
 		try {
-			const float initMult = GetActiveIngredientInitMultiplier();
-			const float skillFactor = GetActiveSkillFactor();
-
 			if (requiem::Adapter::IsActive()) {
 				nlohmann::json reqJson = nlohmann::json::parse(SerializeSectionValues(BuildRequiemValues(a_player)));
-				reqJson["AlchemyIngredientInitMultiplier"] = initMult;
-				reqJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = reqJson.dump();
+			} else if (ordinator::Adapter::IsActive()) {
+				nlohmann::json ordinatorJson = nlohmann::json::object();
+				ordinatorJson["AdvancedLabType"] = ordinator::Adapter::GetAdvancedLabType();
+				ordinatorJson["AdvancedLabActive"] = a_player.ordinatorAdvancedLabActive;
+				const auto& attributes = a_player.ordinatorPhysicianAttributes;
+				const int attributeCount = static_cast<int>(attributes[0]) + static_cast<int>(attributes[1]) + static_cast<int>(attributes[2]);
+				ordinatorJson["PhysicianAttribute"] = attributeCount == 1 ? (attributes[0] ? "Health" : attributes[1] ? "Magicka" : "Stamina") : "";
+				// Multiple choice perks can coexist; capture every active attribute.
+				const auto physicianAttributes = a_player.ordinatorPhysicianAttributes;
+				ordinatorJson["PhysicianAttributes"] = nlohmann::json::array();
+				if (physicianAttributes[0]) ordinatorJson["PhysicianAttributes"].push_back("Health");
+				if (physicianAttributes[1]) ordinatorJson["PhysicianAttributes"].push_back("Magicka");
+				if (physicianAttributes[2]) ordinatorJson["PhysicianAttributes"].push_back("Stamina");
+				settings.modSettings = nlohmann::json{ { "ordinator", ordinatorJson } }.dump();
 			} else if (apafa::Adapter::IsActive()) {
 				nlohmann::json apafaJson = nlohmann::json::object();
-				apafaJson["AlchemyIngredientInitMultiplier"] = initMult;
-				apafaJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = apafaJson.dump();
 			} else if (apothecary::Adapter::IsActive()) {
 				nlohmann::json apotJson = nlohmann::json::object();
-				apotJson["AlchemyIngredientInitMultiplier"] = initMult;
-				apotJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = apotJson.dump();
 			} else if (caco::Adapter::IsActive() && alchemyplus::Adapter::IsActive()) {
 				nlohmann::json combined = nlohmann::json::object();
@@ -180,15 +139,11 @@ namespace alchemist::modsettings
 				if (configuration) {
 					combined["alchemyPlus"] = *configuration;
 				}
-				combined["AlchemyIngredientInitMultiplier"] = initMult;
-				combined["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = combined.dump();
 			} else if (caco::Adapter::IsActive()) {
 				caco::Settings cacoSettings;
 				if (caco::Adapter::TryGetSettings(cacoSettings)) {
 					nlohmann::json cacoJson = nlohmann::json::parse(SerializeSectionValues(BuildCacoValues(cacoSettings)));
-					cacoJson["AlchemyIngredientInitMultiplier"] = initMult;
-					cacoJson["AlchemySkillFactor"] = skillFactor;
 					settings.modSettings = cacoJson.dump();
 				}
 			} else if (alchemyplus::Adapter::IsActive()) {
@@ -197,15 +152,26 @@ namespace alchemist::modsettings
 				if (configuration) {
 					apJson = *configuration;
 				}
-				apJson["AlchemyIngredientInitMultiplier"] = initMult;
-				apJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = apJson.dump();
 			} else {
 				nlohmann::json vanillaJson = nlohmann::json::object();
-				vanillaJson["AlchemyIngredientInitMultiplier"] = initMult;
-				vanillaJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = vanillaJson.dump();
 			}
+			// Engine settings have no dedicated confirmed-CSV columns. Capture the
+			// actual pre-craft values once, separately from overhaul-specific options.
+			auto payload = nlohmann::json::parse(settings.modSettings);
+			if (payload.contains("caco") && payload["caco"].is_object()) {
+				payload["caco"].erase("AlchemyIngredientInitMultiplier");
+				payload["caco"].erase("AlchemySkillFactor");
+			}
+			payload.erase("AlchemyIngredientInitMultiplier");
+			payload.erase("AlchemySkillFactor");
+			payload["engine"] = {
+				{ "AlchemyIngredientInitMultiplier", a_player.alchemyIngredientInitMultiplier },
+				{ "AlchemySkillFactor", a_player.alchemySkillFactor },
+				{ "AlchemyPowerModifier", a_player.alchemyPowerModifier }
+			};
+			settings.modSettings = payload.dump();
 		} catch (...) {
 			settings.modSettings = "{}";
 		}

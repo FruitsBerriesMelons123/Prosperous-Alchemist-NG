@@ -10,7 +10,7 @@ This is a from-scratch rewrite of the original [Prosperous Alchemist](https://ww
 
 - Checks every ingredient pair and trio you can make and sorts the recipes by estimated value.
 - Takes your Alchemy skill, alchemy perks, and any Fortify Alchemy gear you are wearing into account. You can turn this off.
-- Handles Vanilla Skyrim, Alchemy Plus, Complete Alchemy & Cooking Overhaul (CACO), CACO with Alchemy Plus, Requiem, Apothecary, and Alchemy Potions and Food Adjustments (APAFA) automatically.
+- Handles Vanilla Skyrim, Alchemy Plus, Complete Alchemy & Cooking Overhaul (CACO), CACO with Alchemy Plus, Requiem, Apothecary, Alchemy Potions and Food Adjustments (APAFA), and Ordinator automatically.
 - Search by recipe name, ingredient, or effect, with support for AND, OR, exact phrases, and near matches.
 - Sort by value or by name, page through long lists, and optionally show each recipe's effects.
 - Narrow the list to recipes that use the ingredients you have already picked in the alchemy menu.
@@ -127,16 +127,25 @@ To add ingredients to your own list, use the ingredient name, editor ID, or hex 
 
 ## Compatibility
 
-The plugin detects which mods are installed and adjusts its calculations to match. No patches or settings are needed.
+Prosperous Alchemist NG automatically detects your active load order and adapts its calculation engine in real time. No patches or manual configuration required.
 
-- **Vanilla Skyrim**, including the official DLCs and Creation Club ingredients.
+### Dedicated Support
+
+The following are supported through custom math, engine-level hooks, and record-handling baked directly into the plugin:
+
 - **[Alchemy Plus](https://www.nexusmods.com/skyrimspecialedition/mods/80882):** follows your Alchemy Plus settings for magnitude and duration rounding (including per-effect rounding overrides) and the impure-cost fix.
 - **[Complete Alchemy & Cooking Overhaul (CACO)](https://www.nexusmods.com/skyrimspecialedition/mods/19924):** uses CACO's ingredients and your CACO MCM settings, including the Restore Health/Magicka/Stamina duration options. CACO's optional scripted potion handling can change a potion after you craft it, so if that option is on, the final item may not match the estimate.
 - **CACO + Alchemy Plus:** supported together.
 - **[Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888):** uses Requiem's ingredients, alchemy effectiveness, Alchemical Lore ranks, and perks. Use Requiem without CACO or Alchemy Plus.
 - **[Apothecary – An Alchemy Overhaul](https://www.nexusmods.com/skyrimspecialedition/mods/52130):** uses Apothecary's ingredients and effect scaling. Not combined with Alchemy Plus.
 - **[Alchemy Potions and Food Adjustments (APAFA)](https://www.nexusmods.com/skyrimspecialedition/mods/5877):** uses APAFA's ingredient and effect records and its potion-related Alchemy settings.
-- **[kryptopyr's Patch Hub](https://www.nexusmods.com/skyrimspecialedition/mods/19518):** the CACO Rare Curios patch is supported.
+- **[Ordinator - Perks of Skyrim](https://www.nexusmods.com/skyrimspecialedition/mods/1137):** uses its Alchemy Mastery ranks, selected Physician attribute, Poisoner, Pure Mixture, Advanced Lab, and permanent AlchemyPowerMod effects on potion predictions.
+
+### Out-of-the-Box Compatibility
+
+The following alter alchemy records in ways that standard calculation logic supports natively—no custom code or overrides required:
+
+- **[Skyrim Alchemy and Food Overhaul (SAFO)](https://www.nexusmods.com/skyrimspecialedition/mods/12343)**
 
 Other mods that add ingredients work too, since the plugin reads ingredients straight from your load order. Mods that change how potions are built or priced, and overhaul combinations not listed here, may make the estimates less accurate.
 
