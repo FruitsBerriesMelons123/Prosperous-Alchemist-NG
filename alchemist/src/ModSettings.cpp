@@ -1,6 +1,7 @@
 #include "ModSettings.h"
 
 #include "AlchemyPlus/AlchemyPlus.h"
+#include "APAFA/APAFA.h"
 #include "Apothecary/Apothecary.h"
 #include "CACO/CACO.h"
 #include "Requiem/Requiem.h"
@@ -43,6 +44,9 @@ namespace alchemist::modsettings
 			if (requiem::Adapter::IsActive()) {
 				return requiem::Adapter::GetAlchemyIngredientInitMultiplier();
 			}
+			if (apafa::Adapter::IsActive()) {
+				return apafa::Adapter::GetAlchemyIngredientInitMultiplier();
+			}
 			if (apothecary::Adapter::IsActive()) {
 				return apothecary::Adapter::GetAlchemyIngredientInitMultiplier();
 			}
@@ -63,6 +67,9 @@ namespace alchemist::modsettings
 			}
 			if (requiem::Adapter::IsActive()) {
 				return requiem::Adapter::GetAlchemySkillFactor();
+			}
+			if (apafa::Adapter::IsActive()) {
+				return apafa::Adapter::GetAlchemySkillFactor();
 			}
 			if (apothecary::Adapter::IsActive()) {
 				return apothecary::Adapter::GetAlchemySkillFactor();
@@ -153,6 +160,11 @@ namespace alchemist::modsettings
 				reqJson["AlchemyIngredientInitMultiplier"] = initMult;
 				reqJson["AlchemySkillFactor"] = skillFactor;
 				settings.modSettings = reqJson.dump();
+			} else if (apafa::Adapter::IsActive()) {
+				nlohmann::json apafaJson = nlohmann::json::object();
+				apafaJson["AlchemyIngredientInitMultiplier"] = initMult;
+				apafaJson["AlchemySkillFactor"] = skillFactor;
+				settings.modSettings = apafaJson.dump();
 			} else if (apothecary::Adapter::IsActive()) {
 				nlohmann::json apotJson = nlohmann::json::object();
 				apotJson["AlchemyIngredientInitMultiplier"] = initMult;

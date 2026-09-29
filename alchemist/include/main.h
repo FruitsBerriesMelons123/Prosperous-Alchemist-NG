@@ -11,6 +11,7 @@
 #include "Vanilla/Vanilla.h"
 #include "Requiem/Requiem.h"
 #include "Apothecary/Apothecary.h"
+#include "APAFA/APAFA.h"
 #include "Localization.h"
 #include "SeekerOfShadows.h"
 
@@ -1071,7 +1072,8 @@ namespace alchemist {
 			bool useCacoNative,
 			bool mixedPotion = false,
 			bool useRequiemNative = false,
-			bool useApothecaryNative = false) {
+			bool useApothecaryNative = false,
+			bool useAPAFANative = false) {
 			magnitudePowerFactor = 1.0f;
 			durationPowerFactor = 1.0f;
 
@@ -1143,6 +1145,23 @@ namespace alchemist {
 				}
 				magnitudePowerFactor = apMagnitudePowerFactor;
 				durationPowerFactor = apDurationPowerFactor;
+			} else if (useAPAFANative) {
+				float apafaMagnitudePowerFactor = 1.0f;
+				float apafaDurationPowerFactor = 1.0f;
+				if (!apafa::Adapter::TryGetAlchemyEffectivenessMultipliers(
+					effect.baseEffect,
+					evaluatedPlayer.alchemyLevel,
+					getFallbackAlchemistMultiplier(evaluatedPlayer),
+					potion,
+					includeTypePerks,
+					mixedPotion,
+					evaluatedPlayer.alchemyEvaluationContext,
+					apafaMagnitudePowerFactor,
+					apafaDurationPowerFactor)) {
+					return false;
+				}
+				magnitudePowerFactor = apafaMagnitudePowerFactor;
+				durationPowerFactor = apafaDurationPowerFactor;
 			} else {
 				if (!effect.powerAffectsMagnitude && !effect.powerAffectsDuration) {
 					return true;
@@ -1207,11 +1226,12 @@ namespace alchemist {
 			bool useCacoNative,
 			bool mixedPotion = false,
 			bool useRequiemNative = false,
-			bool useApothecaryNative = false) {
+			bool useApothecaryNative = false,
+			bool useAPAFANative = false) {
 			float magnitudePowerFactor = 1.0f;
 			float durationPowerFactor = 1.0f;
 			if (includePlayerFactors && !calculateNativePowerFactors(
-				effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative)) {
+				effect, potion, includeTypePerks, magnitudePowerFactor, durationPowerFactor, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative, useAPAFANative)) {
 				return false;
 			}
 			input = algorithm::CalculateEffectInput(
@@ -1252,9 +1272,10 @@ namespace alchemist {
 			bool useCacoNative,
 			bool applyAlchemyPlusRounding,
 			bool useRequiemNative = false,
-			bool useApothecaryNative = false) {
+			bool useApothecaryNative = false,
+			bool useAPAFANative = false) {
 			algorithm::EffectInput input;
-			if (!calculateNativeEffectInput(effect, false, false, true, input, evaluatedPlayer, useCacoNative, false, useRequiemNative, useApothecaryNative)) {
+			if (!calculateNativeEffectInput(effect, false, false, true, input, evaluatedPlayer, useCacoNative, false, useRequiemNative, useApothecaryNative, useAPAFANative)) {
 				return false;
 			}
 			if (!applyAlchemyPlusRoundingToInput(effect, input, applyAlchemyPlusRounding)) {
@@ -1302,10 +1323,11 @@ namespace alchemist {
 			bool applyAlchemyPlusRounding,
 			bool mixedPotion = false,
 			bool useRequiemNative = false,
-			bool useApothecaryNative = false) {
+			bool useApothecaryNative = false,
+			bool useAPAFANative = false) {
 			algorithm::EffectInput nativeInput;
 			if (!calculateNativeEffectInput(
-					effect, potion, includeTypePerks, includePlayerFactors, nativeInput, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative)) {
+					effect, potion, includeTypePerks, includePlayerFactors, nativeInput, evaluatedPlayer, useCacoNative, mixedPotion, useRequiemNative, useApothecaryNative, useAPAFANative)) {
 				return false;
 			}
 			const double nativeContribution = calculateNativeEffectContribution(effect, nativeInput);
@@ -1353,6 +1375,11 @@ namespace alchemist {
 				(algorithm == EvaluationAlgorithm::Automatic && apothecary::Adapter::IsActive());
 		}
 
+		inline bool useAPAFAAlgorithm(EvaluationAlgorithm algorithm) noexcept {
+			return algorithm == EvaluationAlgorithm::APAFA ||
+				(algorithm == EvaluationAlgorithm::Automatic && apafa::Adapter::IsActive());
+		}
+
 		inline bool useAlchemyPlusAlgorithm(EvaluationAlgorithm algorithm) noexcept {
 			return algorithm == EvaluationAlgorithm::Automatic || algorithm == EvaluationAlgorithm::AlchemyPlus;
 		}
@@ -1379,7 +1406,9 @@ namespace alchemist {
 			const bool requiemNative = requiemAlgorithm && requiem::Adapter::IsActive();
 			const bool apothecaryAlgorithm = useApothecaryAlgorithm(algorithm);
 			const bool apothecaryNative = apothecaryAlgorithm && apothecary::Adapter::IsActive();
-			const bool alchemyPlusAlgorithm = !requiemAlgorithm && !apothecaryAlgorithm && useAlchemyPlusAlgorithm(algorithm);
+			const bool apafaAlgorithm = useAPAFAAlgorithm(algorithm);
+			const bool apafaNative = apafaAlgorithm && apafa::Adapter::IsActive();
+			const bool alchemyPlusAlgorithm = !requiemAlgorithm && !apothecaryAlgorithm && !apafaAlgorithm && useAlchemyPlusAlgorithm(algorithm);
 			const bool alchemyPlusRounding = alchemyPlusAlgorithm && alchemyplus::Adapter::IsRoundingEnabled();
 			const bool alchemyPlusImpureCostFix = alchemyPlusAlgorithm && alchemyplus::Adapter::IsImpureCostFixEnabled();
 
@@ -1446,9 +1475,9 @@ namespace alchemist {
 					if (std::isfinite(candidate.sourceCost) && candidate.sourceCost > 0.0f) {
 						candidateOrderCost = static_cast<double>(candidate.sourceCost);
 						calculated = true;
-					} else if (cacoNative || requiemNative || apothecaryNative) {
+					} else if (cacoNative || requiemNative || apothecaryNative || apafaNative) {
 						calculated = calculateNativeEffectOrder(
-							candidate, evaluatedPlayer, candidateOrderCost, cacoNative, alchemyPlusRounding, requiemNative, apothecaryNative);
+							candidate, evaluatedPlayer, candidateOrderCost, cacoNative, alchemyPlusRounding, requiemNative, apothecaryNative, apafaNative);
 					} else {
 						const auto candidateOrder = calculateLegacyEffect(
 							candidate, false, false, evaluatedPlayer, alchemyPlusRounding);
@@ -1509,9 +1538,9 @@ namespace alchemist {
 			calculatedEffects.reserve(selectedEffects.size());
 			for (const auto& selected : selectedEffects) {
 				Effect calculatedEffect;
-				if (cacoNative || requiemNative || apothecaryNative) {
+				if (cacoNative || requiemNative || apothecaryNative || apafaNative) {
 					if (!calculateNativeEffect(
-						selected.source, potion, true, true, calculatedEffect, evaluatedPlayer, cacoNative, alchemyPlusRounding, mixedPotion, requiemNative, apothecaryNative)) {
+						selected.source, potion, true, true, calculatedEffect, evaluatedPlayer, cacoNative, alchemyPlusRounding, mixedPotion, requiemNative, apothecaryNative, apafaNative)) {
 						return result;
 					}
 				} else {
@@ -1562,7 +1591,7 @@ namespace alchemist {
 			bool impure = false;
 			double totalCost = 0.0;
 			for (const auto& effect : result.effects) {
-				double effectCost = (cacoNative || requiemNative || apothecaryNative) ? effect.nativeCost : static_cast<double>(effect.calcCost);
+				double effectCost = (cacoNative || requiemNative || apothecaryNative || apafaNative) ? effect.nativeCost : static_cast<double>(effect.calcCost);
 				if (alchemyPlusImpureCostFix) {
 					const float adjustedCost = alchemyplus::Adapter::AdjustImpureEffectCost(
 						static_cast<float>(effectCost), isPoison, effect.hostile, impure);

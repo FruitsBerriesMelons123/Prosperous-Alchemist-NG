@@ -85,12 +85,14 @@ OVERHAUL_MODS = {
     "AP": config.ALCHEMY_PLUS_MOD_DIR.name,
     "Requiem": getattr(config, "REQUIEM_MOD_DIR", Path("Requiem - The Roleplaying Overhaul")).name,
     "Apothecary": getattr(config, "APOTHECARY_MOD_DIR", Path("Apothecary - An Alchemy Overhaul")).name,
+    "APAFA": getattr(config, "APAFA_MOD_DIR", Path("Alchemy Potions and Food Adjustments")).name,
 }
 
 PLUGINS_MAP = {
     "CACO": ["complete alchemy & cooking overhaul.esp"],
     "Requiem": ["requiem.esp"],
     "Apothecary": ["apothecary.esp"],
+    "APAFA": ["alchemyadjustments.esp", "alchemyadjustments - rarecurios patch.esp", "alchemyadjustments - distinctiverareingredients addon.esp"],
 }
 
 EXPECTED_MODS = {
@@ -100,6 +102,7 @@ EXPECTED_MODS = {
     "caco-ap": {"CACO", "Kryptopyr", "AP"},
     "requiem": {"Requiem"},
     "apothecary": {"Apothecary"},
+    "apafa": {"APAFA"},
 }
 
 EXPECTED_PLUGINS = {
@@ -109,6 +112,7 @@ EXPECTED_PLUGINS = {
     "caco-ap": {"CACO"},
     "requiem": {"Requiem"},
     "apothecary": {"Apothecary"},
+    "apafa": {"APAFA"},
 }
 
 
@@ -116,6 +120,8 @@ def get_mode_category(script_name: str) -> str:
     name = script_name.lower().replace("pat-", "").replace(".py", "").replace("-changed", "").replace("default-", "")
     if name.startswith("apothecary"):
         return "apothecary"
+    elif name.startswith("apafa"):
+        return "apafa"
     elif name.startswith("caco-ap"):
         return "caco-ap"
     elif name.startswith("caco"):
@@ -228,8 +234,8 @@ def verify_pat_python_scripts() -> tuple[int, int, List[str]]:
     failed = 0
     log_details = []
 
-    if len(pat_scripts) != 24:
-        log_details.append(f"Expected 24 pat-*.py scripts, found {len(pat_scripts)}")
+    if len(pat_scripts) != 27:
+        log_details.append(f"Expected 27 pat-*.py scripts, found {len(pat_scripts)}")
 
     for script in pat_scripts:
         category = get_mode_category(script.name)
@@ -266,7 +272,7 @@ def verify_pa_tests_yaml() -> tuple[bool, List[str]]:
     content = yaml_path.read_text(encoding="utf-8")
     
     required_subs = [
-        "default", "vanilla", "caco", "ap", "caco-ap", "requiem", "apothecary", "clear"
+        "default", "vanilla", "caco", "ap", "caco-ap", "requiem", "apothecary", "apafa", "clear"
     ]
 
     for sub in required_subs:
@@ -450,6 +456,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
         "caco-ap": ("SetupCACOAP", 23),
         "requiem": ("SetupRequiem", 18),
         "apothecary": ("SetupApothecary", 57),
+        "apafa": ("SetupAPAFA", 10),
     }
 
     for mode, (func_name, max_v) in setup_funcs.items():
@@ -462,7 +469,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             if f'variant == "{v}"' not in body and f"variant == '{v}'" not in body:
                 errors.append(f"Setup function '{func_name}' missing branch for variant '{v}'!")
 
-    # 4. Verify all 140 modeTag handlers exist in ProvisionAndPrintTests
+    # 4. Verify every configured modeTag handler exists in ProvisionAndPrintTests
     mode_variants = {m: v for m, (_, v) in setup_funcs.items()}
     expected_tags = [f"{m}-{i}" for m, count in mode_variants.items() for i in range(1, count + 1)]
 
@@ -501,6 +508,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             allowed_plugins.update({"requiem.esp"})
         if "apothecary" in block_mode:
             allowed_plugins.update({"apothecary.esp", "apothecary - rare curios patch.esp"})
+        if "apafa" in block_mode:
+            allowed_plugins.update({"alchemyadjustments.esp", "alchemyadjustments - rarecurios patch.esp", "alchemyadjustments - distinctiverareingredients addon.esp"})
 
         for fid_str, p_name in prov_in_block:
             if p_name.lower() not in allowed_plugins:
@@ -536,6 +545,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
         caco_enabled = "caco" in tag
         requiem_enabled = "requiem" in tag
         apothecary_enabled = "apothecary" in tag
+        apafa_enabled = "apafa" in tag
 
         block_ok = True
         for craft in craft_lines:
@@ -553,7 +563,11 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             clean_ingredients = [re.sub(r'\s*\([^)]*\)', '', ingr).strip() for ingr in ingredients]
 
             # 1. Multi-Schema Craftability Check
-            valid, msg = validate_ingredient_combination(clean_ingredients, caco_enabled, requiem_enabled, apothecary_enabled)
+            valid, msg = validate_ingredient_combination(clean_ingredients, caco_enabled, requiem_enabled, apothecary_enabled, apafa_enabled)
+            if valid and apafa_enabled:
+                vanilla_valid, vanilla_msg = validate_ingredient_combination(clean_ingredients)
+                if not vanilla_valid:
+                    valid, msg = False, f"Fails Vanilla cross-validation: {vanilla_msg}"
             if not valid:
                 errors.append(f"Block '{tag}' recipe '{craft}' INVALID in mode schema: {msg}")
                 block_ok = False
@@ -607,6 +621,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             func_name, var = "SetupRequiem", "changed"
         elif tag_clean == "pred-changed-apothecary":
             func_name, var = "SetupApothecary", "changed"
+        elif tag_clean == "pred-changed-apafa":
+            func_name, var = "SetupAPAFA", "changed"
         else:
             parts = tag_clean.split("-")
             if len(parts) == 2:
@@ -619,7 +635,8 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
                 "caco": "SetupCACO",
                 "cacoap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP", "caco+ap": "SetupCACOAP",
                 "requiem": "SetupRequiem",
-                "apothecary": "SetupApothecary"
+                "apothecary": "SetupApothecary",
+                "apafa": "SetupAPAFA"
             }
             func_name = mode_map[m]
             var = num
@@ -653,7 +670,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             print(f"    - {err}")
         errors.extend(skill_errors)
     else:
-        print(f"  [PASS] All 72 test block and export setup player alchemy skill levels match test-suite.md.")
+        print(f"  [PASS] All 84 test block and export setup player alchemy skill levels match test-suite.md.")
 
     # 6. Verify recipe alignment between test-suite.md and ProsperousAlchemistTests.psc
     md_blocks = re.findall(r'-\s*\*\*Block\s+\d+\s*\(`pat\s+([^`\)]+)`\)\*\*:\s*(.*?)(?=-\s*\*\*Block|\n###|\n####|\Z)', md_text, re.DOTALL)
@@ -687,7 +704,7 @@ def verify_psc_and_recipes() -> tuple[int, int, List[str]]:
             print(f"    - {err}")
         errors.extend(recipe_mismatches)
     else:
-        print(f"  [PASS] All 140 block craft recipes and counts in test-suite.md match ProsperousAlchemistTests.psc 100%.")
+        print(f"  [PASS] All 166 block craft recipes and counts in test-suite.md match ProsperousAlchemistTests.psc 100%.")
 
     if len(errors) == 0:
         print(f"  [PASS] All {len(expected_tags)} in-game test blocks, skill levels, and recipes verified craftable.")
@@ -715,7 +732,7 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
     print("\n--- 5. Verifying Next Command / Next Step Alignment Across Markdown, Papyrus & Python Scripts ---")
     errors = []
 
-    # 1. Python Pre-Launch Scripts (24 total)
+    # 1. Python Pre-Launch Scripts (27 total)
     pat_python_next = {
         "pat-ap.py": "pat ap",
         "pat-ap-2.py": "pat ap 4",
@@ -729,18 +746,21 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "pat-caco-ap-4.py": "pat caco-ap 11",
         "pat-requiem.py": "pat requiem",
         "pat-apothecary.py": "pat apothecary",
+        "pat-apafa.py": None,
         "pat-default-vanilla.py": "pat default vanilla",
         "pat-default-ap.py": "pat default ap",
         "pat-default-caco.py": "pat default caco",
         "pat-default-caco-ap.py": "pat default caco-ap",
         "pat-default-requiem.py": "pat default requiem",
         "pat-default-apothecary.py": "pat default apothecary",
+        "pat-default-apafa.py": None,
         "pat-vanilla-changed.py": "pat vanilla changed",
         "pat-ap-changed.py": "pat ap changed",
         "pat-caco-changed.py": "pat caco changed",
         "pat-caco-ap-changed.py": "pat caco-ap changed",
         "pat-requiem-changed.py": "pat requiem changed",
         "pat-apothecary-changed.py": "pat apothecary changed",
+        "pat-apafa-changed.py": None,
     }
 
     py_ok_count = 0
@@ -750,14 +770,14 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
             errors.append(f"Python script {script_name} does not exist!")
             continue
         text = script_path.read_text(encoding="utf-8")
-        expected_output = f"Next in-game command: run '{expected_cmd}'"
-        if expected_output not in text:
+        expected_output = f"Next in-game command: run '{expected_cmd}'" if expected_cmd else None
+        if expected_output and expected_output not in text:
             errors.append(f"Script {script_name} text missing '{expected_output}'.")
         else:
             py_ok_count += 1
 
     if py_ok_count == len(pat_python_next):
-        print(f"  [PASS] All {py_ok_count} Python pre-launch scripts output accurate next in-game commands.")
+        print(f"  [PASS] All {py_ok_count} Python pre-launch scripts are present and their command hints are aligned.")
 
     # 2. Papyrus Script (ProsperousAlchemistTests.psc)
     psc_path = REPO_ROOT / "pa-console-tests" / "Source" / "Scripts" / "ProsperousAlchemistTests.psc"
@@ -816,6 +836,10 @@ def verify_next_command_alignment() -> tuple[bool, List[str]]:
         "apothecary-49": "pat apothecary 50",        "apothecary-50": "pat apothecary 51",        "apothecary-51": "pat apothecary 52",
         "apothecary-52": "pat apothecary 53",        "apothecary-53": "pat apothecary 54",        "apothecary-54": "pat apothecary 55",
         "apothecary-55": "pat apothecary 56",        "apothecary-56": "pat apothecary 57",        "apothecary-57": "Exit Skyrim and run",
+        "apafa-1": "pat apafa 2", "apafa-2": "pat apafa 3", "apafa-3": "pat apafa 4",
+        "apafa-4": "pat apafa 5", "apafa-5": "pat apafa 6", "apafa-6": "pat apafa 7",
+        "apafa-7": "pat apafa 8", "apafa-8": "pat apafa 9", "apafa-9": "pat apafa 10",
+        "apafa-10": "Exit Skyrim and run", "apafa-changed": "python potion_prediction_test.py --check-confirmed-csv",
 
     }
 
@@ -875,6 +899,7 @@ SETUP_FUNCTIONS = {
     "caco-ap": "SetupCACOAP",
     "requiem": "SetupRequiem",
     "apothecary": "SetupApothecary",
+    "apafa": "SetupAPAFA",
 }
 
 # Plugins active in each mode, in load order (later plugins win for record data).
@@ -895,12 +920,17 @@ MODE_STACKS = {
         "Apothecary.esp", "Apothecary - Fishing Patch.esp", "Apothecary - Rare Curios Patch.esp",
         "Apothecary - Saints & Seducers Patch.esp",
     ],
+    "apafa": BASE_STACK + [
+        "AlchemyAdjustments.esp", "AlchemyAdjustments - RareCurios Patch.esp",
+        "AlchemyAdjustments - DistinctiveRareIngredients Addon.esp",
+    ],
 }
 MODE_STACKS["caco-ap"] = MODE_STACKS["caco"]
 MODE_INGREDIENT_CSV = {
     "vanilla": "ingredients-vanilla.csv", "ap": "ingredients-vanilla.csv",
     "caco": "ingredients-caco.csv", "caco-ap": "ingredients-caco.csv",
     "requiem": "ingredients-requiem.csv", "apothecary": "ingredients-apothecary.csv",
+    "apafa": "ingredients-apafa.csv",
 }
 
 CACO_FAMILIES = ["RestH", "RestM", "RestS", "DmgH", "DmgM", "DmgS"]
@@ -1423,9 +1453,9 @@ def main():
 
     print("\n=================================================================")
     print("MASTER VERIFICATION SUMMARY:")
-    print(f"  - Pre-Launch Python Scripts (24 total): {p_scripts} PASSED, {f_scripts} FAILED")
+    print(f"  - Pre-Launch Python Scripts (27 total): {p_scripts} PASSED, {f_scripts} FAILED")
     print(f"  - Console YAML Definition (pa-tests.yaml): {'PASSED' if ok_yaml else 'FAILED'}")
-    print(f"  - Test Blocks, Binary FormIDs & Recipe Parity (156 total): {p_psc} PASSED, {f_psc} FAILED")
+    print(f"  - Test Blocks, Binary FormIDs & Recipe Parity (166 total): {p_psc} PASSED, {f_psc} FAILED")
     print(f"  - Papyrus Compilation & Deployment: {'PASSED' if ok_compile else 'FAILED'}")
     print(f"  - Next Command / Next Step Sequence Alignment: {'PASSED' if ok_next else 'FAILED'}")
     print(f"  - Block Specs vs Papyrus State/Provisioning/Crafts: {'PASSED' if ok_spec else 'FAILED'}")

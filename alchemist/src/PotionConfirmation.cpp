@@ -1,6 +1,7 @@
 #include "PotionConfirmation.h"
 
 #include "AlchemyPlus/AlchemyPlus.h"
+#include "APAFA/APAFA.h"
 #include "Apothecary/Apothecary.h"
 #include "CACO/CACO.h"
 #include "Requiem/Requiem.h"
@@ -243,6 +244,9 @@ namespace alchemist::confirmations
 		{
 			if (requiem::Adapter::IsActive()) {
 				return "Requiem";
+			}
+			if (apafa::Adapter::IsActive()) {
+				return "APAFA";
 			}
 			if (apothecary::Adapter::IsActive()) {
 				return "Apothecary";

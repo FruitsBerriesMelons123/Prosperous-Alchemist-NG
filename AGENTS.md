@@ -189,8 +189,7 @@ Always use reference files and tools appropriately. Read **user-paths.md**. You 
 - CACO potion handling is not supported for automated capture or validation. The native adapter detects the CACO handling, impurity, reweight, and rename globals and conditionally models those paths when the live records and options enable them, but CACO's scripted potion handling is buggy, slow, and makes reliable automated value capture difficult. For repository tests and all requested captures, `CACO_OptionDisableAllPotionHandling` MUST remain `1` and `CACO_OptionImpurePotions` MUST remain `0`; never generate test requests for `DisableAllPotionHandling = 0` or `ImpurePotionProcessing = 1`.
 
 ### Apothecary - An Alchemy Overhaul
-- Mod files location listed in **user-paths.md**.
-- Mod description: `https://www.nexusmods.com/skyrimspecialedition/mods/52130`
+- Mod files and source code location listed in **user-paths.md**.
 
 ### Kryptopyr's Automated Patches
 - `cc-rarecurios_caco_patch.esp` (in `kryptopyr's Automated Patches`) standardizes Creation Club Rare Curios with CACO.
@@ -224,6 +223,9 @@ Always use reference files and tools appropriately. Read **user-paths.md**. You 
 - To provide examples for console hooks, game engine tweaks, and Papyrus native binding patterns.
 
 ### Requiem
+- Source code location listed in **user-paths.md**.
+
+### Alchemy Potions and Food Adjustments
 - Source code location listed in **user-paths.md**.
 
 ### Ingredients

@@ -1,18 +1,18 @@
 # Prosperous Alchemist NG - Full Minimal & Comprehensive Test Suite
 
-This document defines the full minimal but comprehensive test suite for Prosperous Alchemist NG. It tests all combinations of ingredient effects, selection orders, modes (`AP`, `Vanilla`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`), settings (GameSettings, CACO duration index families, AP JSON thresholds/multipliers/overrides/impure cost fix, Requiem lore/type-perk gates and effect categories, Apothecary skill/category/rank branches), and player levels/perks/purity filters using a minimal, deterministic set of test blocks.
+This document defines the full minimal but comprehensive test suite for Prosperous Alchemist NG. It tests all combinations of ingredient effects, selection orders, modes (`AP`, `Vanilla`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`), settings (GameSettings, CACO duration index families, AP JSON thresholds/multipliers/overrides/impure cost fix, Requiem lore/type-perk gates and effect categories, Apothecary skill/category/rank branches, APAFA-adjusted ingredient/effect records), and player levels/perks/purity filters using a minimal, deterministic set of test blocks.
 
 ---
 
 ## Overview & Architecture
 
 1. **Two-Tier Configuration Architecture & Disk vs In-Game Setting Rule**:
-   - **Pre-Launch Disk Setup**: Modes with NO disk-based configuration files (`Vanilla`, `CACO`, `Requiem`, `Apothecary`) use a **single** root Python script (`pat-vanilla.py`, `pat-caco.py`, `pat-requiem.py`, `pat-apothecary.py`) for observed craft testing because multiple disk scripts are redundant when on-disk settings do not change. Modes WITH disk-based configuration files (`AP`, `CACO+AP` with `AlchemyPlus.json`) use enough pre-launch disk scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-ap-3.py`, `pat-ap-4.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`, `pat-caco-ap-3.py`, `pat-caco-ap-4.py`) to test all distinct on-disk setting configurations.
-   - **In-Game Setting Blocks**: Every supported mode features in-game setting blocks (`pat <mode>` through variant ranges: `vanilla` 1-18, `caco` 1-27, `ap` 1-13, `caco-ap` 1-23, `requiem` 1-18, `apothecary` 1-57), providing 156 observed craft blocks total across the test suite. Each in-game `pat` command contains **no more than 4 tests** (crafts or gate checks).
+   - **Pre-Launch Disk Setup**: Modes with NO disk-based configuration files (`Vanilla`, `CACO`, `Requiem`, `Apothecary`, `APAFA`) use a **single** root Python script (`pat-vanilla.py`, `pat-caco.py`, `pat-requiem.py`, `pat-apothecary.py`, `pat-apafa.py`) for observed craft testing because multiple disk scripts are redundant when on-disk settings do not change. Modes WITH disk-based configuration files (`AP`, `CACO+AP` with `AlchemyPlus.json`) use enough pre-launch disk scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-ap-3.py`, `pat-ap-4.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`, `pat-caco-ap-3.py`, `pat-caco-ap-4.py`) to test all distinct on-disk setting configurations.
+   - **In-Game Setting Blocks**: Every supported mode features in-game setting blocks (`pat <mode>` through variant ranges: `vanilla` 1-18, `caco` 1-27, `ap` 1-13, `caco-ap` 1-23, `requiem` 1-18, `apothecary` 1-57, `apafa` 1-10), providing 166 observed craft blocks total across the test suite. Each in-game `pat` command contains **no more than 4 tests** (crafts or gate checks).
    - **Skill Level Distribution Rule**: Across the blocks in each mode, **at least 9 blocks use Player Alchemy Level 100**, and **at least 1 block uses Player Alchemy Level < 100** (e.g. Level 50 or 75), ensuring maximum coverage at peak level while validating non-100 skill scaling.
    - **Targeted Ingredient Selection Rule**: Ingredient combinations in every block are strictly chosen to contain the specific effects modified by that block's active settings, perks, overrides, duration indices, or scaling branches (e.g., Physician tests Restore Health/Magicka/Stamina; Poisoner tests poison effects; Purity tests mixed beneficial/harmful recipes; AP magnitude overrides test Restore Health/Stamina; Apothecary tests each of its four category scaling branches).
-2. **Dedicated Final Prediction Export Phase Scripts**:
-   - The final phase (Phase 8) tests full potion prediction exports across **ALL** supported modes/mods (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`) and uses **dedicated, separate** pre-launch disk scripts for default settings (`pat-default-<mode>.py`) and changed settings (`pat-<mode>-changed.py`). These prediction export phase scripts are separate files from the observed craft testing phase scripts.
+2. **Optional Full Prediction Export Phase Scripts**:
+   - Phase 9 is optional. It exercises full potion prediction exports (`potions-predicted-*.csv.zst`) across **ALL** supported modes/mods (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`) using **dedicated, separate** pre-launch disk scripts for default settings (`pat-default-<mode>.py`) and changed settings (`pat-<mode>-changed.py`). These scripts are separate from the observed craft testing scripts. Skipping Phase 9 does not skip the confirmed-craft checks in Phase 8 or prevent completing the required test suite.
 3. **Automated In-Game Pre-Test Cleanup & Zero Manual Overhead**:
    Every single in-game command (`pat <mode> [variant]`, e.g. `pat vanilla 2`, `pat caco 3`, `pat ap 4`, `pat requiem 5`, `pat apothecary 8`, `pat default caco`, `pat <mode>-changed`, etc.) automatically handles 100% of state resetting and inventory cleanup at the beginning of the setup function in Papyrus (`ProsperousAlchemistTests.psc`) BEFORE provisioning the new test block:
    - **Clear Player Ingredients**: Automatically removes 100% of all alchemy ingredients from player inventory (`ClearPlayerIngredients`). Utilizes `PO3_SKSEFunctions.AddItemsOfTypeToArray(player, 30)` (FormType 30 = `Ingredient`) and `PO3_SKSEFunctions.AddItemsWithKeywordStringToArray(player, "VendorItemIngredient")` to sweep and strip every single alchemy ingredient item (vanilla, DLC, Creation Club Rare Curios, CACO, Requiem, Apothecary, or any modded ingredient) from the player's inventory prior to provisioning new test block ingredients.
@@ -1903,11 +1903,106 @@ Apothecary is tested with CACO and Alchemy Plus disabled. Since Apothecary has n
         - `Blisterwort + Ambrosia`
         - `Dwarven Oil + Garlic`
         - `Angelfish + Ash Creep Cluster`
-    4. **Next Command**: Exit Skyrim and run `python pat-default-vanilla.py` on disk.
+        4. **Next Command**: Exit Skyrim and run `python pat-apafa.py` on disk.
 
 ---
 
-### Phase 7: Confirmed-Potion Prediction Export Verification (All Modes)
+### Phase 7: APAFA Mode
+
+APAFA replaces ingredient/effect records and exposes two potion-relevant MCM controls backed by the engine settings `fAlchemyIngredientInitMult` and `fAlchemySkillFactor`. The exporter records those true APAFA MCM values in the unified `mod_settings` JSON. The observed craft blocks keep both values at defaults except block 10, which checks changed MCM values.
+
+#### Disk Config (`pat-apafa.py`)
+
+Each block uses the MO2 `Default` profile, APAFA enabled, and Alchemy Plus, CACO, Requiem, and Apothecary disabled. APAFA has no disk JSON; `AlchemyPlus.json` is at defaults but inactive; CACO duration indices are inactive. The listed commands clear ingredients, perks, gear, actor values, and settings before provisioning the listed recipe. Press **F** with the Alchemy Lab UI focused after each setup.
+
+- **Block 1 (`pat apafa`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 0, no type perks; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Resist Frost ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Thistle Branch + Snowberries`
+    3. **Next Command**: `pat apafa 2`.
+- **Block 2 (`pat apafa 2`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 1, no type perks; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Restore Health ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Blisterwort + Wheat`
+    3. **Next Command**: `pat apafa 3`.
+- **Block 3 (`pat apafa 3`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 2, no type perks; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Fortify Health ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Ambrosia + Bear Claws`
+    3. **Next Command**: `pat apafa 4`.
+- **Block 4 (`pat apafa 4`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 3, Benefactor; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Resist Fire ingredient records and Benefactor.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Angelfish + Ash Creep Cluster`
+    3. **Next Command**: `pat apafa 5`.
+- **Block 5 (`pat apafa 5`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 4, Physician and Benefactor; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Regenerate Health ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Alocasia Fruit + Ambrosia`
+    3. **Next Command**: `pat apafa 6`.
+- **Block 6 (`pat apafa 6`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 5, no type perks; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Invisibility ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Ash Creep Cluster + Bittergreen Petals`
+    3. **Next Command**: `pat apafa 7`.
+- **Block 7 (`pat apafa 7`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 5, Physician; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Damage Health ingredient records and Physician.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Chokeberry + Coda Flower`
+    3. **Next Command**: `pat apafa 8`.
+- **Block 8 (`pat apafa 8`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 5, Poisoner; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Weakness to Poison ingredient records and Poisoner.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Abecean Longfin + Deathbell`
+    3. **Next Command**: `pat apafa 9`.
+- **Block 9 (`pat apafa 9`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 100, Fortify 0, Alchemist rank 5, Purity; InitMult 4.0, SkillFactor 1.5; CACO duration indices inactive.
+  - **Target Effects**: APAFA Lingering Damage Stamina ingredient records.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Bittergreen Petals + Coda Flower`
+    3. **Next Command**: `pat apafa 10`.
+- **Block 10 (`pat apafa 10`)**:
+  - **Modified Settings**: Disk: APAFA on, AP/CACO/Requiem/Apothecary off; APAFA no disk JSON; MO2 Default profile. In-Game: Alchemy 75, Fortify 0, Alchemist rank 3, no type perks; APAFA MCM InitMult 5.0 and SkillFactor 2.0; CACO duration indices inactive.
+  - **Target Effects**: APAFA Restore Magicka records and non-100 skill scaling.
+  - **Steps**:
+    1. Press **F** while the Alchemy Lab UI is focused.
+    2. Craft:
+       - `Blister Pod Cap + Bog Beacon`
+    3. **Optional Next Step**: For Phase 9A, exit Skyrim and run `python pat-default-apafa.py`.
+
+1. Exit Skyrim. Run `python pat-apafa.py`, then `python reset_saves_and_start_skyrim.py`.
+2. In the Alchemy Lab, run `pat apafa`, then `pat apafa 2` through `pat apafa 10` in order without exiting Skyrim. Craft the one recipe listed for each block.
+3. Optional: exit Skyrim and run `python pat-default-apafa.py` to begin Phase 9A.
+
+---
+
+### Phase 8: Confirmed-Potion Prediction Export Verification (All Modes)
 
 This phase verifies the C++ plugin's predictions against every row of `alchemist.potions-confirmed.csv`. For each confirmed row the plugin rebuilds the craft from the row's own recorded ingredients, player state, and `mod_settings`, predicts the potion, and writes the result to `alchemist.potions-predicted.<mode>.csv` next to `alchemist.dll`. `python potion_prediction_test.py --check-confirmed-csv` then reports, for each row, the in-game value, the Python prediction, and the C++ prediction. Because every row supplies its own settings, no `pat` command and no in-game setting changes are needed. Only the enabled-mod combination must match the mode being exported, and each export covers only the confirmed rows of the active mode.
 
@@ -1959,21 +2054,29 @@ Re-run this phase after every rebuild of `alchemist.dll` and after adding new co
       1. Exit Skyrim. Run `python pat-default-apothecary.py` on disk.
       2. Run `python reset_saves_and_start_skyrim.py`.
       3. In the Developer Test Hub (requires `developer=1`), press **Export confirmed-potion predictions to CSV** (not "Export potion predictions to CSV") and wait for the completion message. This writes `alchemist.potions-predicted.apothecary.csv`.
+      4. **Next Command**: Exit Skyrim and run `python pat-default-apafa.py` on disk.
+
+7. **APAFA Mode (Confirmed Rows)**:
+   - **Disk**: APAFA enabled; CACO, AP, Requiem, and Apothecary disabled. APAFA's MCM values are captured per row; defaults are InitMult 4.0 and SkillFactor 1.5.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-default-apafa.py` on disk.
+      2. Run `python reset_saves_and_start_skyrim.py`.
+      3. In the Developer Test Hub (requires `developer=1`), press **Export confirmed-potion predictions to CSV** and wait for completion. This writes `alchemist.potions-predicted.apafa.csv`.
       4. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline` on disk.
 
-7. **Verify**:
+8. **Verify**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv --check-baseline`.
       2. Confirm the Python harness passes every row, the baseline reports zero regressions, and the C++ plugin line reports no failing rows (`cpp_divergences=0`). Rows whose C++ value is `N/A` had no matching prediction in the export and must be explained, not ignored.
-      3. **Next Command**: Exit Skyrim and run `python pat-default-vanilla.py` on disk (Phase 8).
+      3. **Next Command**: Optionally run Phase 9 prediction exports; otherwise the required test suite is complete.
 
 ---
 
-### Phase 8: Potion Prediction Export Verification Suite (Default & Changed Settings)
+### Phase 9 (Optional): Full Potion Prediction Export Verification (Default & Changed Settings)
 
-This phase verifies the complete in-game potion value prediction export (`alchemist.potion-predictions.csv.zst`) generated by the SKSE plugin across ALL supported modes (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`) under both **Default Settings** and **Changed (Non-Default) Settings**. Each mode uses separate, dedicated pre-launch disk scripts (`pat-default-<mode>.py` and `pat-<mode>-changed.py`) that are distinct from the observed craft testing phase files.
+This optional phase verifies the full in-game potion value prediction exports (`alchemist.potion-predictions.csv.zst` and the per-mode `potions-predicted-*.csv.zst` fixtures) generated by the SKSE plugin across all supported modes (`Vanilla`, `AP`, `CACO`, `CACO+AP`, `Requiem`, `Apothecary`, `APAFA`) under both **Default Settings** and **Changed (Non-Default) Settings**. It is supplementary: the required suite and confirmed-craft validation are complete after Phase 8. Skip this entire phase if full prediction-export fixtures are not needed. When run, use separate, dedicated pre-launch scripts (`pat-default-<mode>.py` and `pat-<mode>-changed.py`), distinct from the observed craft testing scripts.
 
-#### Sub-Phase 8A: Default Settings Prediction Export Suite
+#### Sub-Phase 9A (Optional): Default Settings Prediction Exports
 
 1. **Vanilla Mode (Default Settings)**:
    - **Default Settings**: Disk: CACO disabled, AP disabled. In-Game: Player Alchemy 100, Fortify 0, no perks, `InitMult=4.0`, `SkillFactor=1.5`.
@@ -2033,9 +2136,19 @@ This phase verifies the complete in-game potion value prediction export (`alchem
       3. In Skyrim console, run `pat default apothecary`.
       4. In the Developer Test Hub (requires `developer=1`), press **Export potion predictions to CSV** (not "Export confirmed-potion predictions to CSV") and wait for the completion message.
       5. Run `python sync_potion_predictions.py` on disk -> syncs to `potions-predicted-apothecary.csv.zst`.
-      6. **Next Command**: `python potion_prediction_test.py --check-confirmed-csv` on disk.
+      6. **Next Command**: Exit Skyrim and run `python pat-default-apafa.py` on disk.
 
-7. **Verify & Archive Default Predictions**:
+7. **APAFA Mode (Default Settings)**:
+   - **Default Settings**: Disk: APAFA enabled; CACO, AP, Requiem, and Apothecary disabled; APAFA has no disk JSON. In-Game: Player Alchemy 100, Fortify 0, no perks, APAFA MCM InitMult 4.0 and SkillFactor 1.5; CACO duration indices inactive.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-default-apafa.py`.
+      2. Run `python reset_saves_and_start_skyrim.py`.
+      3. In Skyrim console, run `pat default apafa`.
+      4. In the Developer Test Hub, press **Export potion predictions to CSV** and wait for completion.
+      5. Run `python sync_potion_predictions.py` -> syncs to `potions-predicted-apafa.csv.zst`.
+      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv` on disk.
+
+8. **Verify & Archive Default Predictions**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv`.
       2. Run `python save_predicted_default_settings.py` on disk to archive default setting CSV fixtures to:
@@ -2045,11 +2158,12 @@ This phase verifies the complete in-game potion value prediction export (`alchem
           - `potions-predicted-caco-ap.default.settings.csv.zst`
           - `potions-predicted-requiem.default.settings.csv.zst`
           - `potions-predicted-apothecary.default.settings.csv.zst`
+          - `potions-predicted-apafa.default.settings.csv.zst`
       3. **Next Command**: Exit Skyrim and run `python pat-vanilla-changed.py` on disk.
 
 ---
 
-#### Sub-Phase 8B: Changed Settings Prediction Export Suite
+#### Sub-Phase 9B (Optional): Changed Settings Prediction Exports
 
 1. **Vanilla Mode (Changed Settings)**:
    - **Modified Settings**: Disk: CACO disabled, AP disabled. In-Game: Player Alchemy 65, Fortify 50 (Peerless gear), Alchemist 3, Physician, Benefactor, Poisoner, Seeker of Shadows, `InitMult=4.5`, `SkillFactor=1.8`.
@@ -2109,9 +2223,19 @@ This phase verifies the complete in-game potion value prediction export (`alchem
       3. In Skyrim console, run `pat apothecary changed`.
       4. In the Developer Test Hub (requires `developer=1`), press **Export potion predictions to CSV** (not "Export confirmed-potion predictions to CSV") and wait for the completion message.
       5. Run `python sync_potion_predictions.py` on disk -> syncs to `potions-predicted-apothecary.csv.zst`.
-      6. **Next Command**: `python potion_prediction_test.py --check-confirmed-csv` on disk.
+      6. **Next Command**: Exit Skyrim and run `python pat-apafa-changed.py` on disk.
 
-7. **Verify & Archive Changed Predictions**:
+7. **APAFA Mode (Changed Settings)**:
+   - **Modified Settings**: Disk: APAFA enabled; CACO, AP, Requiem, and Apothecary disabled; APAFA has no disk JSON. In-Game: Player Alchemy 75, Fortify 0, Alchemist rank 3, no type perks, APAFA MCM InitMult 5.0 and SkillFactor 2.0; CACO duration indices inactive.
+   - **Steps**:
+      1. Exit Skyrim. Run `python pat-apafa-changed.py`.
+      2. Run `python reset_saves_and_start_skyrim.py`.
+      3. In Skyrim console, run `pat apafa changed`.
+      4. In the Developer Test Hub, press **Export potion predictions to CSV** and wait for completion.
+      5. Run `python sync_potion_predictions.py` -> syncs to `potions-predicted-apafa.csv.zst`.
+      6. **Next Command**: Run `python potion_prediction_test.py --check-confirmed-csv` on disk.
+
+8. **Verify & Archive Changed Predictions**:
    - **Steps**:
       1. Run `python potion_prediction_test.py --check-confirmed-csv`.
       2. Run `python save_predicted_changed_settings.py` on disk to archive changed setting CSV fixtures to:
@@ -2121,11 +2245,12 @@ This phase verifies the complete in-game potion value prediction export (`alchem
           - `potions-predicted-caco-ap.changed.settings.csv.zst`
           - `potions-predicted-requiem.changed.settings.csv.zst`
           - `potions-predicted-apothecary.changed.settings.csv.zst`
+          - `potions-predicted-apafa.changed.settings.csv.zst`
       3. **Next Step**: Suite Complete! Run `python verify_test_suite_alignment.py` to confirm 100% test suite alignment.
 
 ---
 
-#### Sub-Phase 8C: Toggling Active Prediction Baseline Fixtures
+#### Sub-Phase 9C (Optional): Toggling Active Prediction Baseline Fixtures
 
 To switch active baseline files (`potions-predicted-*.csv.zst`) between archived **Default Settings** and **Changed Settings** fixtures without re-exporting:
 - **Toggle Automatically**: Run `python toggle-predicted-settings.py` on disk. Automatically detects current active state (`default` vs `changed`) and switches to the opposite set.
@@ -2171,8 +2296,8 @@ Once the user completes the in-game test suite execution, the AI agent must perf
 361. **Row-by-Row Confirmation Audit**:
    - Open `alchemist.potions-confirmed.csv` in `SKSE\Plugins\`.
    - Perform an explicit row-by-row comparison against the requested test plan, confirming:
-     - All 60 requested observed-craft setting blocks across all 6 modes are present (10 AP, 10 Vanilla, 10 CACO, 10 CACO+AP, 10 Requiem, 10 Apothecary blocks).
-     - Mode flags (`caco_enabled`, `alchemy_plus_enabled`, Requiem mode, Apothecary mode) match the block specification.
+     - All 70 requested observed-craft setting blocks across all 7 modes are present (10 AP, 10 Vanilla, 10 CACO, 10 CACO+AP, 10 Requiem, 10 Apothecary, 10 APAFA blocks).
+     - Mode flags (`caco_enabled`, `alchemy_plus_enabled`, Requiem mode, Apothecary mode, APAFA mode) match the block specification.
      - In-game parameters (`player_alchemy_level`, `player_fortify_alchemy`, `player_perks`, `game_settings`, `mod_settings`) match the block specification.
      - Each requested ingredient recipe and click selection order is recorded exactly as requested.
 
@@ -2342,18 +2467,30 @@ This section contains the comprehensive technical breakdown of all test phases, 
 | **Apothecary-55** | `Apothecary-55` | `pat-apothecary.py` | `pat apothecary 55` | AP disabled; Apothecary enabled | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 25, Fortify 0, Perks: None; SPID perk present | Blisterwort+Ambrosia; Dwarven Oil+Garlic |
 | **Apothecary-56** | `Apothecary-56` | `pat-apothecary.py` | `pat apothecary 56` | AP disabled; Apothecary enabled | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 60, Fortify 0, Perks: None; SPID perk present | Blisterwort+Ambrosia |
 | **Apothecary-57** | `Apothecary-57` | `pat-apothecary.py` | `pat apothecary 57` | AP disabled; Apothecary enabled | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 90, Fortify 0, Perks: None; SPID perk present | Blisterwort+Ambrosia; Dwarven Oil+Garlic; Angelfish+Ash Creep Cluster |
+| **APAFA-1** | `APAFA-1` | `pat-apafa.py` | `pat apafa` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 0, no type perks | Thistle Branch+Snowberries |
+| **APAFA-2** | `APAFA-2` | `pat-apafa.py` | `pat apafa 2` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 1, no type perks | Blisterwort+Wheat |
+| **APAFA-3** | `APAFA-3` | `pat-apafa.py` | `pat apafa 3` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 2, no type perks | Ambrosia+Bear Claws |
+| **APAFA-4** | `APAFA-4` | `pat-apafa.py` | `pat apafa 4` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 3, Benefactor | Angelfish+Ash Creep Cluster |
+| **APAFA-5** | `APAFA-5` | `pat-apafa.py` | `pat apafa 5` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 4, Physician, Benefactor | Alocasia Fruit+Ambrosia |
+| **APAFA-6** | `APAFA-6` | `pat-apafa.py` | `pat apafa 6` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, no type perks | Ash Creep Cluster+Bittergreen Petals |
+| **APAFA-7** | `APAFA-7` | `pat-apafa.py` | `pat apafa 7` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, Physician | Chokeberry+Coda Flower |
+| **APAFA-8** | `APAFA-8` | `pat-apafa.py` | `pat apafa 8` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, Poisoner | Abecean Longfin+Deathbell |
+| **APAFA-9** | `APAFA-9` | `pat-apafa.py` | `pat apafa 9` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A (CACO disabled) | Skill 100, Fortify 0, Alchemist 5, Purity | Bittergreen Petals+Coda Flower |
+| **APAFA-10** | `APAFA-10` | `pat-apafa.py` | `pat apafa 10` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 5.0, SkillFactor 2.0 | N/A (CACO disabled) | Skill 75, Fortify 0, Alchemist 3, no type perks | Blister Pod Cap+Bog Beacon |
 | **Pred-Default-Vanilla** | `Vanilla-Default` | `pat-default-vanilla.py` | `pat default vanilla` | N/A (AP Disabled) | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-AP** | `AP-Default` | `pat-default-ap.py` | `pat default ap` | mag 25/5, dur 15/5, impureFix=True | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-CACO** | `CACO-Default` | `pat-default-caco.py` | `pat default caco` | N/A (AP Disabled) | InitMult 3.9, SkillFactor 1.0 | All 0s (Index 0), DisableHandling=1, ImpureProc=0 | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-CACO+AP** | `CACO-AP-Default` | `pat-default-caco-ap.py` | `pat default caco-ap` | mag 25/5, dur 15/5, impureFix=True | InitMult 3.9, SkillFactor 1.0 | All 0s (Index 0), DisableHandling=1, ImpureProc=0 | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Default-Requiem** | `Requiem-Default` | `pat-default-requiem.py` | `pat default requiem` | AP disabled; Requiem enabled | InitMult 4.0, SkillFactor 1.1 | N/A | Skill 100, Fortify 0, Perks: Alchemical Lore 1 | Full Potion Prediction Export |
 | **Pred-Default-Apothecary** | `Apothecary-Default` | `pat-default-apothecary.py` | `pat default apothecary` | AP disabled; Apothecary enabled | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
+| **Pred-Default-APAFA** | `APAFA-Default` | `pat-default-apafa.py` | `pat default apafa` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 4.0, SkillFactor 1.5 | N/A | Skill 100, Fortify 0, Perks: None | Full Potion Prediction Export |
 | **Pred-Changed-Vanilla** | `Vanilla-Changed` | `pat-vanilla-changed.py` | `pat vanilla changed` | N/A (AP Disabled) | InitMult 4.5, SkillFactor 1.8 | N/A | Skill 65, Fortify 50 (Peerless gear), Perks: Alchemist 3, Physician, Benefactor, Poisoner, Seeker of Shadows | Full Potion Prediction Export |
 | **Pred-Changed-AP** | `AP-Changed` | `pat-ap-changed.py` | `pat ap changed` | mag 10/2, dur 10/2, impureFix=False, overrides (0x3EB15) | InitMult 4.2, SkillFactor 1.6 | N/A | Skill 75, Fortify 50 (Peerless gear), Perks: Alchemist 4, Physician, Benefactor | Full Potion Prediction Export |
 | **Pred-Changed-CACO** | `CACO-Changed` | `pat-caco-changed.py` | `pat caco changed` | N/A (AP Disabled) | InitMult 3.2, SkillFactor 2.8 | All 10s (Index 2), DisableHandling=1, ImpureProc=0 | Skill 55, Fortify 50 (Peerless gear), Perks: Alchemist 2, Physician, Poisoner | Full Potion Prediction Export |
 | **Pred-Changed-CACO+AP** | `CACO-AP-Changed` | `pat-caco-ap-changed.py` | `pat caco-ap changed` | mag 30/6, dur 20/6, impureFix=True | InitMult 3.5, SkillFactor 2.5 | Mixed: RestH 5s, RestM 10s, RestS 0s, DmgH 10s, DmgM 5s, DmgS 0s, DisableHandling=1, ImpureProc=0 | Skill 85, Fortify 50 (Peerless gear), Perks: Alchemist 4, Physician, Benefactor, Poisoner | Full Potion Prediction Export |
 | **Pred-Changed-Requiem** | `Requiem-Changed` | `pat-requiem-changed.py` | `pat requiem changed` | AP disabled; Requiem enabled | InitMult 4.0, SkillFactor 1.1 | N/A | Skill 75, Fortify 0, Perks: Lore 2, Improved Elixirs, Improved Poisons | Full Potion Prediction Export |
 | **Pred-Changed-Apothecary** | `Apothecary-Changed` | `pat-apothecary-changed.py` | `pat apothecary changed` | AP disabled; Apothecary enabled | InitMult 4.5, SkillFactor 1.8 | N/A | Skill 65, Fortify 50 (Peerless gear), Perks: Alchemist 3 | Full Potion Prediction Export |
+| **Pred-Changed-APAFA** | `APAFA-Changed` | `pat-apafa-changed.py` | `pat apafa changed` | APAFA enabled; AP/CACO/Requiem/Apothecary disabled; no disk JSON | InitMult 5.0, SkillFactor 2.0 | N/A | Skill 75, Fortify 0, Alchemist 3, no type perks | Full Potion Prediction Export |
 
 ---
 
@@ -2362,9 +2499,9 @@ This section contains the comprehensive technical breakdown of all test phases, 
 If other test tasks or agents modify `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc`, `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml`, or root `pat-*.py` scripts, an AI agent can restore the full minimal test suite by following these exact steps:
 
 1. **Verify Console Definition (`pa-tests.yaml`)**:
-   Ensure `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml` contains subcommands for `default`, `vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, `apothecary`, `vanilla-changed`, `ap-changed`, `caco-changed`, `caco-ap-changed`, `requiem-changed`, and `apothecary-changed` with optional `variant` string parameters. The help strings for `vanilla` (2-18), `caco` (2-18), `ap` (2-12), `caco-ap` (2-11), `requiem` (2-12), and `apothecary` (2-20) must cover all mode variants.
+   Ensure `pa-console-tests/SKSE/CustomConsole/pa-tests.yaml` contains subcommands for `default`, `vanilla`, `caco`, `ap`, `caco-ap`, `requiem`, `apothecary`, and `apafa` with optional `variant` string parameters. The help strings for `vanilla` (2-18), `caco` (2-27), `ap` (2-13), `caco-ap` (2-23), `requiem` (2-18), `apothecary` (2-57), and `apafa` (2-10, changed) must cover all mode variants.
 2. **Verify Papyrus Test Script (`ProsperousAlchemistTests.psc`)**:
-   Ensure `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc` implements all 90 in-game test block handlers in `ProvisionAndPrintTests` as specified in the technical matrix.
+   Ensure `pa-console-tests/Source/Scripts/ProsperousAlchemistTests.psc` implements all 166 in-game test block handlers in `ProvisionAndPrintTests` as specified in the technical matrix.
 3. **Recompile Papyrus Script**:
    Execute the PowerShell build script:
    ```powershell
@@ -2372,7 +2509,7 @@ If other test tasks or agents modify `pa-console-tests/Source/Scripts/Prosperous
    .\compile.ps1
    ```
 4. **Verify Root Python Mode Scripts**:
-   Ensure all 24 pre-launch mode scripts (`pat-ap.py`, `pat-ap-2.py`, `pat-ap-3.py`, `pat-ap-4.py`, `pat-vanilla.py`, `pat-caco.py`, `pat-caco-ap.py`, `pat-caco-ap-2.py`, `pat-caco-ap-3.py`, `pat-caco-ap-4.py`, `pat-requiem.py`, `pat-apothecary.py`, `pat-default-vanilla.py`, `pat-default-ap.py`, `pat-default-caco.py`, `pat-default-caco-ap.py`, `pat-default-requiem.py`, `pat-default-apothecary.py`, `pat-vanilla-changed.py`, `pat-ap-changed.py`, `pat-caco-changed.py`, `pat-caco-ap-changed.py`, `pat-requiem-changed.py`, `pat-apothecary-changed.py`) configure `AlchemyPlus.json` and MO2 `modlist.txt` accurately using `apply_mode_config` from `pat_config_helper.py`.
+   Ensure all 27 pre-launch mode scripts include `pat-apafa.py`, `pat-default-apafa.py`, and `pat-apafa-changed.py`; each uses `apply_mode_config` to enable APAFA and disable the inactive overhauls.
 5. **Rebuild & Deploy SKSE Plugin**:
    Run `python build.py` from repository root and verify that the built and deployed DLL timestamps match.
 6. **Final Verification Check**:

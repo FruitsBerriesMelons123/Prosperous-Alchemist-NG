@@ -174,6 +174,7 @@ namespace alchemist::devhub {
 			if (a_mode == "AP") return "ap";
 			if (a_mode == "Requiem") return "requiem";
 			if (a_mode == "Apothecary") return "apothecary";
+			if (a_mode == "APAFA") return "apafa";
 			return "vanilla";
 		}
 
@@ -1036,6 +1037,7 @@ namespace alchemist::devhub {
 			case EvaluationAlgorithm::CACO: return "caco";
 			case EvaluationAlgorithm::Requiem: return "requiem";
 			case EvaluationAlgorithm::Apothecary: return "apothecary";
+			case EvaluationAlgorithm::APAFA: return "apafa";
 			default: return "automatic";
 			}
 		}
@@ -1869,12 +1871,15 @@ namespace alchemist::devhub {
 			}
 
 			const bool reqActive = requiem::Adapter::IsActive();
+			const bool apafaActive = apafa::Adapter::IsActive();
 			const bool apotActive = apothecary::Adapter::IsActive();
 			const bool cacoActive = caco::Adapter::IsActive();
 			const bool apActive = alchemyplus::Adapter::IsActive();
 			std::string modeStr = "Vanilla";
 			if (reqActive) {
 				modeStr = "Requiem";
+			} else if (apafaActive) {
+				modeStr = "APAFA";
 			} else if (apotActive) {
 				modeStr = "Apothecary";
 			} else if (cacoActive && apActive) {
@@ -3702,16 +3707,17 @@ namespace alchemist::devhub {
 			ImGui::BeginDisabled(view.busy);
 			if (ImGui::Button("Test all ingredients with every algorithm")) RunAlgorithmMatrix();
 			ImGui::EndDisabled();
-			DrawTestHint("Runs Vanilla, Alchemy Plus, CACO, and Automatic (the active combined path); unavailable compatibility mods use safe fallback behavior while still exercising each algorithm path.");
+			DrawTestHint("Runs Vanilla, Alchemy Plus, CACO, Requiem, Apothecary, APAFA, and Automatic (the active path); unavailable compatibility mods use safe fallback behavior while still exercising each algorithm path.");
 			if (!view.hasAlgorithmMatrix) {
 				DrawTestHint("No exhaustive algorithm result is available yet.");
 			} else {
 				ImGui::Text("Ingredient forms tested: %zu", view.algorithmMatrix.ingredientCount);
 				ImGui::Text("Cross-algorithm totals: %s", view.algorithmMatrix.totalsAgree ? "match" : "differ");
-				ImGui::Text("Alchemy Plus: %s; CACO: %s; combined: %s",
+				ImGui::Text("Alchemy Plus: %s; CACO: %s; combined: %s; APAFA: %s",
 					view.algorithmMatrix.alchemyPlusActive ? "active" : "inactive",
 					view.algorithmMatrix.cacoActive ? "active" : "inactive",
-					view.algorithmMatrix.combinedActive ? "active" : "inactive");
+					view.algorithmMatrix.combinedActive ? "active" : "inactive",
+					view.algorithmMatrix.apafaActive ? "active" : "inactive");
 				if (ImGui::BeginTable("AlgorithmMatrix", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
 					ImGui::TableSetupColumn("Algorithm");
 					ImGui::TableSetupColumn("Compatibility records");

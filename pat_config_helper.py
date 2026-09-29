@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import config
@@ -25,11 +26,23 @@ def refresh_mo2_if_running() -> None:
         pass
 
 
-def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool = False, requiem_enabled: bool = False, apothecary_enabled: bool = False) -> tuple[bool, str]:
-    """Validate whether an ingredient combination can craft a potion in Skyrim."""
+@lru_cache(maxsize=None)
+def _load_ingredient_effects(path: Path) -> Dict[str, set]:
     import csv
+    effects_by_ing: Dict[str, set] = {}
+    if path.exists():
+        with open(path, encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                effects_by_ing.setdefault(row["ingredient_name"], set()).add(row["effect_name"])
+    return effects_by_ing
+
+
+def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool = False, requiem_enabled: bool = False, apothecary_enabled: bool = False, apafa_enabled: bool = False) -> tuple[bool, str]:
+    """Validate whether the active ingredient schema can craft a potion."""
     repo_root = Path(__file__).resolve().parent
-    if apothecary_enabled:
+    if apafa_enabled:
+        csv_file = repo_root / "ingredients-apafa.csv"
+    elif apothecary_enabled:
         csv_file = repo_root / "ingredients-apothecary.csv"
     elif requiem_enabled:
         csv_file = repo_root / "ingredients-requiem.csv"
@@ -37,29 +50,22 @@ def validate_ingredient_combination(ingredients: List[str], caco_enabled: bool =
         csv_file = repo_root / "ingredients-caco.csv"
     else:
         csv_file = repo_root / "ingredients-vanilla.csv"
-    if not csv_file.exists():
-        return (True, "CSV file not found, skipping validation")
+    def validate_schema(path: Path) -> tuple[bool, str]:
+        effects_by_ing = _load_ingredient_effects(path)
+        if not effects_by_ing:
+            return (True, f"{path.name} not found, skipping validation")
+        for ing in ingredients:
+            if ing not in effects_by_ing:
+                return (False, f"Ingredient '{ing}' not found in {path.name}")
+        for i in range(len(ingredients)):
+            for j in range(i + 1, len(ingredients)):
+                ing1, ing2 = ingredients[i], ingredients[j]
+                shared = effects_by_ing[ing1] & effects_by_ing[ing2]
+                if shared:
+                    return (True, f"Valid craftable recipe: '{ing1}' + '{ing2}' share {sorted(shared)}")
+        return (False, f"Invalid recipe: ingredients {ingredients} share 0 effects in {path.name}")
 
-    effects_by_ing: Dict[str, set] = {}
-    with open(csv_file, encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            ing = row["ingredient_name"]
-            eff = row["effect_name"]
-            effects_by_ing.setdefault(ing, set()).add(eff)
-
-    for ing in ingredients:
-        if ing not in effects_by_ing:
-            return (False, f"Ingredient '{ing}' not found in {csv_file.name}")
-
-    for i in range(len(ingredients)):
-        for j in range(i + 1, len(ingredients)):
-            ing1, ing2 = ingredients[i], ingredients[j]
-            shared = effects_by_ing[ing1] & effects_by_ing[ing2]
-            if shared:
-                return (True, f"Valid craftable recipe: '{ing1}' + '{ing2}' share {sorted(shared)}")
-
-    return (False, f"Invalid recipe: ingredients {ingredients} share 0 effects in {csv_file.name}")
+    return validate_schema(csv_file)
 
 EXEMPLARS_LIST = [
     "Skyrim.esm|E3E9A",
@@ -152,6 +158,7 @@ def update_mo2_modlist(
     ap_enabled: bool = False,
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
+    apafa_enabled: bool = False,
 ) -> None:
     modlist_path = config.MO2_DEFAULT_PROFILE_DIR / "modlist.txt"
     if not modlist_path.exists():
@@ -160,17 +167,20 @@ def update_mo2_modlist(
     pa_ng_mod_name = config.PA_NG_MOD_DIR.name
     requiem_mod_name = getattr(config, "REQUIEM_MOD_DIR", Path("Requiem - The Roleplaying Overhaul")).name
     apothecary_mod_name = getattr(config, "APOTHECARY_MOD_DIR", Path("Apothecary - An Alchemy Overhaul")).name
+    apafa_mod_name = getattr(config, "APAFA_MOD_DIR", Path("Alchemy Potions and Food Adjustments")).name
 
     target_states = {
-        config.CACO_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
-        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
-        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled and not requiem_enabled and not apothecary_enabled, "disabled"),
+        config.CACO_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
+        config.KRYPTOPYR_PATCHES_MOD_DIR.name: (caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
+        config.ALCHEMY_PLUS_MOD_DIR.name: (ap_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled, "disabled"),
         requiem_mod_name: (requiem_enabled, "disabled"),
         "Requiem": (requiem_enabled, "disabled"),
         "Requiem - The Roleplaying Overhaul": (requiem_enabled, "disabled"),
         apothecary_mod_name: (apothecary_enabled, "disabled"),
         "Apothecary": (apothecary_enabled, "disabled"),
         "Apothecary - An Alchemy Overhaul": (apothecary_enabled, "disabled"),
+        apafa_mod_name: (apafa_enabled, "disabled"),
+        "Alchemy Potions and Food Adjustments": (apafa_enabled, "disabled"),
         pa_ng_mod_name: (True, "enabled"),
     }
 
@@ -231,6 +241,7 @@ def sync_mo2_plugins_txt(
     caco_enabled: bool = False,
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
+    apafa_enabled: bool = False,
 ) -> None:
     plugins_path = config.MO2_DEFAULT_PROFILE_DIR / "plugins.txt"
     if not plugins_path.exists():
@@ -251,6 +262,11 @@ def sync_mo2_plugins_txt(
         "apothecary - fishing patch.esp",
         "apothecary - rare curios patch.esp",
     ]
+    apafa_plugins = [
+        "alchemyadjustments.esp",
+        "alchemyadjustments - rarecurios patch.esp",
+        "alchemyadjustments - distinctiverareingredients addon.esp",
+    ]
     lines = plugins_path.read_text(encoding="utf-8").splitlines()
     new_lines = []
     modified = False
@@ -268,6 +284,11 @@ def sync_mo2_plugins_txt(
             new_lines.append(new_line)
         elif raw in apothecary_plugins:
             new_line = f"*{line.lstrip('*')}" if apothecary_enabled else line.lstrip("*")
+            if new_line != line:
+                modified = True
+            new_lines.append(new_line)
+        elif raw in apafa_plugins:
+            new_line = f"*{line.lstrip('*')}" if apafa_enabled else line.lstrip("*")
             if new_line != line:
                 modified = True
             new_lines.append(new_line)
@@ -291,6 +312,7 @@ def apply_mode_config(
     ap_enabled: bool = False,
     requiem_enabled: bool = False,
     apothecary_enabled: bool = False,
+    apafa_enabled: bool = False,
 ) -> None:
     # 1. Update MO2 modlist, restore load order, and sync plugins.txt
     update_mo2_modlist(
@@ -298,12 +320,14 @@ def apply_mode_config(
         ap_enabled=ap_enabled,
         requiem_enabled=requiem_enabled,
         apothecary_enabled=apothecary_enabled,
+        apafa_enabled=apafa_enabled,
     )
     restore_mo2_loadorder()
     sync_mo2_plugins_txt(
-        caco_enabled=caco_enabled and not requiem_enabled and not apothecary_enabled,
+        caco_enabled=caco_enabled and not requiem_enabled and not apothecary_enabled and not apafa_enabled,
         requiem_enabled=requiem_enabled,
         apothecary_enabled=apothecary_enabled,
+        apafa_enabled=apafa_enabled,
     )
     refresh_mo2_if_running()
 

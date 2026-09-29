@@ -12,3 +12,6 @@
 - Writing a file back to the computer from a staged output that reuses an earlier output's filename can write the earlier content. Give each revision a new staged filename and confirm the result by hash.
 - `strings` is not installed in Git Bash; inspect binary files (e.g. compiled `.pex`) by reading bytes in Python.
 - Piping `ls -l` through `cut -c30-` truncated the size column and looked like a corrupt 2 KB DLL; use `awk '{print $5, $7}'` for size/time.
+- `Get-Content` against guessed source paths that do not exist; locate files with `rg --files` before opening them.
+- `rg -n` with a malformed regex containing quotes or parentheses failed in PowerShell; simplify the pattern or use fixed-string matching.
+- Running the master test-suite verification harness again while its first run was still active exited at its single-instance guard; wait for the first run to finish before retrying.

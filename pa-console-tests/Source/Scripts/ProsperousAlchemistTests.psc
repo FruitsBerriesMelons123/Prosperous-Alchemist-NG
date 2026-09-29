@@ -1643,6 +1643,97 @@ string Function SetupApothecary(string variant = "1") global
     return "Apothecary test state applied successfully."
 EndFunction
 
+string Function SetupAPAFA(string variant = "1") global
+    Actor player = Game.GetPlayer()
+    ResetPlayerState(player)
+    string modeTag = "apafa-1"
+    if variant == "changed"
+        modeTag = "apafa-changed"
+        player.SetActorValue("Alchemy", 75)
+        player.ForceActorValue("Alchemy", 75)
+        SetAlchemistRank(player, 3)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 5.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 2.0")
+    elseif variant == "2"
+        modeTag = "apafa-2"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 1)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "3"
+        modeTag = "apafa-3"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 2)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "4"
+        modeTag = "apafa-4"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 3)
+        player.AddPerk(Game.GetFormFromFile(0x00058216, "Skyrim.esm") as Perk)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "5"
+        modeTag = "apafa-5"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 4)
+        player.AddPerk(Game.GetFormFromFile(0x00058215, "Skyrim.esm") as Perk)
+        player.AddPerk(Game.GetFormFromFile(0x00058216, "Skyrim.esm") as Perk)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "6"
+        modeTag = "apafa-6"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 5)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "7"
+        modeTag = "apafa-7"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 5)
+        player.AddPerk(Game.GetFormFromFile(0x00058215, "Skyrim.esm") as Perk)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "8"
+        modeTag = "apafa-8"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 5)
+        player.AddPerk(Game.GetFormFromFile(0x00058217, "Skyrim.esm") as Perk)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "9"
+        modeTag = "apafa-9"
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 5)
+        player.AddPerk(Game.GetFormFromFile(0x0005821D, "Skyrim.esm") as Perk)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    elseif variant == "10"
+        modeTag = "apafa-10"
+        player.SetActorValue("Alchemy", 75)
+        player.ForceActorValue("Alchemy", 75)
+        SetAlchemistRank(player, 3)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 5.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 2.0")
+    else
+        player.SetActorValue("Alchemy", 100)
+        player.ForceActorValue("Alchemy", 100)
+        SetAlchemistRank(player, 0)
+        ConsoleUtil.ExecuteCommand("setgs fAlchemyIngredientInitMult 4.0")
+        ConsoleUtil.ExecuteCommand("setgs fAlchemySkillFactor 1.5")
+    endif
+    ProvisionAndPrintTests(player, modeTag, variant)
+    return "APAFA test state applied successfully."
+EndFunction
+
 string Function SetupDefault(string mode = "vanilla") global
     Actor player = Game.GetPlayer()
     ResetPlayerState(player)
@@ -1675,10 +1766,12 @@ string Function SetupDefault(string mode = "vanilla") global
     elseif mode == "requiem"
         nextStep = "python pat-default-apothecary.py"
     elseif mode == "apothecary"
-        nextStep = "python potion_prediction_test.py --check-confirmed-csv"
+        nextStep = "python pat-default-apafa.py"
+    elseif mode == "apafa"
+        nextStep = "python pat-vanilla-changed.py"
     endif
     ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
-    if mode == "apothecary"
+    if mode == "apothecary" || mode == "apafa"
         ConsoleUtil.PrintMessage("Then: " + nextStep + ", then 'python save_predicted_default_settings.py', then exit Skyrim and run python pat-vanilla-changed.py")
     else
         ConsoleUtil.PrintMessage("Then: Exit Skyrim and run " + nextStep)
@@ -3115,7 +3208,7 @@ Function ProvisionAndPrintTests(Actor player, string modeTag, string variant) gl
 		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Ambrosia")
 		ConsoleUtil.PrintMessage("2. Craft: Dwarven Oil + Garlic")
 		ConsoleUtil.PrintMessage("3. Craft: Angelfish + Ash Creep Cluster")
-		ConsoleUtil.PrintMessage("Next: Exit Skyrim and run python pat-default-vanilla.py")
+		ConsoleUtil.PrintMessage("Next: Exit Skyrim and run python pat-apafa.py")
 	elseif modeTag == "vanilla-changed"
 		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
 		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
@@ -3136,7 +3229,61 @@ Function ProvisionAndPrintTests(Actor player, string modeTag, string variant) gl
 		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
 		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
 		ConsoleUtil.PrintMessage("Then: Exit Skyrim and run python pat-apothecary-changed.py")
+	elseif modeTag == "apafa-1"
+		ProvisionForm(player, 0x000134AA, "Skyrim.esm") ; Thistle Branch
+		ProvisionForm(player, 0x0001B3BD, "Skyrim.esm") ; Snowberries
+		ConsoleUtil.PrintMessage("1. Craft: Thistle Branch + Snowberries")
+		ConsoleUtil.PrintMessage("Next: pat apafa 2")
+	elseif modeTag == "apafa-2"
+		ProvisionForm(player, 0x0004DA25, "Skyrim.esm") ; Blisterwort
+		ProvisionForm(player, 0x0004B0BA, "Skyrim.esm") ; Wheat
+		ConsoleUtil.PrintMessage("1. Craft: Blisterwort + Wheat")
+		ConsoleUtil.PrintMessage("Next: pat apafa 3")
+	elseif modeTag == "apafa-3"
+		ProvisionForm(player, 0x00000836, "ccbgssse037-curios.esl") ; Ambrosia
+		ProvisionForm(player, 0x0006BC02, "Skyrim.esm") ; Bear Claws
+		ConsoleUtil.PrintMessage("1. Craft: Ambrosia + Bear Claws")
+		ConsoleUtil.PrintMessage("Next: pat apafa 4")
+	elseif modeTag == "apafa-4"
+		ProvisionForm(player, 0x000008EB, "ccBGSSSE001-Fish.esm") ; Angelfish
+		ProvisionForm(player, 0x0001CD74, "Dragonborn.esm") ; Ash Creep Cluster
+		ConsoleUtil.PrintMessage("1. Craft: Angelfish + Ash Creep Cluster")
+		ConsoleUtil.PrintMessage("Next: pat apafa 5")
+	elseif modeTag == "apafa-5"
+		ProvisionForm(player, 0x00000D62, "ccbgssse037-curios.esl") ; Alocasia Fruit
+		ProvisionForm(player, 0x00000836, "ccbgssse037-curios.esl") ; Ambrosia
+		ConsoleUtil.PrintMessage("1. Craft: Alocasia Fruit + Ambrosia")
+		ConsoleUtil.PrintMessage("Next: pat apafa 6")
+	elseif modeTag == "apafa-6"
+		ProvisionForm(player, 0x0001CD74, "Dragonborn.esm") ; Ash Creep Cluster
+		ProvisionForm(player, 0x00000D68, "ccbgssse037-curios.esl") ; Bittergreen Petals
+		ConsoleUtil.PrintMessage("1. Craft: Ash Creep Cluster + Bittergreen Petals")
+		ConsoleUtil.PrintMessage("Next: pat apafa 7")
+	elseif modeTag == "apafa-7"
+		ProvisionForm(player, 0x00000838, "ccbgssse037-curios.esl") ; Chokeberry
+		ProvisionForm(player, 0x00000805, "ccbgssse037-curios.esl") ; Coda Flower
+		ConsoleUtil.PrintMessage("1. Craft: Chokeberry + Coda Flower")
+		ConsoleUtil.PrintMessage("Next: pat apafa 8")
+	elseif modeTag == "apafa-8"
+		ProvisionForm(player, 0x00106E1B, "Skyrim.esm") ; Abecean Longfin
+		ProvisionForm(player, 0x000516C8, "Skyrim.esm") ; Deathbell
+		ConsoleUtil.PrintMessage("1. Craft: Abecean Longfin + Deathbell")
+		ConsoleUtil.PrintMessage("Next: pat apafa 9")
+	elseif modeTag == "apafa-9"
+		ProvisionForm(player, 0x00000D68, "ccbgssse037-curios.esl") ; Bittergreen Petals
+		ProvisionForm(player, 0x00000805, "ccbgssse037-curios.esl") ; Coda Flower
+		ConsoleUtil.PrintMessage("1. Craft: Bittergreen Petals + Coda Flower")
+		ConsoleUtil.PrintMessage("Next: pat apafa 10")
+	elseif modeTag == "apafa-10"
+		ProvisionForm(player, 0x00000D6A, "ccbgssse037-curios.esl") ; Blister Pod Cap
+		ProvisionForm(player, 0x00000D6C, "ccbgssse037-curios.esl") ; Bog Beacon
+		ConsoleUtil.PrintMessage("1. Craft: Blister Pod Cap + Bog Beacon")
+		ConsoleUtil.PrintMessage("Next: Exit Skyrim and run python pat-default-apafa.py")
 	elseif modeTag == "apothecary-changed"
+		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
+		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
+		ConsoleUtil.PrintMessage("Then: Exit Skyrim and run python pat-apafa-changed.py")
+	elseif modeTag == "apafa-changed"
 		ConsoleUtil.PrintMessage("Export-only block: no crafting required.")
 		ConsoleUtil.PrintMessage("Next: In the Developer Test Hub press 'Export potion predictions to CSV', then run 'python sync_potion_predictions.py'")
 		ConsoleUtil.PrintMessage("Then: python potion_prediction_test.py --check-confirmed-csv, then python save_predicted_changed_settings.py")

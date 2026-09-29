@@ -74,6 +74,7 @@ VANILLA_CSV = SCRIPT_ROOT / "ingredients-vanilla.csv"
 CACO_CSV = SCRIPT_ROOT / "ingredients-caco.csv"
 REQUIEM_CSV = SCRIPT_ROOT / "ingredients-requiem.csv"
 APOTHECARY_CSV = SCRIPT_ROOT / "ingredients-apothecary.csv"
+APAFA_CSV = SCRIPT_ROOT / "ingredients-apafa.csv"
 ALCHEMIST_INI_NAME = "alchemist.ini"
 CONFIRMED_CSV = SCRIPT_ROOT / "links" / "alchemist.potions-confirmed.csv"
 CONFIRMED_LOG = SCRIPT_ROOT / "potion_prediction_confirmed.log"
@@ -1536,6 +1537,7 @@ class PredictionSettings:
 	alchemy_plus_enabled: bool
 	requiem_enabled: bool = False
 	apothecary_enabled: bool = False
+	apafa_enabled: bool = False
 	player: PlayerSettings = field(default_factory=PlayerSettings)
 	caco_ingredient_init_multiplier: float = 3.9
 	caco_skill_factor: float = 1.0
@@ -1559,6 +1561,8 @@ class PredictionSettings:
 
 	@property
 	def mode(self) -> str:
+		if self.apafa_enabled:
+			return "apafa"
 		if self.apothecary_enabled:
 			return "apothecary"
 		if self.requiem_enabled:
@@ -1669,7 +1673,7 @@ class PotionPredictor:
 		use_caco_native = self.settings.caco_enabled
 		use_requiem_native = self.settings.requiem_enabled
 		use_apothecary_native = self.settings.apothecary_enabled
-		use_native = use_caco_native or use_requiem_native or use_apothecary_native
+		use_native = use_caco_native or use_requiem_native or use_apothecary_native or self.settings.apafa_enabled
 		rounding = self.settings.alchemy_plus_rounding
 
 		# effectsBySourceIdentity: each ingredient contributes at most one
@@ -2454,18 +2458,21 @@ def recipe_from_confirmed_row(
 	return canonical_recipe
 
 
-def confirmed_mode_flags(mode: str) -> tuple[bool, bool, bool, bool]:
+def confirmed_mode_flags(mode: str) -> tuple[bool, bool, bool, bool, bool]:
 	normalized = mode.strip().casefold().replace(" ", "")
 	try:
 		return {
-			"vanilla": (False, False, False, False),
-			"ap": (False, True, False, False),
-			"alchemy-plus": (False, True, False, False),
-			"caco": (True, False, False, False),
-			"caco+ap": (True, True, False, False),
-			"caco+alchemy-plus": (True, True, False, False),
-			"requiem": (False, False, True, False),
-			"apothecary": (False, False, False, True),
+			"vanilla": (False, False, False, False, False),
+			"ap": (False, True, False, False, False),
+			"alchemy-plus": (False, True, False, False, False),
+			"caco": (True, False, False, False, False),
+			"caco+ap": (True, True, False, False, False),
+			"caco+alchemy-plus": (True, True, False, False, False),
+			"requiem": (False, False, True, False, False),
+			"apothecary": (False, False, False, True, False),
+			"apafa": (False, False, False, False, True),
+			"alchemy-adjustments": (False, False, False, False, True),
+			"alchemyadjustments": (False, False, False, False, True),
 		}[normalized]
 	except KeyError as error:
 		raise ValueError(f"unknown confirmed potion mode {mode!r}") from error
@@ -2491,7 +2498,7 @@ def parse_confirmed_json(
 def confirmed_settings(
 	row: Mapping[str, str], path: Path, line_number: int
 ) -> PredictionSettings:
-	caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled = confirmed_mode_flags(row["mode"])
+	caco_enabled, alchemy_plus_enabled, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(row["mode"])
 	player = PlayerSettings(
 		alchemy_level=f32(float(row["alchemy_level"])),
 		fortify_alchemy_level=f32(float(row["fortify_alchemy_level"])),
@@ -2506,6 +2513,19 @@ def confirmed_settings(
 
 	mod_settings = parse_confirmed_json(row, "mod_settings", path, line_number) if "mod_settings" in row else {}
 
+	if apafa_enabled:
+		init_mult = float(mod_settings.get("AlchemyIngredientInitMultiplier", 4.0))
+		skill_factor = float(mod_settings.get("AlchemySkillFactor", 1.5))
+		return PredictionSettings(
+			caco_enabled=False,
+			alchemy_plus_enabled=False,
+			requiem_enabled=False,
+			apothecary_enabled=False,
+			apafa_enabled=True,
+			player=player,
+			caco_ingredient_init_multiplier=init_mult,
+			caco_skill_factor=skill_factor,
+		)
 	if requiem_enabled:
 		if "requiem" in mod_settings and isinstance(mod_settings["requiem"], dict):
 			req_values = mod_settings["requiem"]
@@ -2875,7 +2895,7 @@ def run_confirmed_fixture_check(
 			mode_idx = mode_row_counts.get(mode, 0)
 			mode_row_counts[mode] = mode_idx + 1
 
-			caco_enabled, _, requiem_enabled, apothecary_enabled = confirmed_mode_flags(
+			caco_enabled, _, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(
 				mode
 			)
 
@@ -2922,7 +2942,9 @@ def run_confirmed_fixture_check(
 
 			try:
 				settings = confirmed_settings(row, confirmed_csv, line_number)
-				if apothecary_enabled:
+				if apafa_enabled:
+					db_key = "apafa"
+				elif apothecary_enabled:
 					db_key = "apothecary"
 				elif requiem_enabled:
 					db_key = "requiem"
@@ -2931,7 +2953,9 @@ def run_confirmed_fixture_check(
 				else:
 					db_key = "vanilla"
 				if db_key not in databases:
-					if db_key == "apothecary":
+					if db_key == "apafa":
+						databases[db_key] = IngredientDatabase.load(APAFA_CSV)
+					elif db_key == "apothecary":
 						databases[db_key] = IngredientDatabase.load(APOTHECARY_CSV)
 					elif db_key == "requiem":
 						databases[db_key] = IngredientDatabase.load(REQUIEM_CSV)
@@ -3422,7 +3446,7 @@ def run_predicted_fixture_check(
 
 		for row_idx, (line_number, row, recipe, expected) in enumerate(pred_rows):
 			mode = row["mode"].strip()
-			caco_enabled, ap_enabled, requiem_enabled, apothecary_enabled = confirmed_mode_flags(mode)
+			caco_enabled, ap_enabled, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(mode)
 
 			merged_row = dict(row)
 			if "mod_settings" not in merged_row or not merged_row["mod_settings"]:
@@ -3437,7 +3461,9 @@ def run_predicted_fixture_check(
 					if matching_conf.get("mod_settings"):
 						merged_row["mod_settings"] = matching_conf["mod_settings"]
 
-			if apothecary_enabled:
+			if apafa_enabled:
+				db_key = "apafa"
+			elif apothecary_enabled:
 				db_key = "apothecary"
 			elif requiem_enabled:
 				db_key = "requiem"
@@ -3447,7 +3473,9 @@ def run_predicted_fixture_check(
 				db_key = "vanilla"
 
 			if db_key not in databases:
-				if db_key == "apothecary":
+				if db_key == "apafa":
+					databases[db_key] = IngredientDatabase.load(APAFA_CSV)
+				elif db_key == "apothecary":
 					databases[db_key] = IngredientDatabase.load(APOTHECARY_CSV)
 				elif db_key == "requiem":
 					databases[db_key] = IngredientDatabase.load(REQUIEM_CSV)
@@ -3651,13 +3679,15 @@ def run_confirmed_row(
 
 	line_number, row, recipe, expected = found_row
 	mode = row["mode"].strip()
-	caco_enabled, _, requiem_enabled, apothecary_enabled = confirmed_mode_flags(mode)
+	caco_enabled, _, requiem_enabled, apothecary_enabled, apafa_enabled = confirmed_mode_flags(mode)
 	settings = confirmed_settings(row, confirmed_csv, line_number)
 	selection_recipe = confirmed_selection_recipe_from_row(
 		row, confirmed_csv, line_number, recipe
 	)
 
-	if apothecary_enabled:
+	if apafa_enabled:
+		database = IngredientDatabase.load(APAFA_CSV)
+	elif apothecary_enabled:
 		database = IngredientDatabase.load(APOTHECARY_CSV)
 	elif requiem_enabled:
 		database = IngredientDatabase.load(REQUIEM_CSV)

@@ -16,7 +16,8 @@ namespace alchemist {
 		AlchemyPlus,
 		CACO,
 		Requiem,
-		Apothecary
+		Apothecary,
+		APAFA
 	};
 
 	namespace engine {
@@ -53,6 +54,7 @@ namespace alchemist {
 		bool cacoActive = false;
 		bool combinedActive = false;
 		bool requiemActive = false;
+		bool apafaActive = false;
 		bool totalsAgree = false;
 		bool completed = false;
 	};

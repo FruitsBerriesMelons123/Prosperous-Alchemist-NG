@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.5.0
+Added automatic compatibility for Alchemy Potions and Food Adjustments (APAFA), including its ingredient and effect records and potion-related MCM settings.
+
 ## 1.4.1
 Unified the shared alchemy calculations across Vanilla, Alchemy Plus, CACO, Requiem, and Apothecary, improving effect magnitude, duration, and potion value predictions, including Fortify Alchemy and perk interactions.
 Refined CACO and Apothecary compatibility.

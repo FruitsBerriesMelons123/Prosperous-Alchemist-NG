@@ -38,12 +38,13 @@ CACO_MOD_DIR: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\Complete Alc
 KRYPTOPYR_PATCHES_MOD_DIR: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\kryptopyr's Automated Patches")
 APOTHECARY_MOD_DIR: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\Apothecary - An Alchemy Overhaul")
 REQUIEM_MOD_DIR: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\Requiem - The Roleplaying Overhaul")
+APAFA_MOD_DIR: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\Alchemy Potions and Food Adjustments")
 CACO_SETTINGS: Final = Path(r"E:\Projects\games\skyrim\1.6.1170\mods\Alchemy Plus\SKSE\Plugins\AlchemyPlus.json")
 MO2_DEFAULT_PROFILE_DIR: Final = MO2_PROFILE / "profiles" / "Default"
 MO2_SAVES_DIR: Final = MO2_DEFAULT_PROFILE_DIR / "saves"
-BACKUP_LOCKEDORDER: Final = MO2_DEFAULT_PROFILE_DIR / "lockedorder.txt.2026_09_23_15_48_17"
-BACKUP_LOADORDER: Final = MO2_DEFAULT_PROFILE_DIR / "loadorder.txt.2026_09_23_15_48_17"
-BACKUP_PLUGINS: Final = MO2_DEFAULT_PROFILE_DIR / "plugins.txt.2026_09_23_15_48_17"
+BACKUP_LOCKEDORDER: Final = MO2_DEFAULT_PROFILE_DIR / "lockedorder.txt.MANUAL"
+BACKUP_LOADORDER: Final = MO2_DEFAULT_PROFILE_DIR / "loadorder.txt.MANUAL"
+BACKUP_PLUGINS: Final = MO2_DEFAULT_PROFILE_DIR / "plugins.txt.MANUAL"
 QUEST_TRACKER_SOURCE: Final = Path(r"E:\Projects\games\skyrim\git\wtarking-cell-QuestTrackerNG")
 CONSOLEUTIL_EXTENDED_SOURCE: Final = Path(r"E:\Projects\games\skyrim\git\KrisV-777-ConsoleUtil-Extended")
 EXTENDED_CONSOLE_SOURCE: Final = Path(r"E:\Projects\games\skyrim\git\KrisV-777-Extended-Console")
@@ -86,6 +87,7 @@ PATHS: Final = {
 	"kryptopyr_patches_mod_dir": KRYPTOPYR_PATCHES_MOD_DIR,
 	"apothecary_mod_dir": APOTHECARY_MOD_DIR,
 	"requiem_mod_dir": REQUIEM_MOD_DIR,
+	"apafa_mod_dir": APAFA_MOD_DIR,
 	"caco_settings": CACO_SETTINGS,
 	"mo2_default_profile_dir": MO2_DEFAULT_PROFILE_DIR,
 	"backup_lockedorder": BACKUP_LOCKEDORDER,
@@ -108,6 +110,7 @@ __all__ = [
 	"KRYPTOPYR_PATCHES_MOD_DIR",
 	"APOTHECARY_MOD_DIR",
 	"REQUIEM_MOD_DIR",
+	"APAFA_MOD_DIR",
 	"ALCHEMY_PLUS_MOD_DIR",
 	"PA_NG_MOD_DIR",
 	"MO2_DEFAULT_PROFILE_DIR",

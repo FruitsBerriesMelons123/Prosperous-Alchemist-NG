@@ -50,6 +50,7 @@ The active mode depends on the mods and settings that are actually loaded. Havin
 | CACO + AP | CACO and AP adapters | The only supported mixed-overhaul combination. CACO calculates the effects and AP adjusts the value. |
 | [Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888) | `alchemist/Requiem/` | Requiem records, alchemy effectiveness, Alchemical Lore ranks, and perk/keyword gates. Must not be combined with CACO or AP. |
 | [Apothecary](https://www.nexusmods.com/skyrimspecialedition/mods/52130) | `alchemist/Apothecary/` | Loaded Apothecary records and keyword-based effectiveness scaling. AP behavior is not applied. |
+| Alchemy Potions and Food Adjustments (APAFA) | `alchemist/APAFA/` | Uses APAFA's loaded ingredient/effect records and vanilla Alchemy effectiveness rules. It identifies APAFA by the fixed `AlchemyAdjustments.esp` filename because its BSA and script names are unreliable activation signals. It records the two potion-relevant MCM controls (`fAlchemyIngredientInitMult` and `fAlchemySkillFactor`) in confirmed rows. |
 
 The predictions model each mod's mechanics from loaded records and supported settings. They do not run each mod's scripted post-craft changes. CACO potion handling is not supported for automated capture: `CACO_OptionDisableAllPotionHandling` must stay `1` and `CACO_OptionImpurePotions` must stay `0` during testing.
 
@@ -57,7 +58,7 @@ The predictions model each mod's mechanics from loaded records and supported set
 
 | Path | Purpose |
 | --- | --- |
-| `alchemist/` | CMake project for the plugin: `src/`, `include/`, the per-mode adapters (`Vanilla/`, `AlchemyPlus/`, `CACO/`, `Requiem/`, `Apothecary/`), `version.rc`, and `CMakeLists.txt`. |
+| `alchemist/` | CMake project for the plugin: `src/`, `include/`, the per-mode adapters (`Vanilla/`, `AlchemyPlus/`, `CACO/`, `Requiem/`, `Apothecary/`, `APAFA/`), `version.rc`, and `CMakeLists.txt`. |
 | `cmake/imgui-reusable/` | CMake wrapper that builds and installs Dear ImGui as a static, reusable package. |
 | `locales/` | Bundled translation JSON files and the locale schema ([locales/README.md](locales/README.md)). |
 | `fonts/` | Instructions for optional multilingual fonts ([fonts/README.md](fonts/README.md)). |
@@ -66,7 +67,7 @@ The predictions model each mod's mechanics from loaded records and supported set
 | `build.py` | The supported entry point for building, deploying, and packaging. |
 | `config.example.py`, `user-paths.example.md`, `pa-console-tests/compile-paths.example.ps1` | Templates for the git-ignored, machine-specific `config.py`, `user-paths.md`, and `pa-console-tests/compile-paths.ps1`. |
 | `potion_prediction_test.py`, `potion_prediction_baseline.json` | Offline prediction harness and the baseline of passing rows used for regression checks. |
-| `ingredients-*.csv` | Ingredient and effect snapshots for Vanilla, CACO, Requiem, and Apothecary, used by the harness and by recipe validation. |
+| `ingredients-*.csv` | Ingredient and effect snapshots for Vanilla, CACO, Requiem, Apothecary, and APAFA, used by the harness and by recipe validation. |
 | `db/`, `build_ingredient_db.py` | Canonical ingredient database generated from game plugins and the snapshots. |
 | `pat-*.py`, `pat_config_helper.py` | Pre-launch scripts that set up the MO2 mod list, `plugins.txt`, and `AlchemyPlus.json` for each test mode. |
 | `pa-console-tests/` | Papyrus source and CustomConsole YAML for the in-game `pat` command, plus `compile.ps1` and `compile-paths.example.ps1`. |
@@ -257,7 +258,7 @@ Set `developer = 1` in the active profile's section of the deployed `alchemist.i
 1. **Pre-launch disk setup (Skyrim closed).** Run the mode's script, for example `python pat-vanilla.py`, `python pat-ap-2.py`, or `python pat-caco-ap.py`. It enables only that mode's mods in the MO2 profile, syncs `plugins.txt`, and writes `AlchemyPlus.json`. Modes with no settings on disk use a single script; AP and CACO+AP use one script per JSON configuration.
 2. **In-game blocks (one Skyrim session).** Launch SKSE through MO2 (or run `python reset_saves_and_start_skyrim.py`), open the console, and run `pat <mode> [n]`, for example `pat vanilla`, `pat caco 3`, or `pat requiem 5`. Each command clears ingredients, perks, Fortify Alchemy gear, GameSettings, and mod globals, applies the block's state, gives 99 of each required ingredient, and prints the recipes to craft and the next command. If the alchemy menu is already open, press **F** to refresh the ingredient list.
 
-The supported modes are `vanilla`, `ap`, `caco`, `caco-ap`, `requiem`, and `apothecary`. The final phase uses `pat-default-<mode>.py` and `pat-<mode>-changed.py` to export full prediction files (`potions-predicted-*.csv.zst`). Afterwards, `sync_potion_predictions.py`, `save_predicted_default_settings.py`, `save_predicted_changed_settings.py`, and `toggle-predicted-settings.py` copy those exports into the repository fixtures and switch between them.
+The supported modes are `vanilla`, `ap`, `caco`, `caco-ap`, `requiem`, `apothecary`, and `apafa`. Optional Phase 9 uses `pat-default-<mode>.py` and `pat-<mode>-changed.py` to export full prediction files (`potions-predicted-*.csv.zst`). If you run it, `sync_potion_predictions.py`, `save_predicted_default_settings.py`, `save_predicted_changed_settings.py`, and `toggle-predicted-settings.py` copy those exports into the repository fixtures and switch between them.
 
 Before designing new test recipes, check them with `validate_ingredient_combination` in `pat_config_helper.py` against both the target mode's snapshot and `ingredients-vanilla.csv`. Resolve every FormID from the real plugins or snapshots, and use `Game.GetFormFromFile` in Papyrus. [potion-prediction-default-settings.md](potion-prediction-default-settings.md) lists the baseline settings for each mode.
 
@@ -342,6 +343,7 @@ Restart Skyrim after editing the INI by hand.
 | kryptopyr's Patch Hub | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/19518) | CACO and Rare Curios patches. |
 | Requiem | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/60888) · [GitHub](https://github.com/ProbablyManuel/requiem) | Supported overhaul. |
 | Apothecary – An Alchemy Overhaul | [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/52130) | Supported overhaul. |
+| Alchemy Potions and Food Adjustments | APAFA mode; detected by `AlchemyAdjustments.esp`. |
 | Quest Tracker NG | [GitHub](https://github.com/wtarking-cell/QuestTrackerNG) | Reference for quest-related code. |
 
 ## License and credits

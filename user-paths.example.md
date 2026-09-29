@@ -76,7 +76,13 @@
 ## Apothecary
 ### Mod Directory
 - `E:\Projects\games\skyrim\1.6.1170\mods\Apothecary - An Alchemy Overhaul`
+### Source Code
+- `E:\Projects\games\skyrim\utils\apothecary\source\scripts`
 
 ## CACO Potion Builder
 ### Source Code
 - `E:\Projects\games\skyrim\git\dhildebr-caco-potion-builder`
+
+## Alchemy Potions and Food Adjustments
+### Source Code
+- `E:\Projects\games\skyrim\utils\apafa\source\scripts`

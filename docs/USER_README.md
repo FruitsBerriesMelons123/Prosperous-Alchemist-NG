@@ -10,7 +10,7 @@ This is a from-scratch rewrite of the original [Prosperous Alchemist](https://ww
 
 - Checks every ingredient pair and trio you can make and sorts the recipes by estimated value.
 - Takes your Alchemy skill, alchemy perks, and any Fortify Alchemy gear you are wearing into account. You can turn this off.
-- Handles Vanilla Skyrim, Alchemy Plus, Complete Alchemy & Cooking Overhaul (CACO), CACO with Alchemy Plus, Requiem, and Apothecary automatically.
+- Handles Vanilla Skyrim, Alchemy Plus, Complete Alchemy & Cooking Overhaul (CACO), CACO with Alchemy Plus, Requiem, Apothecary, and Alchemy Potions and Food Adjustments (APAFA) automatically.
 - Search by recipe name, ingredient, or effect, with support for AND, OR, exact phrases, and near matches.
 - Sort by value or by name, page through long lists, and optionally show each recipe's effects.
 - Narrow the list to recipes that use the ingredients you have already picked in the alchemy menu.
@@ -135,6 +135,7 @@ The plugin detects which mods are installed and adjusts its calculations to matc
 - **CACO + Alchemy Plus:** supported together.
 - **[Requiem](https://www.nexusmods.com/skyrimspecialedition/mods/60888):** uses Requiem's ingredients, alchemy effectiveness, Alchemical Lore ranks, and perks. Use Requiem without CACO or Alchemy Plus.
 - **[Apothecary – An Alchemy Overhaul](https://www.nexusmods.com/skyrimspecialedition/mods/52130):** uses Apothecary's ingredients and effect scaling. Not combined with Alchemy Plus.
+- **[Alchemy Potions and Food Adjustments (APAFA)](https://www.nexusmods.com/skyrimspecialedition/mods/5877):** uses APAFA's ingredient and effect records and its potion-related Alchemy settings.
 - **[kryptopyr's Patch Hub](https://www.nexusmods.com/skyrimspecialedition/mods/19518):** the CACO Rare Curios patch is supported.
 
 Other mods that add ingredients work too, since the plugin reads ingredients straight from your load order. Mods that change how potions are built or priced, and overhaul combinations not listed here, may make the estimates less accurate.
@@ -177,7 +178,7 @@ Post in the Nexus comments or open an issue on [GitHub](https://github.com/Fruit
 ## Credits
 
 - Built with [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG), [Dear ImGui](https://github.com/ocornut/imgui), [nlohmann/json](https://github.com/nlohmann/json), and [Zstandard](https://github.com/facebook/zstd).
-- Thanks to the [SKSE team](https://skse.silverlock.org/), the Address Library author, and the authors of Alchemy Plus, CACO, Requiem, and Apothecary.
+- Thanks to the [SKSE team](https://skse.silverlock.org/), the Address Library author, and the authors of Alchemy Plus, CACO, Requiem, Apothecary, and APAFA.
 - Thanks to all translators and contributors.
 
 ## License

@@ -3,6 +3,7 @@
 #include "AlchemistEngine.h"
 #include "AlchemyPlus/AlchemyPlus.h"
 #include "Requiem/Requiem.h"
+#include "APAFA/APAFA.h"
 #include "DeveloperTestHub.h"
 #include "IngredientTracker.h"
 #include "MenuHandler.h"
@@ -575,6 +576,7 @@ namespace alchemist {
 		alchemyplus::Adapter::Refresh();
 		requiem::Adapter::Refresh();
 		apothecary::Adapter::Refresh();
+		apafa::Adapter::Refresh();
 		int ignorePlayer = kIgnorePlayer.GetValue();
 		auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
 		if (!playerCharacter) {
@@ -674,6 +676,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* msg)
 		alchemist::caco::Adapter::Initialize();
 		alchemist::requiem::Adapter::Initialize();
 		alchemist::apothecary::Adapter::Initialize();
+		alchemist::apafa::Adapter::Initialize();
 	}
 	if (msg->type == SKSE::MessagingInterface::kInputLoaded) {
 		alchemist::alchemyplus::Adapter::Initialize();

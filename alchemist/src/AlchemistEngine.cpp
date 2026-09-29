@@ -1265,6 +1265,7 @@ namespace alchemist::engine {
 		result.cacoActive = caco::Adapter::IsActive();
 		result.combinedActive = result.alchemyPlusActive && result.cacoActive;
 		result.requiemActive = requiem::Adapter::IsActive();
+		result.apafaActive = apafa::Adapter::IsActive();
 
 		std::vector<Ingredient> availableIngredients;
 		for (auto* nativeIngredient : dataHandler->GetFormArray<IngredientItem>()) {
@@ -1274,12 +1275,13 @@ namespace alchemist::engine {
 		}
 		result.ingredientCount = availableIngredients.size();
 
-		const std::array<EvaluationAlgorithm, 6> algorithms{
+		const std::array<EvaluationAlgorithm, 7> algorithms{
 			EvaluationAlgorithm::Vanilla,
 			EvaluationAlgorithm::AlchemyPlus,
 			EvaluationAlgorithm::CACO,
 			EvaluationAlgorithm::Requiem,
 			EvaluationAlgorithm::Apothecary,
+			EvaluationAlgorithm::APAFA,
 			EvaluationAlgorithm::Automatic
 		};
 		result.algorithms.reserve(algorithms.size());
@@ -1295,9 +1297,9 @@ namespace alchemist::engine {
 				result.alchemyPlusActive : algorithm == EvaluationAlgorithm::CACO ? result.cacoActive :
 				algorithm == EvaluationAlgorithm::Requiem ? result.requiemActive :
 				algorithm == EvaluationAlgorithm::Apothecary ? apothecary::Adapter::IsActive() :
-				algorithm == EvaluationAlgorithm::Automatic && (result.alchemyPlusActive || result.cacoActive || result.requiemActive || apothecary::Adapter::IsActive());
+				algorithm == EvaluationAlgorithm::APAFA ? result.apafaActive :
+				algorithm == EvaluationAlgorithm::Automatic && (result.alchemyPlusActive || result.cacoActive || result.requiemActive || apothecary::Adapter::IsActive() || result.apafaActive);
 
-			const bool useCacoNative = algorithm == EvaluationAlgorithm::CACO && caco::Adapter::IsActive();
 			std::vector<std::vector<const RE::EffectSetting*>> effectIdentities;
 			effectIdentities.reserve(availableIngredients.size());
 			for (const auto& ingredient : availableIngredients) {

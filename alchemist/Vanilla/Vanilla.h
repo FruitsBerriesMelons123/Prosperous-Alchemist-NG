@@ -13,7 +13,7 @@ namespace RE
 }
 
 // Skyrim's own alchemy rules, shared by every mode: game-setting effectiveness, perk entry-point
-// evaluation, and effect classification. Mod adapters (CACO, Requiem, Apothecary, Alchemy Plus) build on this.
+// evaluation, and effect classification. Mod adapters (CACO, Requiem, Apothecary, APAFA, Alchemy Plus) build on this.
 namespace alchemist::vanilla
 {
 	struct SeekerEvaluationState
